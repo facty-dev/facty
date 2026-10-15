@@ -1,0 +1,106 @@
+name: Agentic SDLC
+
+# Main orchestrator — triggers the full SDLC pipeline when a PR is labeled 'sdlc'
+# Phases: Discovery → PRD → BDD → Implementation → Review → Merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, labeled]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: agentic-sdlc-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check-trigger:
+    name: Check SDLC trigger
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+      phase: ${{ steps.check.outputs.phase }}
+    steps:
+      - name: Check for SDLC label
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(l => l.name);
+            const hasSdlc = labels.some(l => l.startsWith('sdlc'));
+
+            // Determine starting phase from label
+            let phase = 'discovery';
+            if (labels.includes('sdlc:prd')) phase = 'prd';
+            if (labels.includes('sdlc:bdd')) phase = 'bdd';
+            if (labels.includes('sdlc:implement')) phase = 'implement';
+
+            core.setOutput('should-run', hasSdlc ? 'true' : 'false');
+            core.setOutput('phase', phase);
+            core.info(`Labels: ${labels.join(', ')}`);
+            core.info(`SDLC enabled: ${hasSdlc}, starting phase: ${phase}`);
+
+  update-state:
+    name: Initialize SDLC state
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create/update SDLC state
+        run: |
+          mkdir -p .agentic/messages/{decision-to-coding,coding-to-decision,human-review}
+          mkdir -p .agentic/decisions .agentic/reviews
+
+          cat > .agentic/state.json << 'EOF'
+          {
+            "version": "1.0",
+            "pr": ${{ github.event.pull_request.number }},
+            "repo": "${{ github.repository }}",
+            "branch": "${{ github.head_ref }}",
+            "started_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "current_phase": "${{ needs.check-trigger.outputs.phase }}",
+            "phases": {}
+          }
+          EOF
+
+      - name: Commit state
+        run: |
+          git config user.name "agentic-sdlc"
+          git config user.email "sdlc@agentic.dev"
+          git add .agentic/
+          git commit -m "chore: initialize SDLC state [skip ci]" || true
+          git push
+
+  start-discovery:
+    name: Phase — Discovery (OST)
+    needs: [check-trigger, update-state]
+    if: needs.check-trigger.outputs.should-run == 'true' && needs.check-trigger.outputs.phase == 'discovery'
+    uses: ./.github/workflows/phase-discovery.yml
+    secrets: inherit
+
+  start-prd:
+    name: Phase — PRD
+    needs: [check-trigger, update-state]
+    if: needs.check-trigger.outputs.should-run == 'true' && needs.check-trigger.outputs.phase == 'prd'
+    uses: ./.github/workflows/phase-prd.yml
+    secrets: inherit
+
+  start-bdd:
+    name: Phase — BDD Specs
+    needs: [check-trigger, update-state]
+    if: needs.check-trigger.outputs.should-run == 'true' && needs.check-trigger.outputs.phase == 'bdd'
+    uses: ./.github/workflows/phase-bdd.yml
+    secrets: inherit
+
+  start-implement:
+    name: Phase — Implementation
+    needs: [check-trigger, update-state]
+    if: needs.check-trigger.outputs.should-run == 'true' && needs.check-trigger.outputs.phase == 'implement'
+    uses: ./.github/workflows/phase-implement.yml
+    secrets: inherit

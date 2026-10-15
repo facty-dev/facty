@@ -1,0 +1,328 @@
+name: Merge Trigger — Materialize & Trigger Downstream
+
+# Fires when a phase branch merges into main.
+# 1. Detects which assets were materialized
+# 2. Updates asset graph
+# 3. Appends audit event
+# 4. Creates downstream branch(es)
+# 5. Triggers appropriate agent(s)
+# 6. Handles skip-ahead (multi-phase merges)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: merge-trigger-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  # Only run on actual merges (PR closed with merged=true)
+  check-merge:
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      is-merge: 'true'
+      pr-number: ${{ github.event.pull_request.number }}
+      branch: ${{ github.event.pull_request.head.ref }}
+      merge-commit: ${{ github.event.pull_request.merge_commit_sha }}
+      files: ${{ steps.files.outputs.files }}
+      phases: ${{ steps.analyze.outputs.phases }}
+      skip-ahead: ${{ steps.analyze.outputs.skip-ahead }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: files
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const files = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number
+            });
+            const paths = files.data.map(f => f.filename);
+            core.setOutput('files', JSON.stringify(paths));
+            core.info(`Changed files: ${paths.join(', ')}`);
+
+      - name: Analyze merge — detect phases and skip-ahead
+        id: analyze
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const files = JSON.parse('${{ steps.files.outputs.files }}');
+            const branch = '${{ github.event.pull_request.head.ref }}';
+
+            // Detect which SDLC phases have assets in this merge
+            const phases = {
+              discovery: files.some(f => f.startsWith('docs/discovery/')),
+              prd: files.some(f => f.startsWith('docs/prd/')),
+              bdd: files.some(f => f.startsWith('specs/')),
+              impl: files.some(f => f.startsWith('src/') || f.startsWith('tests/')),
+              adr: files.some(f => f.startsWith('docs/adr/'))
+            };
+
+            // Extract feature slug from branch name: sdlc/<phase>/<slug>
+            const match = branch.match(/^sdlc\/([^/]+)\/(.+)$/);
+            const phase = match ? match[1] : 'unknown';
+            const slug = match ? match[2] : 'unknown';
+
+            // Determine furthest downstream phase to trigger
+            let triggerPhase = null;
+            let skipAhead = [];
+
+            if (phases.impl || phases.adr) {
+              triggerPhase = 'done';  // Implementation complete
+            } else if (phases.bdd) {
+              triggerPhase = 'impl';
+              if (phase !== 'bdd') skipAhead.push('bdd');
+            } else if (phases.prd) {
+              triggerPhase = 'bdd';
+              if (phase !== 'prd') skipAhead.push('prd');
+              if (!phases.discovery) skipAhead.push('discovery');
+            } else if (phases.discovery) {
+              triggerPhase = 'prd';
+              if (phase !== 'ost' && phase !== 'discovery') skipAhead.push('discovery');
+            }
+
+            core.setOutput('phases', JSON.stringify({
+              detected: phases,
+              branchPhase: phase,
+              featureSlug: slug,
+              triggerPhase: triggerPhase,
+              skipAhead: skipAhead
+            }));
+
+            core.info(`Detected phases: ${JSON.stringify(phases)}`);
+            core.info(`Branch phase: ${phase}, slug: ${slug}`);
+            core.info(`Trigger: ${triggerPhase}, skip-ahead: ${skipAhead.join(',') || 'none'}`);
+
+  # Handle push to main (squash merges, direct commits)
+  handle-push:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Analyze push for SDLC assets
+        id: analyze
+        run: |
+          # Get files changed in this push
+          FILES=$(git diff-tree --no-commit-id --name-only -r HEAD)
+          echo "Changed files: $FILES"
+
+          # Detect phases
+          DISCOVERY=false
+          PRD=false
+          BDD=false
+          IMPL=false
+
+          echo "$FILES" | grep -q '^docs/discovery/' && DISCOVERY=true
+          echo "$FILES" | grep -q '^docs/prd/' && PRD=true
+          echo "$FILES" | grep -q '^specs/' && BDD=true
+          echo "$FILES" | grep -qE '^(src|tests)/' && IMPL=true
+
+          # Determine trigger
+          if [ "$IMPL" = "true" ]; then
+            TRIGGER="done"
+          elif [ "$BDD" = "true" ]; then
+            TRIGGER="impl"
+          elif [ "$PRD" = "true" ]; then
+            TRIGGER="bdd"
+          elif [ "$DISCOVERY" = "true" ]; then
+            TRIGGER="prd"
+          else
+            TRIGGER="none"
+          fi
+
+          echo "phases={\"discovery\":$DISCOVERY,\"prd\":$PRD,\"bdd\":$BDD,\"impl\":$IMPL}" >> $GITHUB_OUTPUT
+          echo "trigger=$TRIGGER" >> $GITHUB_OUTPUT
+
+      - name: Update asset graph
+        run: |
+          ./scripts/asset-sync.sh || echo "asset-sync.sh not yet implemented"
+
+      - name: Append audit event
+        run: |
+          mkdir -p .agentic
+          cat >> .agentic/audit.jsonl << EOF
+          {
+            "event_id": "evt-$(date +%s)-${{ github.sha }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "event_type": "asset.materialized",
+            "actor": {
+              "type": "ci",
+              "id": "merge-trigger",
+              "run_id": "${{ github.run_id }}"
+            },
+            "commit": "${{ github.sha }}",
+            "trigger": "${{ steps.analyze.outputs.trigger }}"
+          }
+          EOF
+          git add .agentic/audit.jsonl assets/graph.json 2>/dev/null || true
+          git commit -m "chore: update asset graph and audit trail [skip ci]" || true
+          git push || true
+
+      - name: Trigger downstream
+        if: steps.analyze.outputs.trigger != 'none' && steps.analyze.outputs.trigger != 'done'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const trigger = '${{ steps.analyze.outputs.trigger }}';
+            const sha = '${{ github.sha }}';
+
+            // Get feature slug from recent commits or default
+            const commits = await github.rest.repos.listCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: 'main',
+              per_page: 5
+            });
+
+            // Extract slug from asset files
+            let slug = 'feature';
+            for (const commit of commits.data) {
+              const files = await github.rest.repos.getCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: commit.sha
+              });
+              for (const file of files.data.files || []) {
+                const match = file.filename.match(/sdlc\/[^/]+\/(.+)/) ||
+                             file.filename.match(/PRD-\d+-(.+?)\.md/);
+                if (match) {
+                  slug = match[1];
+                  break;
+                }
+              }
+              if (slug !== 'feature') break;
+            }
+
+            // Create downstream branch
+            const branchName = `sdlc/${trigger}/${slug}`;
+            try {
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/heads/${branchName}`,
+                sha: sha
+              });
+              core.info(`Created branch: ${branchName}`);
+            } catch (e) {
+              if (e.status === 422) {
+                core.info(`Branch ${branchName} already exists`);
+              } else {
+                throw e;
+              }
+            }
+
+            // Trigger agent workflow
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'agent-decision.yml',
+              ref: branchName,
+              inputs: {
+                phase: trigger,
+                task: `Generate ${trigger} assets for ${slug} based on upstream merged assets`,
+                checkout_ref: branchName
+              }
+            });
+            core.info(`Dispatched agent-decision for phase: ${trigger}`);
+
+  # Main handler for PR merges
+  handle-pr-merge:
+    needs: check-merge
+    if: needs.check-merge.outputs.is-merge == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync asset graph
+        run: |
+          ./scripts/asset-sync.sh || echo "TODO: implement asset-sync.sh"
+
+      - name: Log merge event
+        run: |
+          mkdir -p .agentic
+          cat >> .agentic/audit.jsonl << EOF
+          {
+            "event_id": "evt-merge-${{ needs.check-merge.outputs.pr-number }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "event_type": "pr.merged",
+            "pr": ${{ needs.check-merge.outputs.pr-number }},
+            "branch": "${{ needs.check-merge.outputs.branch }}",
+            "merge_commit": "${{ needs.check-merge.outputs.merge-commit }}",
+            "phases": ${{ needs.check-merge.outputs.phases }},
+            "skip_ahead": $(echo '${{ needs.check-merge.outputs.phases }}' | jq -c '.skipAhead')
+          }
+          EOF
+
+      - name: Create downstream branch
+        if: fromJSON(needs.check-merge.outputs.phases).triggerPhase != null && fromJSON(needs.check-merge.outputs.phases).triggerPhase != 'done'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const phases = JSON.parse('${{ needs.check-merge.outputs.phases }}');
+            const trigger = phases.triggerPhase;
+            const slug = phases.featureSlug;
+            const branchName = `sdlc/${trigger}/${slug}`;
+
+            // Skip-ahead: log which phases were skipped
+            if (phases.skipAhead.length > 0) {
+              core.info(`Skip-ahead: ${phases.skipAhead.join(', ')} already materialized`);
+            }
+
+            // Create branch from main
+            const mainSha = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'heads/main'
+            });
+
+            try {
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/heads/${branchName}`,
+                sha: mainSha.data.object.sha
+              });
+              core.info(`Created downstream branch: ${branchName}`);
+            } catch (e) {
+              if (e.status === 422) {
+                core.info(`Branch ${branchName} already exists — skipping creation`);
+              } else {
+                throw e;
+              }
+            }
+
+            // Dispatch agent
+            const agentWorkflow = trigger === 'impl' ? 'agent-coding.yml' : 'agent-decision.yml';
+            const inputs = trigger === 'impl'
+              ? { task_file: `.agentic/messages/decision-to-coding/${slug}-task.md` }
+              : { phase: trigger, task: `Generate ${trigger} for ${slug} from merged upstream assets`, checkout_ref: branchName };
+
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: agentWorkflow,
+              ref: branchName,
+              inputs: inputs
+            });
+            core.info(`Dispatched ${agentWorkflow} on ${branchName}`);

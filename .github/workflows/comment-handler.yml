@@ -1,0 +1,271 @@
+name: SDLC Comment Handler
+
+# Handles /sdlc-* commands in PR comments
+# Commands: /sdlc-update, /sdlc-approve, /sdlc-reject, /sdlc-skip, /sdlc-inject, /sdlc-regenerate, /sdlc-explain
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  check-command:
+    runs-on: ubuntu-latest
+    outputs:
+      is-sdlc-command: ${{ steps.check.outputs.is-command }}
+      command: ${{ steps.check.outputs.command }}
+      args: ${{ steps.check.outputs.args }}
+      pr-number: ${{ github.event.issue.number }}
+      comment-id: ${{ github.event.comment.id }}
+      author: ${{ github.event.comment.user.login }}
+    steps:
+      - name: Parse comment
+        id: check
+        run: |
+          BODY="${{ github.event.comment.body }}"
+
+          # Check if comment starts with /sdlc-
+          if [[ "$BODY" =~ ^/sdlc-([a-z]+)[[:space:]]*(.*)$ ]]; then
+            CMD="${BASH_REMATCH[1]}"
+            ARGS="${BASH_REMATCH[2]}"
+            echo "is-command=true" >> $GITHUB_OUTPUT
+            echo "command=$CMD" >> $GITHUB_OUTPUT
+            echo "args=$ARGS" >> $GITHUB_OUTPUT
+            echo "Parsed: /sdlc-$CMD $ARGS"
+          else
+            echo "is-command=false" >> $GITHUB_OUTPUT
+            echo "Not an SDLC command"
+          fi
+
+  handle-update:
+    needs: check-command
+    if: needs.check-command.outputs.is-sdlc-command == 'true' && needs.check-command.outputs.command == 'update'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Create agent task from comment
+        run: |
+          mkdir -p .agentic/messages/human-review
+          cat > .agentic/messages/human-review/$(date +%s)-update.md << EOF
+          ---
+          from: human
+          author: ${{ needs.check-command.outputs.author }}
+          pr: ${{ needs.check-command.outputs.pr-number }}
+          command: update
+          ---
+
+          # Update Request
+
+          ${{ needs.check-command.outputs.args }}
+          EOF
+
+          git config user.name "sdlc-bot"
+          git config user.email "sdlc@agentic.dev"
+          git add .agentic/
+          git commit -m "docs: add human feedback for agent [skip ci]"
+          git push
+
+      - name: Trigger agent update
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.payload.issue.pull_request.head.ref;
+            const prNumber = context.issue.number;
+            const author = '${{ needs.check-command.outputs.author }}';
+            const args = `${{ needs.check-command.outputs.args }}`;
+
+            // Post acknowledgment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `🤖 **Agent update requested** by @${author}\n\n` +
+                    `**Instruction:** ${args}\n\n` +
+                    `The agent will update this branch based on your feedback. ` +
+                    `I'll comment again when done.`
+            });
+
+            // Dispatch agent
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'agent-decision.yml',
+              ref: branch,
+              inputs: {
+                phase: 'update',
+                task: `Address review feedback from @${author}: ${args}`,
+                checkout_ref: branch
+              }
+            });
+
+  handle-approve:
+    needs: check-command
+    if: needs.check-command.outputs.is-sdlc-command == 'true' && needs.check-command.outputs.command == 'approve'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post approval note
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `✅ **Approval noted** by @${context.actor}\n\n` +
+                    `Please use the GitHub "Approve" button to complete the review. ` +
+                    `This command is for tracking purposes only.`
+            });
+
+  handle-reject:
+    needs: check-command
+    if: needs.check-command.outputs.is-sdlc-command == 'true' && needs.check-command.outputs.command == 'reject'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create rejection task
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const args = `${{ needs.check-command.outputs.args }}`;
+            const branch = context.payload.issue.pull_request.head.ref;
+
+            // Create task for agent to address rejection
+            await github.rest.repos.createOrUpdateFileContents({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: `.agentic/messages/human-review/rejection-${Date.now()}.md`,
+              message: 'docs: add rejection feedback [skip ci]',
+              content: Buffer.from(`---
+from: human
+author: ${context.actor}
+command: reject
+---
+
+# Rejection Feedback
+
+${args || 'No reason provided'}
+`).toString('base64'),
+              branch: branch
+            });
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `❌ **Changes requested** by @${context.actor}\n\n` +
+                    `**Feedback:** ${args || 'No reason provided'}\n\n` +
+                    `The agent will address this feedback.`
+            });
+
+  handle-skip:
+    needs: check-command
+    if: needs.check-command.outputs.is-sdlc-command == 'true' && needs.check-command.outputs.command == 'skip'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log skip request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const phase = '${{ needs.check-command.outputs.args }}'.trim();
+            const prNumber = context.issue.number;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `⏭️ **Skip requested:** \`${phase}\` phase will be skipped on merge.\n\n` +
+                    `Downstream trigger will start from the phase after \`${phase}\`.`
+            });
+
+            // TODO: Store skip preference in PR metadata for merge-trigger to read
+
+  handle-inject:
+    needs: check-command
+    if: needs.check-command.outputs.is-sdlc-command == 'true' && needs.check-command.outputs.command == 'inject'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Acknowledge injection
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const filePath = '${{ needs.check-command.outputs.args }}'.trim();
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `📎 **File injection noted:** \`${filePath}\`\n\n` +
+                    `Please add this file to the PR. On merge, the pipeline will detect ` +
+                    `the manually-added asset and skip agent generation for that phase.`
+            });
+
+  handle-regenerate:
+    needs: check-command
+    if: needs.check-command.outputs.is-sdlc-command == 'true' && needs.check-command.outputs.command == 'regenerate'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger regeneration
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.payload.issue.pull_request.head.ref;
+            const prNumber = context.issue.number;
+
+            // Extract phase from branch name
+            const match = branch.match(/^sdlc\/([^/]+)\//);
+            const phase = match ? match[1] : 'unknown';
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `🔄 **Regeneration requested** for \`${phase}\` phase\n\n` +
+                    `The agent will regenerate this asset from scratch.`
+            });
+
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'agent-decision.yml',
+              ref: branch,
+              inputs: {
+                phase: phase,
+                task: 'Regenerate this asset from scratch, ignoring previous version',
+                checkout_ref: branch
+              }
+            });
+
+  handle-explain:
+    needs: check-command
+    if: needs.check-command.outputs.is-sdlc-command == 'true' && needs.check-command.outputs.command == 'explain'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger explanation
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.payload.issue.pull_request.head.ref;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `🧠 **Explanation requested**\n\n` +
+                    `The agent will explain its decisions for this phase.`
+            });
+
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'agent-decision.yml',
+              ref: branch,
+              inputs: {
+                phase: 'explain',
+                task: 'Explain the decisions made in this asset: what was chosen, why, what alternatives were considered',
+                checkout_ref: branch
+              }
+            });

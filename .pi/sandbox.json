@@ -1,0 +1,7 @@
+{
+  "network": {
+    "allowedDomains": [
+      "earendil-works.github.io"
+    ]
+  }
+}

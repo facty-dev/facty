@@ -1,0 +1,26 @@
+# Environment files (secrets)
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/settings.local.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Agent runtime state (machine-local)
+.agentic/tmp/
+.agentic/vm-session.json
+.agentic/vm-session.log
+.gondolin-pi/
