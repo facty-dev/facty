@@ -7,7 +7,7 @@
 
 **Date:** 2026-10-15
 **Facilitator:** decision agent (drawbridge SDLC discovery run, zai-glm-5-3)
-**Status:** draft <!-- draft | in-review | approved -->
+**Status:** approved <!-- draft | in-review | approved -->
 **Version:** 0.1
 
 ---
@@ -329,9 +329,9 @@ with the ASM-3a-1/2/3 CI feasibility spike run early and in parallel.
 
 | Role | Name | Date | Signature |
 |------|------|------|-----------|
-| Product Owner | chart (per ADR-0001 deciders) | — | pending |
-| Tech Lead | — | — | pending |
-| Design Lead | — | — | pending |
+| Product Owner | chart (per ADR-0001 deciders) | 2026-10-15 | approved in dev session — proceed with selected path (SOL-001-A client session manifests first); decider-model layer and self-improvement loop tracked as roadmap PRDs |
+| Tech Lead | — | — | — |
+| Design Lead | — | — | — |
 
 ---
 
