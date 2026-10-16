@@ -15,6 +15,23 @@ secrets never leave the host.
 > repo remains the canonical record:
 > [chartpath/clientsort-docs-archive](https://github.com/chartpath/clientsort-docs-archive).
 
+## Why OST-first
+
+Most AI-SDLC and spec-driven frameworks start at **solution definition**:
+PRDs and specs describe *what to build* before anything asks whether it is
+the right problem to solve. Drawbridge operates one layer up: the
+[OST](docs/discovery/ost.md) is a live strategic asset, and the agents
+continuously pick up the direct output of stakeholder-facing discovery work
+that happens upstream of PRDs.
+
+The loop spirals: opportunities are evaluated strategically → solutions are
+proposed with **testable assumptions** → lean production slices validate the
+assumptions, ordered by business value rank (cheapest assumption-killers
+first) → evidence flows back into the tree. Discovery is continuous, not a
+one-time gate — the same layering Jira Product Discovery added above
+delivery workflows, but agentic, auditable, and versioned in the asset
+graph.
+
 ## Status
 
 **Operational.** The full pipeline is proven end-to-end: the discovery phase

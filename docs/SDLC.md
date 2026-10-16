@@ -8,6 +8,15 @@
 
 A structured, gated SDLC driven by two AI agents (decision + coding) with human review gates at each phase. Based on the **Triple Diamond** / **Opportunity Solution Tree (OST)** approach from continuous discovery.
 
+> **OST-first:** This SDLC starts one layer above solution definition. The OST
+> is a live asset continuously fed by stakeholder-facing discovery —
+> opportunities, solutions, and testable assumptions — so agents evaluate
+> *whether the right problem is being solved* before defining what to build.
+> Delivery proceeds as lean production slices that validate the assumptions
+> behind each solution, ordered by business value rank (cheapest
+> assumption-killers first). Evidence from each slice spirals back into the
+> tree — discovery never closes.
+
 ---
 
 ## Overview
