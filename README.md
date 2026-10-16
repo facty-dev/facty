@@ -1,76 +1,53 @@
 # drawbridge — Agentic SDLC + multi-tenant agent isolation on Gondolin micro-VMs
 
-Run the SDLC (discovery → PRD → BDD → implementation → review) with two AI
-agents — a **decision agent** (plans, reviews) and a **coding agent**
-(implements) — each executing inside isolated **gondolin micro-VMs** with
-DuckDuckGo web search and a full skill suite baked in. Every run is audited;
-secrets never leave the host.
+Two AI agents — a **decision agent** (plans, reviews) and a **coding agent**
+(implements) — run your SDLC (discovery → PRD → BDD → implementation →
+review) inside isolated **gondolin micro-VMs**: web search and a full skill
+suite baked in, every run audited, secrets never leaving the host.
+**Operational** — the pipeline is proven end-to-end (discovery runs in ~76s,
+audited, zero secret exposure).
 
-> **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) ·
-> Key decision: [ADR-0001](docs/adr/0001-session-execution-under-sandboxing.md)
->
-> **Lineage:** drawbridge continues the neurosymbolic architecture explored as
-> clientsort/Reyearn (2020–2024). Its full git history is imported below and
-> the vision document lives at [docs/vision.md](docs/vision.md); the original
-> repo remains the canonical record:
-> [chartpath/clientsort-docs-archive](https://github.com/chartpath/clientsort-docs-archive).
-
-## Why OST-first
-
-Most AI-SDLC and spec-driven frameworks start at **solution definition**:
-PRDs and specs describe *what to build* before anything asks whether it is
-the right problem to solve. Drawbridge operates one layer up: the
-[OST](docs/discovery/ost.md) is a live strategic asset, and the agents
-continuously pick up the direct output of stakeholder-facing discovery work
-that happens upstream of PRDs.
-
-The loop spirals: opportunities are evaluated strategically → solutions are
-proposed with **testable assumptions** → lean production slices validate the
-assumptions, ordered by business value rank (cheapest assumption-killers
-first) → evidence flows back into the tree. Discovery is continuous, not a
-one-time gate — the same layering Jira Product Discovery added above
-delivery workflows, but agentic, auditable, and versioned in the asset
-graph.
-
-## Status
-
-**Operational.** The full pipeline is proven end-to-end: the discovery phase
-runs decision agents in a VM session (76s, audited, zero secret exposure) and
-writes OST/PRD/BDD assets into `docs/` and `specs/`.
+Docs: [Architecture](docs/ARCHITECTURE.md) · [ADR-0001](docs/adr/0001-session-execution-under-sandboxing.md) ·
+[SDLC](docs/SDLC.md) · Lineage: [vision](docs/vision.md) ←
+[clientsort-docs-archive](https://github.com/chartpath/clientsort-docs-archive) (full history imported)
 
 ## Quick start
 
-Prerequisites (host):
-
-- `gondolin` (`npm install -g @earendil-works/gondolin` + QEMU)
-- `pi` (`npm install -g @earendil-works/pi-coding-agent`), Mistral credential
-  stored via `pi auth` (or `MISTRAL_API_KEY` exported in your shell)
-- The gondolin-pi VM template at `~/code/gondolin-pi` (snapshot built)
+Prerequisites: `gondolin` + QEMU, `pi` (npm globals), Mistral credential via
+`pi auth`, and the gondolin-pi VM template with a built snapshot.
 
 ```bash
-# 1. Boot the SDLC VM session — from YOUR terminal, leave it open
-make vm-up                # guest prompt appears; this terminal hosts the session
+# 1. Boot the agent VM session — from YOUR terminal, leave it open
+make vm-up                # this terminal hosts the session
 
-# 2. (any terminal / agent session) run SDLC phases
+# 2. Run SDLC phases — from any terminal (or a sandboxed agent session)
 make agent-decision PHASE=discovery TASK="Bootstrap the OST for <feature>"
 make agent-decision PHASE=prd        TASK="Generate PRD-007 from the OST"
 make agent-decision PHASE=bdd        TASK="Write specs from PRD-007"
 make agent-coding   TASK=.agentic/messages/decision-to-coding/001-task.md
 
-# or generically
-make run-agent AGENT=decision PHASE=prd TASK="..."
-
 # 3. Lifecycle
 make vm-status             # session state (safe from sandboxed sessions)
-make vm-down              # stop the session (from your terminal)
+make vm-down               # stop the session (from your terminal)
 ```
 
-Agents read/write the repo directly: the project is mounted at `/workspace`
-inside the VM, so artifacts land on the host. Every run — success or failure —
-is appended to `.agentic/audit.jsonl` (role, phase, model, runtime, exit code,
-duration).
+Agents work directly on the repo (mounted at `/workspace` in the VM), so
+artifacts land on the host. Every run — success or failure — is appended to
+`.agentic/audit.jsonl` with role, phase, model, runtime, exit code, duration.
 
-## The isolation model
+## Why OST-first
+
+Most AI-SDLC frameworks start at **solution definition** — PRDs describe
+*what to build* before asking whether it's the right problem. Drawbridge
+operates one layer up: the [OST](docs/discovery/ost.md) is a live strategic
+asset, continuously fed by stakeholder-facing discovery upstream of PRDs.
+The loop spirals — opportunities → solutions with **testable assumptions** →
+lean production slices validating them, **ordered by business value rank**
+(cheapest assumption-killers first) → evidence back into the tree. Discovery
+never closes. It's the layering Jira Product Discovery added above delivery
+workflows — but agentic, auditable, and versioned in the asset graph.
+
+## Isolation model
 
 ```
 ┌──────────────────────────── YOUR MACHINE ─────────────────────────────┐
@@ -91,53 +68,50 @@ duration).
 │               side only) │  egress: explicit allow-list only     │     │
 │                          └──────────────────────────────────────┘     │
 │                                                                       │
-│  Host filesystem (NOT mounted into the VM unless explicit):           │
-│  ~/.ssh ❌  ~/.aws ❌  other projects ❌  host keychains ❌             │
+│  Never mounted into the VM:  ~/.ssh ❌  ~/.aws ❌  other projects ❌    │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
-| Guarantee | Mechanism (gondolin) |
+| Guarantee | Mechanism |
 |---|---|
-| **Secrets** | `--host-secret`: guest env holds a placeholder; the host proxy substitutes the real value only into outbound requests to allowed hosts. Usable, never readable. |
+| **Secrets** | `--host-secret`: guest sees a placeholder; the host proxy substitutes the real value only into outbound requests to allowed hosts — usable, never readable |
 | **Project** | Only explicitly `--mount-hostfs`-ed directories exist in the guest |
-| **Network** | Programmable stack: synthetic DNS + domain allow-list; anything else blocked |
-| **Process** | Hypervisor isolation (QEMU/krun micro-VM) |
-| **State** | Snapshot-based guest images; sessions are ephemeral-per-boot |
-| **Host agent sandboxing** | The orchestrating pi session runs under pi-sandbox; session IPC (unix socket) is the only bridge |
+| **Network** | Synthetic DNS + explicit domain allow-list; everything else blocked |
+| **Process** | Hypervisor isolation (QEMU/krun micro-VM), snapshot-based images |
+| **Orchestration** | The driving session runs under pi-sandbox; unix-socket IPC is the only bridge |
 
-## The two-agent SDLC
+## Agents
 
-- **Decision agent** (`zai-glm-5-3` @ max thinking): discovery (OST), PRD, BDD,
-  review. Writes docs/specs assets + coding-agent task queue messages.
-- **Coding agent** (`zai-glm-5-3` @ low thinking): implements tasks from
-  `.agentic/messages/decision-to-coding/` with TDD, reports back via
-  `coding-to-decision/`.
+- **Decision agent** (`zai-glm-5-3` @ max thinking) — OST, PRD, BDD, review;
+  writes docs/specs assets and the coding-agent task queue
+- **Coding agent** (`zai-glm-5-3` @ low thinking) — TDD implementation from
+  `.agentic/messages/decision-to-coding/`; reports to `coding-to-decision/`
 
-Role prompts: `templates/sdlc/agents/`. Full lifecycle:
-[docs/SDLC.md](docs/SDLC.md) · Runtime: [docs/AGENTIC-RUNTIME.md](docs/AGENTIC-RUNTIME.md) ·
-Gates: [docs/GITHUB-GATES.md](docs/GITHUB-GATES.md) ·
-Assets: [docs/ASSET-MODEL.md](docs/ASSET-MODEL.md)
+Role prompts: `templates/sdlc/agents/`. Per-run model overrides:
+`AGENT_MODEL`, `AGENT_THINKING`, `AGENT_RUNTIME=auto|session|ephemeral`.
 
-## Known sharp edges (see ADR-0001)
+## Sharp edges (ADR-0001)
 
-1. **Never** run `gondolin list` / `exec --sock <session-id>` from a
-   sandboxed session — the pid-based session GC misfires under the sandbox
-   and deletes live sessions' registry files. The scripts use recorded
-   socket paths (`.agentic/vm-session.json`) instead.
-2. `gondolin exec` commands don't inherit the boot env — the secret
-   placeholder is stashed at `/root/.session-env/` at boot and sourced by
-   exec'd agents.
-3. The session lives as long as the terminal hosting `make vm-up`. For
-   unattended/CI operation, host the session via launchd (future work).
+1. Never run `gondolin list` / id-based `exec` from a sandboxed session — the
+   pid-based session GC misfires under the sandbox and deletes live sessions'
+   registry files. The scripts use recorded socket paths instead.
+2. `gondolin exec` doesn't inherit the boot env — the secret placeholder is
+   stashed at boot (`/root/.session-env/`) and sourced by exec'd agents.
+3. The session lives as long as the terminal hosting `make vm-up` — launchd
+   hosting for unattended/CI operation is roadmap.
 
-## Roadmap (on the new primitives)
+## Roadmap
 
-- Multi-tenant client management: per-client gondolin sessions, per-client
-  host-secrets and egress policies. Session naming: `pi-<client>-<provider>`;
-  credential naming: `<client>-<provider>-<credential>`.
-- `launchd`-hosted persistent sessions for unattended operation.
-- GitHub Actions wiring: CI runs agents in ephemeral gondolin VMs
-  (`--resume` from the cached snapshot).
+- **Multi-tenant client sessions**: per-client manifests, host-secrets, and
+  egress policies (`pi-<client>-<provider>` naming)
+- **Unattended hosting**: launchd-supervised sessions
+- **CI wiring**: GitHub Actions phases on ephemeral VM boots (cached snapshot)
+- **Decision-model layer**: small typed models (JSON-schema in → structured
+  choice + confidence out) replacing ad-hoc routing/gating logic
+- **Self-improvement loop**: distill metrics from the audit trail into
+  *proposed deterministic inputs* for the decision models — new routing rules,
+  gate thresholds, classification schemas — human-critic-gated, versioned in
+  the asset graph (PRD-005's neurosymbolic bridge, operationalized)
 
 ## Project structure
 
@@ -146,10 +120,10 @@ drawbridge/
 ├── Makefile                  # SDLC + session lifecycle targets
 ├── scripts/
 │   ├── vm-session.sh         # SDLC VM session lifecycle (up/status/exec/down)
-│   ├── agent-pi.sh           # decision/coding agent runner (audited)
-│   └── sdlc-branch.sh        # git-native phase branches
+│   ├── agent-pi.sh            # decision/coding agent runner (audited)
+│   └── sdlc-branch.sh         # git-native phase branches
 ├── templates/sdlc/           # OST/PRD/BDD/ADR templates + agent role prompts
-├── docs/                     # architecture, SDLC, PRDs, ADRs
+├── docs/                     # architecture, SDLC, PRDs, ADRs, vision
 │   └── adr/                  # decision records (start with ADR-0001)
 └── .agentic/                 # audit trail, agent message queues
 ```
