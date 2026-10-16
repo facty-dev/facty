@@ -11,9 +11,11 @@
 #
 # ── Quick start ──────────────────────────────────────────────────────────────
 #
+#   make dss-live             # Interactive walkthrough (streamed LLM sensing)
 #   make dss-demo             # Run the Silver Blaze case (phase 1)
 #   make dss-demo-2           # Apply the ledger test (phase 2)
 #   make dss-selftest         # Acceptance test — the PoC happy path, asserted
+#   make dss-test             # All tests: selftest + the sensing retry loop
 #
 #   make vm-up                # Boot the pack-factory VM session (from YOUR terminal)
 #   make agent-decision PHASE=discovery TASK="..."
@@ -31,9 +33,11 @@ help:
 	@echo "redyarn — the detective DSS (symbolic engine + LLM sensing)"
 	@echo ""
 	@echo "═══ redyarn engine (the product) ═══"
+	@echo "  make dss-live           Interactive walkthrough (streamed LLM sensing)"
 	@echo "  make dss-demo           Run the Silver Blaze case (phase 1)"
 	@echo "  make dss-demo-2         Apply the ledger test (phase 2)"
 	@echo "  make dss-selftest       Acceptance test — the PoC happy path, asserted"
+	@echo "  make dss-test           All tests: selftest + the sensing retry loop"
 	@echo ""
 	@echo "═══ Pack-factory VM session ═══"
 	@echo "  make vm-up              Boot the SDLC VM session (from your terminal)"
@@ -73,7 +77,10 @@ info:
 # over canonical case artifacts. The LLM senses and proposes; the engine
 # decides. See docs/adr/0003-detective-dss-neurosymbolic-core.md.
 
-.PHONY: dss-demo dss-demo-2 dss-selftest
+.PHONY: dss-demo dss-demo-2 dss-selftest dss-live dss-test
+
+dss-live:
+	python3 engine/cli.py --case engine/cases/silver-blaze
 
 dss-demo:
 	python3 engine/engine.py run --case engine/cases/silver-blaze
@@ -83,6 +90,9 @@ dss-demo-2:
 
 dss-selftest:
 	python3 engine/engine.py selftest
+
+dss-test: dss-selftest
+	python3 engine/test_retry.py
 
 # ── Agentic Runtime (SDLC) ──────────────────────────────────────────────────
 # Asset-oriented SDLC: OST → PRD → BDD → Implementation → ADRs

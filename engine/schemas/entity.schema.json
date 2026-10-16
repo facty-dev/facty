@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Entity",
+  "description": "A case entity extracted by the sensing half: a person, animal, place, object, or organization that matters to the case.",
+  "type": "object",
+  "required": ["id", "name", "kind", "confidence"],
+  "properties": {
+    "id": { "type": "string" },
+    "name": { "type": "string" },
+    "kind": { "type": "string", "enum": ["person", "animal", "place", "object", "organization"] },
+    "role": { "type": "string" },
+    "mentions": { "type": "array", "items": { "type": "string" } },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+  }
+}

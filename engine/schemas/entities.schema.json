@@ -1,0 +1,7 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Entities",
+  "description": "The sensing half's entity extraction: an array of case entities.",
+  "type": "array",
+  "items": { "$ref": "entity.schema.json" }
+}

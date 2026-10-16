@@ -1,0 +1,7 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EvidenceIndex",
+  "description": "The sensing half's classification of the raw evidence pile: an array of typed evidence items.",
+  "type": "array",
+  "items": { "$ref": "evidence-item.schema.json" }
+}

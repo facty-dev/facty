@@ -17,6 +17,9 @@ TS_SCALARS = {"string": "string", "number": "number", "integer": "number", "bool
 
 
 def ts_type(prop):
+    if "$ref" in prop:
+        ref = json.loads((SCHEMA_DIR / prop["$ref"]).read_text())
+        return ref.get("title", "unknown")
     if "enum" in prop:
         return " | ".join(json.dumps(v) for v in prop["enum"])
     t = prop.get("type")
@@ -34,6 +37,10 @@ def emit_ts():
     for schema_file in sorted(SCHEMA_DIR.glob("*.schema.json")):
         schema = json.loads(schema_file.read_text())
         name = schema.get("title", schema_file.stem.replace(".schema", ""))
+        if schema.get("type") == "array":
+            parts.append(f"export type {name} = {ts_type(schema.get('items', {}))}[];")
+            parts.append("")
+            continue
         parts.append(f"export interface {name} {{")
         for key, prop in schema.get("properties", {}).items():
             optional = "" if key in schema.get("required", []) else "?"

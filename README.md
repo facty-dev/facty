@@ -74,9 +74,11 @@ vanished and the dog that didn't bark. See
 [the PoC plan](docs/discovery/detective-dss-poc.md).
 
 ```bash
-make dss-demo        # phase 1 — the case as first heard
-make dss-demo-2      # phase 2 — the ledger test applied
+make dss-live        # interactive walkthrough — step through, streamed LLM sensing
+make dss-demo        # phase 1 — the case as first heard (batch)
+make dss-demo-2      # phase 2 — the ledger test applied (batch)
 make dss-selftest    # acceptance test — the happy path, asserted
+make dss-test        # all tests: selftest + the sensing retry loop
 ```
 
 ## Where things live

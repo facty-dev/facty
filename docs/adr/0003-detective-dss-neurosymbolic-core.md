@@ -109,6 +109,20 @@ self-critique doesn't work. The LLM never sits in the inner loop of rule
 firing and never issues the verdict; every verdict is a deterministic
 artifact the engine can replay without the LLM.
 
+**Schema-guided extraction is the sensing contract.** The LLM half's
+interface is (JSON schema + messy field input) → typesafe,
+schema-validated structured object that the logic engine consumes
+(`engine/sensing.py`). Entity extraction and classification are sensing
+operations — the engine never extracts or classifies; it verifies what
+the senses produce. (PRD-005 GOAL-2 / GOAL-5.)
+
+**The judge layer with a capped correction loop.** The loop is sense →
+judge → solve. The judge validates the structured output (schema +
+compute checks on the objects — e.g. unique ids, real source files); a
+rejection feeds the error back to the LLM for a capped number of
+correction turns (max 3) before the corrected output passes for real.
+An unreachable LLM fails fast — that error cannot correct itself.
+
 ### 2. Canonical artifact model — one schema, three projections
 
 | Artifact | Canonical JSON shape | Projections |

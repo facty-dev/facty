@@ -1,0 +1,7 @@
+[
+  { "file": "kennel-log.txt", "evidenceClass": "log", "summary": "Kennel log for the night of the disappearance — fed 22:00, walked 23:30, then a gap until dawn with no barking recorded.", "confidence": 0.95 },
+  { "file": "stable-roster.md", "evidenceClass": "roster", "summary": "King's Pyland roster: owner, trainer, stable lad, the kennel dog (barks at strangers), and the rival trainer.", "confidence": 0.95 },
+  { "file": "moor-report.txt", "evidenceClass": "report", "summary": "The moor find: Straker dead of a single blow, cravat torn, lantern and penknife beside him; hoof-prints walking toward Mapleton.", "confidence": 0.95 },
+  { "file": "telegram.txt", "evidenceClass": "correspondence", "summary": "Office telegrams: the scratch, the owner's demand, and Straker's second address with debts.", "confidence": 0.9 },
+  { "file": "rival-note.md", "evidenceClass": "note", "summary": "Silas Brown's note: the horse found riderless at Mapleton at dawn; a denial of involvement.", "confidence": 0.9 }
+]

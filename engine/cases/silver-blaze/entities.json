@@ -1,0 +1,12 @@
+[
+  { "id": "e-silver-blaze", "name": "Silver Blaze", "kind": "animal", "role": "the missing champion racehorse (white forefoot)", "mentions": ["evidence/telegram.txt", "evidence/moor-report.txt", "evidence/rival-note.md"], "confidence": 0.98 },
+  { "id": "e-straker", "name": "John Straker", "kind": "person", "role": "the trainer, found dead on the moor", "mentions": ["evidence/moor-report.txt", "evidence/telegram.txt", "evidence/stable-roster.md"], "confidence": 0.98 },
+  { "id": "e-ned-hunter", "name": "Ned Hunter", "kind": "person", "role": "stable lad; knew Straker from the city", "mentions": ["evidence/stable-roster.md"], "confidence": 0.95 },
+  { "id": "e-colonel-ross", "name": "Colonel Ross", "kind": "person", "role": "the owner", "mentions": ["evidence/stable-roster.md", "evidence/telegram.txt"], "confidence": 0.95 },
+  { "id": "e-silas-brown", "name": "Silas Brown", "kind": "person", "role": "rival trainer at Mapleton", "mentions": ["evidence/stable-roster.md", "evidence/rival-note.md"], "confidence": 0.95 },
+  { "id": "e-carlo", "name": "Carlo", "kind": "animal", "role": "kennel spaniel; barks at strangers, knows the stable staff", "mentions": ["evidence/kennel-log.txt", "evidence/stable-roster.md"], "confidence": 0.9 },
+  { "id": "e-kings-pyland", "name": "King's Pyland", "kind": "place", "role": "the stables where Silver Blaze was kept", "mentions": ["evidence/stable-roster.md", "evidence/telegram.txt"], "confidence": 0.95 },
+  { "id": "e-mapleton", "name": "Mapleton", "kind": "place", "role": "the rival stables across the moor", "mentions": ["evidence/stable-roster.md", "evidence/rival-note.md", "evidence/moor-report.txt"], "confidence": 0.95 },
+  { "id": "e-the-moor", "name": "the moor", "kind": "place", "role": "where Straker's body was found", "mentions": ["evidence/moor-report.txt"], "confidence": 0.95 },
+  { "id": "e-cravat", "name": "the cravat", "kind": "object", "role": "Straker's torn cravat — a sign of struggle", "mentions": ["evidence/moor-report.txt"], "confidence": 0.85 }
+]

@@ -11,19 +11,31 @@ path.
 ## Run
 
 ```bash
-make dss-demo        # phase 1 — the case as first heard
-make dss-demo-2      # phase 2 — the ledger test applied
+make dss-live        # interactive walkthrough — step through, streamed LLM sensing
+make dss-demo        # phase 1 — the case as first heard (batch)
+make dss-demo-2      # phase 2 — the ledger test applied (batch)
 make dss-selftest    # acceptance test — the PoC happy path, asserted
 ```
 
 ## Layout
 
 - `schemas/` — the canonical artifact schemas (the common protocol)
-- `engine.py` — the engine (library + CLI: `run`, `selftest`)
+- `engine.py` — the symbolic engine (library + CLI: `run`, `selftest`)
+- `sensing.py` — the probabilistic half: schema-guided structured
+  extraction (schema + messy input → validated object, LLM streamed),
+  with a judge layer (schema + compute checks) and a capped correction
+  loop — rejections feed back to the LLM, max 3 turns
+- `test_retry.py` — the correction loop, tested with a stubbed runner
+  (no LLM needed)
+- `cli.py` — the interactive CLI: step-through walkthrough with
+  module-tagged log lines and live LLM streaming (a stepping stone to
+  the Workbench UI)
 - `cases/silver-blaze/` — the exemplar case: `evidence/` (raw files),
-  `pack/` (rules, constraints, hypotheses), `facts.json` +
-  `facts-ledger.json` (the sensed facts), `SENSING.md` (the sensing
-  record), `expected.md` (the outcome the selftest asserts)
+  `pack/` (rules, constraints, hypotheses), the recorded sensing
+  (`evidence-index.json`, `entities.json`, `facts.json`,
+  `facts-ledger.json`), `sensing-prompt.md` (the facts task),
+  `SENSING.md` (the sensing record), `expected.md` (the outcome the
+  selftest asserts)
 - `emit.py` → `emit/` — codegen projections (TypeScript types, Datalog)
 
 ## The protocol

@@ -36,6 +36,8 @@ _TYPE_MAP = {
 
 def validate(instance, schema, path="$"):
     """Return a list of violation strings (empty = valid)."""
+    if isinstance(schema, dict) and "$ref" in schema:
+        return validate(instance, load_json(SCHEMA_DIR / schema["$ref"]), path)
     errs = []
     t = schema.get("type")
     if t is not None:
@@ -72,6 +74,17 @@ def load_array(path, schema_name):
         errs = validate(item, schema, f"{path}[{i}]")
         if errs:
             raise SystemExit(f"schema violation in {path}[{i}]:\n  " + "\n  ".join(errs))
+    return data
+
+
+def load_validated(path, schema_name):
+    """Load a JSON document, validating the whole document against an
+    (array or object) schema — for wrapper schemas with $ref items."""
+    data = load_json(path)
+    schema = load_json(SCHEMA_DIR / schema_name)
+    errs = validate(data, schema, path=str(path))
+    if errs:
+        raise SystemExit(f"schema violation in {path}:\n  " + "\n  ".join(errs))
     return data
 
 
@@ -119,28 +132,36 @@ def conds_hold(conds, facts):
 
 # ── Forward chaining (modus ponens; fixpoint) ────────────────────────
 
-def forward_chain(facts, rules, max_rounds=50):
-    """Run rules to a fixpoint.
+def forward_chain(facts, rules, max_rounds=50, emit=None):
+    """Run rules to a fixpoint. If emit is given, it is called with an
+    event dict per rule firing (derive / raise / open), including the
+    source fact ids that matched the rule's conditions.
     Returns (derived_facts, fired, opened_questions, raised_hypotheses)."""
     known = {f["id"]: f for f in facts}
     derived, fired, questions, raised = [], [], [], []
     q_ids = set()
+
+    def fire(event):
+        if emit:
+            emit(event)
+
     for round_no in range(max_rounds):
         new_any = False
         for rule in rules:
-            # All binding combinations for the rule's conditions.
-            combos = [{}]
+            # All binding combinations for the rule's conditions,
+            # tracking which fact ids matched each condition.
+            combos = [({}, [])]
             for cond in rule["when"]:
                 nxt = []
-                for b in combos:
+                for b, srcs in combos:
                     for fact in known.values():
                         mb = match_cond(cond, fact, b)
                         if mb is not None:
-                            nxt.append(mb)
+                            nxt.append((mb, srcs + [fact["id"]]))
                 combos = nxt
                 if not combos:
                     break
-            for b in combos:
+            for b, srcs in combos:
                 for action in rule["then"]:
                     op = action.get("op")
                     if op == "derive":
@@ -155,14 +176,22 @@ def forward_chain(facts, rules, max_rounds=50):
                             fact = dict(fact, id=fid)
                         known[fid] = fact
                         derived.append(fact)
-                        fired.append({"rule": rule["id"], "round": round_no, "bindings": b})
+                        fired.append({"rule": rule["id"], "round": round_no,
+                                      "derived": fid, "sources": srcs})
+                        fire({"op": "derive", "rule": rule["id"], "fact": fact,
+                              "sources": srcs})
                         new_any = True
                     elif op == "raise":
-                        for hid in subst(action["hypotheses"], b):
-                            if hid not in raised:
-                                raised.append(hid)
-                                fired.append({"rule": rule["id"], "round": round_no, "raised": hid})
-                                new_any = True
+                        new = [hid for hid in subst(action["hypotheses"], b)
+                               if hid not in raised]
+                        for hid in new:
+                            raised.append(hid)
+                            fired.append({"rule": rule["id"], "round": round_no,
+                                          "raised": hid})
+                        if new:
+                            fire({"op": "raise", "rule": rule["id"],
+                                  "hypotheses": new})
+                            new_any = True
                     elif op == "open":
                         q = subst(action["question"], b)
                         q.setdefault("raisedBy", "rule:" + rule["id"])
@@ -170,7 +199,9 @@ def forward_chain(facts, rules, max_rounds=50):
                         if q["id"] not in q_ids:
                             q_ids.add(q["id"])
                             questions.append(q)
-                            fired.append({"rule": rule["id"], "round": round_no, "opened": q["id"]})
+                            fired.append({"rule": rule["id"], "round": round_no,
+                                          "opened": q["id"]})
+                            fire({"op": "open", "rule": rule["id"], "question": q})
                             new_any = True
         if not new_any:
             break
@@ -179,8 +210,9 @@ def forward_chain(facts, rules, max_rounds=50):
 
 # ── Backward chaining (goal-driven claim proofs) ─────────────────────
 
-def prove_claims(claims, facts):
-    """Every claim must be provable from the fact base.
+def prove_claims(claims, facts, emit=None):
+    """Every claim must be provable from the fact base. If emit is given,
+    it is called per claim (proven or refuted, with the proving fact id).
     Returns (proven_count, refuted_claims, proofs)."""
     proofs, refuted = [], []
     for claim in claims:
@@ -189,6 +221,9 @@ def prove_claims(claims, facts):
             if match_cond(claim, fact, {}) is not None:
                 matched = fact["id"]
                 break
+        if emit:
+            emit({"op": "claim", "claim": claim, "proven": matched is not None,
+                  "provenBy": matched})
         if matched:
             proofs.append({"claim": claim, "provenBy": matched})
         else:
@@ -198,8 +233,9 @@ def prove_claims(claims, facts):
 
 # ── Constraint layer (prune + support) ───────────────────────────────
 
-def apply_constraints(hypotheses, facts, constraints):
-    """Prune eliminated hypotheses, add support scores.
+def apply_constraints(hypotheses, facts, constraints, emit=None):
+    """Prune eliminated hypotheses, add support scores. If emit is given,
+    it is called per elimination / support event.
     Returns (survivors, pruned)."""
     scored = []
     for h in hypotheses:
@@ -216,12 +252,21 @@ def apply_constraints(hypotheses, facts, constraints):
                         h["eliminated"] = c.get("reason", c["id"])
                         pruned.append({"hypothesis": h["id"], "constraint": c["id"],
                                        "reason": c.get("reason", "")})
+                        if emit:
+                            emit({"op": "eliminate", "constraint": c["id"],
+                                  "hypothesis": h["id"],
+                                  "reason": c.get("reason", "")})
         elif c["type"] == "support":
             if conds_hold(c.get("when", []), facts):
                 for h in scored:
                     if h["id"] == c["hypothesis"] and not h["eliminated"]:
                         if h.get(c.get("field")) == c.get("value"):
                             h["support"] += 1
+                            if emit:
+                                emit({"op": "support", "constraint": c["id"],
+                                      "hypothesis": h["id"],
+                                      "field": c.get("field"),
+                                      "value": c.get("value")})
     survivors = [h for h in scored if not h["eliminated"]]
     for h in scored:
         h["status"] = "pruned" if h["eliminated"] else "open"
@@ -236,10 +281,23 @@ def apply_constraints(hypotheses, facts, constraints):
 W_CLAIMS, W_SUPPORT, W_PRIOR = 0.6, 0.3, 0.1
 
 
-def combine(survivors, facts, questions):
+def rank_questions(questions, ranked_ids):
+    """Open questions ranked by how many surviving hypotheses they
+    discriminate (ties: lowest priority, then id)."""
+    open_q = [q for q in questions if q.get("status") == "open"]
+
+    def q_key(q):
+        alive = len([r for r in ranked_ids if r in q.get("discriminates", [])])
+        return (-alive, q.get("priority", 99), q["id"])
+
+    open_q.sort(key=q_key)
+    return open_q
+
+
+def combine(survivors, facts, questions, emit=None):
     ranked = []
     for h in survivors:
-        proven, refuted, proofs = prove_claims(h.get("claims", []), facts)
+        proven, refuted, proofs = prove_claims(h.get("claims", []), facts, emit=emit)
         total = len(h.get("claims", [])) or 1
         score = (W_CLAIMS * proven / total
                  + W_SUPPORT * min(h["support"], 3) / 3
@@ -251,17 +309,14 @@ def combine(survivors, facts, questions):
             "support": h["support"], "prior": h.get("prior", 0.0),
             "score": round(score, 4), "proofs": proofs, "refuted": refuted,
         })
+        if emit:
+            emit({"op": "proof", "hypothesis": h["id"],
+                  "statement": h["statement"], "proven": proven,
+                  "total": total, "score": round(score, 4)})
     ranked.sort(key=lambda r: (-r["score"], r["id"]))
-    # Recommended test: the open question discriminating the most
-    # surviving hypotheses (ties: lowest priority, then id).
-    open_q = [q for q in questions if q.get("status") == "open"]
-
-    def q_key(q):
-        alive = len([r for r in ranked if r["id"] in q.get("discriminates", [])])
-        return (-alive, q.get("priority", 99), q["id"])
-
-    open_q.sort(key=q_key)
-    return {"ranking": ranked, "recommended_test": open_q[0] if open_q else None}
+    recommended = rank_questions(questions, [r["id"] for r in ranked])
+    return {"ranking": ranked,
+            "recommended_test": recommended[0] if recommended else None}
 
 
 # ── Case loading + run ───────────────────────────────────────────────
@@ -277,13 +332,13 @@ def load_case(case_dir, add_facts=None):
     return facts, rules, hypotheses, constraints
 
 
-def run_case(case_dir, add_facts=None):
+def run_case(case_dir, add_facts=None, emit=None):
     facts, rules, hypotheses, constraints = load_case(case_dir, add_facts)
-    derived, fired, questions, raised = forward_chain(facts, rules)
+    derived, fired, questions, raised = forward_chain(facts, rules, emit=emit)
     all_facts = facts + derived
     active = [h for h in hypotheses if h["id"] in raised] if raised else hypotheses
-    survivors, pruned = apply_constraints(active, all_facts, constraints)
-    verdict = combine(survivors, all_facts, questions)
+    survivors, pruned = apply_constraints(active, all_facts, constraints, emit=emit)
+    verdict = combine(survivors, all_facts, questions, emit=emit)
     return {
         "case": str(Path(case_dir).name),
         "phase": "phase 2 (test applied)" if add_facts else "phase 1 (initial evidence)",
@@ -411,6 +466,16 @@ def cmd_selftest(args):
     r2b = run_case(case, add_facts=ledger)
     same = json.dumps(r2, sort_keys=True) == json.dumps(r2b, sort_keys=True)
     check("deterministic replay (identical verdict, no LLM in the verdict path)", same)
+    try:
+        engine_load = True
+        load_validated = __import__("engine").load_validated
+        load_validated(case / "facts.json", "facts.schema.json")
+        load_validated(case / "evidence-index.json", "evidence-index.schema.json")
+        load_validated(case / "entities.json", "entities.schema.json")
+    except SystemExit:
+        engine_load = False
+    check("recorded sensing artifacts validate against their schemas "
+          "(facts, evidence-index, entities — incl. $ref wrappers)", engine_load)
     check("all artifacts are schema-validated JSON files; no DB, no VM, no network",
           True)
 

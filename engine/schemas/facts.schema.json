@@ -1,0 +1,7 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Facts",
+  "description": "The sensing half's fact extraction: an array of facts, schema-valid for the logic engine to consume.",
+  "type": "array",
+  "items": { "$ref": "fact.schema.json" }
+}
