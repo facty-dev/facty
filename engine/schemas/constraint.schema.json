@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Constraint",
+  "description": "A constraint-layer rule over the hypothesis space: eliminate a hypothesis when conditions hold, or add support when a hypothesis's field matches.",
+  "type": "object",
+  "required": ["id", "type"],
+  "properties": {
+    "id": { "type": "string" },
+    "type": { "type": "string", "enum": ["eliminate", "support"] },
+    "hypothesis": { "type": "string" },
+    "field": { "type": "string" },
+    "value": {},
+    "when": {
+      "type": "array",
+      "items": { "type": "object", "description": "Condition patterns; all must match the fact base (sensed + derived)." }
+    },
+    "reason": { "type": "string" }
+  }
+}

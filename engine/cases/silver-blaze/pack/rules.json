@@ -1,0 +1,110 @@
+[
+  {
+    "id": "R0",
+    "version": "1",
+    "pack": "silver-blaze",
+    "when": [
+      { "subject": "Silver Blaze", "predicate": "missing", "value": true },
+      { "subject": "John Straker", "predicate": "dead", "value": true }
+    ],
+    "then": [
+      { "op": "raise", "hypotheses": ["H1", "H2", "H3", "H4"] }
+    ]
+  },
+  {
+    "id": "R1",
+    "version": "1",
+    "pack": "silver-blaze",
+    "when": [
+      { "subject": "Silver Blaze", "predicate": "hoofprintsGait", "value": "walking" },
+      { "subject": "Silver Blaze", "predicate": "foundRiderless", "value": true }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d1", "type": "derived", "subject": "Silver Blaze", "predicate": "fate", "value": "wandered", "confidence": 0.9, "source": "rule:R1" } }
+    ]
+  },
+  {
+    "id": "R2",
+    "version": "1",
+    "pack": "silver-blaze",
+    "when": [
+      { "subject": "kennel-dog", "predicate": "barksAt", "value": "stranger" },
+      { "subject": "kennel-dog", "predicate": "barkedAtNightVisitor", "value": false }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d2", "type": "derived", "subject": "night-visitor", "predicate": "role", "value": "acquaintance", "confidence": 0.85, "source": "rule:R2" } }
+    ]
+  },
+  {
+    "id": "R3",
+    "version": "1",
+    "pack": "silver-blaze",
+    "when": [
+      { "subject": "night-visitor", "predicate": "role", "value": "acquaintance" },
+      { "subject": "John Straker", "predicate": "dead", "value": true },
+      { "subject": "John Straker", "predicate": "cravatTorn", "value": true }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d3", "type": "derived", "subject": "night-visitor", "predicate": "killed", "value": "John Straker", "confidence": 0.8, "source": "rule:R3" } }
+    ]
+  },
+  {
+    "id": "R4",
+    "version": "1",
+    "pack": "silver-blaze",
+    "when": [
+      { "subject": "John Straker", "predicate": "paidToSabotage", "value": "Silas Brown" }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d4", "type": "derived", "subject": "John Straker", "predicate": "wasSabotaging", "value": true, "confidence": 0.9, "source": "rule:R4" } }
+    ]
+  },
+  {
+    "id": "R5",
+    "version": "1",
+    "pack": "silver-blaze",
+    "when": [
+      { "subject": "John Straker", "predicate": "metOnMoor", "value": "Ned Hunter" },
+      { "subject": "Ned Hunter", "predicate": "handledTheHorse", "value": true },
+      { "subject": "night-visitor", "predicate": "role", "value": "acquaintance" }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d5", "type": "derived", "subject": "night-visitor", "predicate": "role", "value": "accomplice", "confidence": 0.8, "source": "rule:R5" } }
+    ]
+  },
+  {
+    "id": "R6",
+    "version": "1",
+    "pack": "silver-blaze",
+    "when": [
+      { "subject": "John Straker", "predicate": "debts", "value": true },
+      { "subject": "John Straker", "predicate": "secondEstablishment", "value": true }
+    ],
+    "then": [
+      { "op": "open", "question": { "id": "q1", "text": "Was Straker paid to sabotage Silver Blaze? Check the ledger at his second establishment.", "slot": "sabotage-payment", "mandatory": true, "priority": 1, "discriminates": ["H2", "H3"] } }
+    ]
+  },
+  {
+    "id": "R7",
+    "version": "1",
+    "pack": "silver-blaze",
+    "when": [
+      { "subject": "kennel-log", "predicate": "barkingEntry", "value": "absent" }
+    ],
+    "then": [
+      { "op": "open", "question": { "id": "q2", "text": "Who was the night visitor? The dog knew them — check the stable roster for acquaintances on the grounds that night.", "slot": "night-visitor-identity", "mandatory": true, "priority": 2, "discriminates": ["H2", "H3", "H4"] } }
+    ]
+  },
+  {
+    "id": "R8",
+    "version": "1",
+    "pack": "silver-blaze",
+    "when": [
+      { "subject": "Silver Blaze", "predicate": "scratched", "value": true },
+      { "subject": "Silas Brown", "predicate": "rivalOf", "value": "Colonel Ross" }
+    ],
+    "then": [
+      { "op": "open", "question": { "id": "q3", "text": "Did the rival trainer benefit from the scratch? Check Silas Brown's whereabouts on the night of the disappearance.", "slot": "rival-alibi", "mandatory": false, "priority": 3, "discriminates": ["H1"] } }
+    ]
+  }
+]

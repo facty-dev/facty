@@ -1,0 +1,49 @@
+[
+  {
+    "id": "C1",
+    "type": "eliminate",
+    "hypothesis": "H4",
+    "when": [
+      { "subject": "night-visitor", "predicate": "role", "value": "acquaintance" }
+    ],
+    "reason": "the dog barks at strangers and did not bark — the visitor was no stranger"
+  },
+  {
+    "id": "C2",
+    "type": "eliminate",
+    "hypothesis": "H1",
+    "when": [
+      { "subject": "Silver Blaze", "predicate": "fate", "value": "wandered" }
+    ],
+    "reason": "the horse wandered, it was not stolen — no theft, no rival theft"
+  },
+  {
+    "id": "C3",
+    "type": "eliminate",
+    "hypothesis": "H2",
+    "when": [
+      { "subject": "John Straker", "predicate": "wasSabotaging", "value": true }
+    ],
+    "reason": "Straker was a perpetrator (paid sabotage), not a pure victim"
+  },
+  {
+    "id": "C4",
+    "type": "support",
+    "hypothesis": "H2",
+    "field": "killer",
+    "value": "acquaintance",
+    "when": [
+      { "subject": "night-visitor", "predicate": "killed", "value": "John Straker" }
+    ]
+  },
+  {
+    "id": "C5",
+    "type": "support",
+    "hypothesis": "H3",
+    "field": "killer",
+    "value": "accomplice",
+    "when": [
+      { "subject": "night-visitor", "predicate": "role", "value": "accomplice" }
+    ]
+  }
+]

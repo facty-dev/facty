@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Fact",
+  "description": "A single observed or derived claim about the case. Sensed facts carry LLM confidence + source spans; derived facts cite the rule that produced them.",
+  "type": "object",
+  "required": ["id", "type", "subject", "predicate", "value", "confidence", "source"],
+  "properties": {
+    "id": { "type": "string" },
+    "type": { "type": "string", "enum": ["case", "evidence", "world", "derived"] },
+    "subject": { "type": "string" },
+    "predicate": { "type": "string" },
+    "value": {},
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "source": { "type": "string" },
+    "observedAt": { "type": "string" }
+  }
+}

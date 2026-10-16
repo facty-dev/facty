@@ -66,12 +66,18 @@ Fraud, outages, security findings, contracts — each is a **pack**: an
 ontology + rules + constraints. Same engine, different costume. (Sherlock was
 a detective, not a doctor — the method is the product.)
 
-## Status: PoC
+## Status: PoC — working end-to-end
 
 One exemplar happy path, end to end, from JSON files and schemas — no
 database yet. The exemplar is a classic: **Silver Blaze** — the horse that
 vanished and the dog that didn't bark. See
 [the PoC plan](docs/discovery/detective-dss-poc.md).
+
+```bash
+make dss-demo        # phase 1 — the case as first heard
+make dss-demo-2      # phase 2 — the ledger test applied
+make dss-selftest    # acceptance test — the happy path, asserted
+```
 
 ## Where things live
 

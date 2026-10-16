@@ -1,0 +1,63 @@
+[
+  {
+    "id": "H1",
+    "statement": "Rival theft — Silas Brown stole Silver Blaze and killed Straker to sabotage the race",
+    "status": "open",
+    "prior": 0.3,
+    "claims": [
+      { "subject": "Silver Blaze", "predicate": "fate", "value": "stolen" },
+      { "subject": "Silas Brown", "predicate": "killed", "value": "John Straker" }
+    ],
+    "killer": "rival",
+    "horse_fate": "stolen",
+    "evidenceFor": ["f12", "f13"],
+    "evidenceAgainst": ["f04", "f05"],
+    "discriminatingTests": ["Check Silas Brown's alibi for the night of the disappearance"]
+  },
+  {
+    "id": "H2",
+    "statement": "Acquaintance killing — a mystery acquaintance killed Straker over his secret; the horse wandered to Mapleton",
+    "status": "open",
+    "prior": 0.4,
+    "claims": [
+      { "subject": "Silver Blaze", "predicate": "fate", "value": "wandered" },
+      { "subject": "night-visitor", "predicate": "killed", "value": "John Straker" }
+    ],
+    "killer": "acquaintance",
+    "horse_fate": "wandered",
+    "evidenceFor": ["f03", "f06", "f08"],
+    "evidenceAgainst": [],
+    "discriminatingTests": ["Identify the night visitor; check the second-establishment ledger"]
+  },
+  {
+    "id": "H3",
+    "statement": "Self-sabotage — Straker was paid to sabotage his own horse and was killed by his accomplice; the horse bolted",
+    "status": "open",
+    "prior": 0.35,
+    "claims": [
+      { "subject": "Silver Blaze", "predicate": "fate", "value": "wandered" },
+      { "subject": "John Straker", "predicate": "wasSabotaging", "value": true },
+      { "subject": "night-visitor", "predicate": "role", "value": "accomplice" }
+    ],
+    "killer": "accomplice",
+    "horse_fate": "wandered",
+    "evidenceFor": ["f10", "f11"],
+    "evidenceAgainst": [],
+    "discriminatingTests": ["Collect the second-establishment ledger (payments + the 3 a.m. meeting)"]
+  },
+  {
+    "id": "H4",
+    "statement": "Stranger — a stranger stole the horse and killed Straker",
+    "status": "open",
+    "prior": 0.1,
+    "claims": [
+      { "subject": "Silver Blaze", "predicate": "fate", "value": "stolen" },
+      { "subject": "night-visitor", "predicate": "role", "value": "stranger" }
+    ],
+    "killer": "stranger",
+    "horse_fate": "stolen",
+    "evidenceFor": [],
+    "evidenceAgainst": ["f06", "f07"],
+    "discriminatingTests": ["Check whether the dog barked (it did not — see the kennel-log gap)"]
+  }
+]

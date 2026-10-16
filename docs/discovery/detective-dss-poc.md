@@ -1,6 +1,6 @@
 # PoC plan — the detective DSS, one exemplar happy path
 
-**Status:** proposed · **Date:** 2026-10-15
+**Status:** in progress — engine spike implemented 2026-10-16, selftest green · **Date:** 2026-10-15
 **Product:** redyarn · **Vocabulary:** case decision support (opportunity / assumptions / hypotheses / acceptance)
 **Architecture:** [ADR-0003](../adr/0003-detective-dss-neurosymbolic-core.md)
 
@@ -84,3 +84,9 @@ that would settle the top two.
 
 Built and tested **in the current dev agent session** (host, sandboxed). VM
 testing comes after, when real deployments need isolation from secrets.
+
+## Build log
+
+- 2026-10-16 — engine spike implemented (`engine/`): schemas, forward +
+  backward chaining, constraint layer, deterministic verdict + trace;
+  Silver Blaze exemplar end-to-end; `make dss-selftest` green.

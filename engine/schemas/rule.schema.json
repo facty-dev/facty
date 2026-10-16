@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Rule",
+  "description": "A forward-chaining production rule: when the conditions match facts, the actions fire (derive a fact, raise hypotheses, open a question).",
+  "type": "object",
+  "required": ["id", "when", "then"],
+  "properties": {
+    "id": { "type": "string" },
+    "version": { "type": "string" },
+    "pack": { "type": "string" },
+    "salience": { "type": "number" },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "when": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "Condition pattern over facts. Literals match exactly; {\"var\": name} binds a variable for use in actions.",
+        "properties": {
+          "type": {},
+          "subject": {},
+          "predicate": {},
+          "value": {}
+        }
+      }
+    },
+    "then": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["op"],
+        "properties": {
+          "op": { "type": "string", "enum": ["derive", "raise", "open"] },
+          "fact": { "type": "object" },
+          "hypotheses": { "type": "array", "items": { "type": "string" } },
+          "question": { "type": "object" }
+        }
+      }
+    }
+  }
+}

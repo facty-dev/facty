@@ -1,0 +1,16 @@
+[
+  { "id": "f01", "type": "case", "subject": "Silver Blaze", "predicate": "missing", "value": true, "confidence": 0.95, "source": "evidence/telegram.txt:1", "observedAt": "2026-10-16" },
+  { "id": "f02", "type": "case", "subject": "John Straker", "predicate": "dead", "value": true, "confidence": 0.98, "source": "evidence/moor-report.txt:3", "observedAt": "2026-10-16" },
+  { "id": "f03", "type": "evidence", "subject": "John Straker", "predicate": "cravatTorn", "value": true, "confidence": 0.85, "source": "evidence/moor-report.txt:6", "observedAt": "2026-10-16" },
+  { "id": "f04", "type": "evidence", "subject": "Silver Blaze", "predicate": "hoofprintsGait", "value": "walking", "confidence": 0.9, "source": "evidence/moor-report.txt:10", "observedAt": "2026-10-16" },
+  { "id": "f05", "type": "evidence", "subject": "Silver Blaze", "predicate": "foundRiderless", "value": true, "confidence": 0.95, "source": "evidence/rival-note.md:3", "observedAt": "2026-10-16" },
+  { "id": "f06", "type": "evidence", "subject": "kennel-dog", "predicate": "barkedAtNightVisitor", "value": false, "confidence": 0.9, "source": "evidence/kennel-log.txt:5-10", "observedAt": "2026-10-16" },
+  { "id": "f07", "type": "world", "subject": "kennel-dog", "predicate": "barksAt", "value": "stranger", "confidence": 0.8, "source": "evidence/stable-roster.md:6", "observedAt": "2026-10-16" },
+  { "id": "f08", "type": "evidence", "subject": "kennel-dog", "predicate": "knows", "value": "Ned Hunter", "confidence": 0.9, "source": "evidence/stable-roster.md:5-6", "observedAt": "2026-10-16" },
+  { "id": "f09", "type": "world", "subject": "Ned Hunter", "predicate": "acquaintanceOf", "value": "King's Pyland", "confidence": 0.9, "source": "evidence/stable-roster.md:5", "observedAt": "2026-10-16" },
+  { "id": "f10", "type": "case", "subject": "John Straker", "predicate": "debts", "value": true, "confidence": 0.85, "source": "evidence/telegram.txt:5", "observedAt": "2026-10-16" },
+  { "id": "f11", "type": "case", "subject": "John Straker", "predicate": "secondEstablishment", "value": true, "confidence": 0.8, "source": "evidence/telegram.txt:5", "observedAt": "2026-10-16" },
+  { "id": "f12", "type": "case", "subject": "Silver Blaze", "predicate": "scratched", "value": true, "confidence": 0.95, "source": "evidence/telegram.txt:2", "observedAt": "2026-10-16" },
+  { "id": "f13", "type": "case", "subject": "Silas Brown", "predicate": "rivalOf", "value": "Colonel Ross", "confidence": 0.9, "source": "evidence/rival-note.md:6", "observedAt": "2026-10-16" },
+  { "id": "f14", "type": "evidence", "subject": "kennel-log", "predicate": "barkingEntry", "value": "absent", "confidence": 0.85, "source": "evidence/kennel-log.txt:8-9", "observedAt": "2026-10-16" }
+]

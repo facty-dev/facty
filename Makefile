@@ -1,12 +1,21 @@
-# redyarn — Agentic SDLC + multi-tenant agent isolation on Gondolin micro-VMs
+# redyarn — the detective DSS (symbolic engine + LLM sensing)
 #
-# Two AI agents (decision + coding) run inside isolated gondolin micro-VMs,
-# driving a gated SDLC: discovery → PRD → BDD → implementation → review.
-# Every agent run is audited to .agentic/audit.jsonl.
+# The product: a domain-agnostic abductive decision-support engine
+# (engine/) — evidence in, ranked hypotheses out, full reasoning trace.
+# Domains are packs (engine/cases/).
+#
+# The machinery: two AI agents (decision + coding) run inside isolated
+# gondolin micro-VMs as the pack factory — a gated SDLC: discovery → PRD →
+# BDD → implementation → review. Every agent run is audited to
+# .agentic/audit.jsonl.
 #
 # ── Quick start ──────────────────────────────────────────────────────────────
 #
-#   make vm-up                # Boot the SDLC VM session (from YOUR terminal)
+#   make dss-demo             # Run the Silver Blaze case (phase 1)
+#   make dss-demo-2           # Apply the ledger test (phase 2)
+#   make dss-selftest         # Acceptance test — the PoC happy path, asserted
+#
+#   make vm-up                # Boot the pack-factory VM session (from YOUR terminal)
 #   make agent-decision PHASE=discovery TASK="..."
 #   make agent-coding TASK=<task-file>
 #   make vm-status            # Session state (safe from sandboxed sessions)
@@ -19,9 +28,14 @@
 .PHONY: help info
 
 help:
-	@echo "redyarn — Agentic SDLC on Gondolin micro-VMs"
+	@echo "redyarn — the detective DSS (symbolic engine + LLM sensing)"
 	@echo ""
-	@echo "═══ SDLC VM session ═══"
+	@echo "═══ redyarn engine (the product) ═══"
+	@echo "  make dss-demo           Run the Silver Blaze case (phase 1)"
+	@echo "  make dss-demo-2         Apply the ledger test (phase 2)"
+	@echo "  make dss-selftest       Acceptance test — the PoC happy path, asserted"
+	@echo ""
+	@echo "═══ Pack-factory VM session ═══"
 	@echo "  make vm-up              Boot the SDLC VM session (from your terminal)"
 	@echo "  make vm-status          Show session state"
 	@echo "  make vm-down            Stop the session (from your terminal)"
@@ -53,6 +67,22 @@ info:
 	@echo "pi:        $$(command -v pi || echo 'not found')"
 	@echo "session:   $$(./scripts/vm-session.sh status | head -1)"
 	@echo "template:  $$(ls ~/code/gondolin-pi/snapshots/pi-sandbox.qcow2 >/dev/null 2>&1 && echo ok || echo missing)"
+
+# ── redyarn engine (the product) ─────────────────────────────────────────────
+# The deterministic symbolic half: forward/backward chaining + constraints
+# over canonical case artifacts. The LLM senses and proposes; the engine
+# decides. See docs/adr/0003-detective-dss-neurosymbolic-core.md.
+
+.PHONY: dss-demo dss-demo-2 dss-selftest
+
+dss-demo:
+	python3 engine/engine.py run --case engine/cases/silver-blaze
+
+dss-demo-2:
+	python3 engine/engine.py run --case engine/cases/silver-blaze --add-facts engine/cases/silver-blaze/facts-ledger.json
+
+dss-selftest:
+	python3 engine/engine.py selftest
 
 # ── Agentic Runtime (SDLC) ──────────────────────────────────────────────────
 # Asset-oriented SDLC: OST → PRD → BDD → Implementation → ADRs
