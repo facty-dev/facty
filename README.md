@@ -1,9 +1,10 @@
 # drawbridge — Agentic SDLC + multi-tenant agent isolation on Gondolin micro-VMs
 
-Two AI agents — a **decision agent** (plans, reviews) and a **coding agent**
-(implements) — run your SDLC (discovery → PRD → BDD → implementation →
-review) inside isolated **gondolin micro-VMs**: web search and a full skill
-suite baked in, every run audited, secrets never leaving the host.
+An agent trio — **planner** (reasoning and decomposition), **decider**
+(typed routing/gating decisions), **coder** (specs, code, data) — runs your
+SDLC (discovery → PRD → BDD → implementation → review) inside isolated
+**gondolin micro-VMs**: web search and a full skill suite baked in, every
+run audited, secrets never leaving the host.
 **Operational** — the pipeline is proven end-to-end (discovery runs in ~76s,
 audited, zero secret exposure).
 
@@ -80,14 +81,17 @@ workflows — but agentic, auditable, and versioned in the asset graph.
 | **Process** | Hypervisor isolation (QEMU/krun micro-VM), snapshot-based images |
 | **Orchestration** | The driving session runs under pi-sandbox; unix-socket IPC is the only bridge |
 
-## Agents
+## Agents — planner, decider, coder
 
-- **Decision agent** (`zai-glm-5-3` @ max thinking) — OST, PRD, BDD, review;
-  writes docs/specs assets and the coding-agent task queue
-- **Coding agent** (`zai-glm-5-3` @ low thinking) — TDD implementation from
-  `.agentic/messages/decision-to-coding/`; reports to `coding-to-decision/`
+Three node types; one model for now (`zai-glm-5-3`), tuned per purpose:
 
-Role prompts: `templates/sdlc/agents/`. Per-run model overrides:
+| Node | Purpose | Model profile | Today's runtime |
+|---|---|---|---|
+| **Planner** | OST, PRD, BDD, review, ADRs — logical decomposition over code generation | big model @ **max thinking** (GPQA / tau-bench class) | the `decision` role (`make agent-decision`) |
+| **Decider** | routing, gating, classification — typed JSON-schema decisions returning choice + confidence + probabilities; the classifier-replacement layer feeding the self-improvement loop | small decision models (GLiDE / Jev class) | deterministic rules + jq; model layer is roadmap |
+| **Coder** | specs, code, data, tests — generation over reasoning | big model @ low thinking (SWE-bench Verified / Terminal-Bench class) | the `coding` role (`make agent-coding`) |
+
+Role prompts: `templates/sdlc/agents/`. Per-run overrides:
 `AGENT_MODEL`, `AGENT_THINKING`, `AGENT_RUNTIME=auto|session|ephemeral`.
 
 ## Sharp edges (ADR-0001)
@@ -106,8 +110,9 @@ Role prompts: `templates/sdlc/agents/`. Per-run model overrides:
   egress policies (`pi-<client>-<provider>` naming)
 - **Unattended hosting**: launchd-supervised sessions
 - **CI wiring**: GitHub Actions phases on ephemeral VM boots (cached snapshot)
-- **Decision-model layer**: small typed models (JSON-schema in → structured
-  choice + confidence out) replacing ad-hoc routing/gating logic
+- **Decider model layer**: promote routing/gating/classification from
+  deterministic rules to typed decision models (JSON schema in → choice +
+  confidence + probabilities out)
 - **Self-improvement loop**: distill metrics from the audit trail into
   *proposed deterministic inputs* for the decision models — new routing rules,
   gate thresholds, classification schemas — human-critic-gated, versioned in
