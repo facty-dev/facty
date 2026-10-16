@@ -114,7 +114,11 @@ interface is (JSON schema + messy field input) → typesafe,
 schema-validated structured object that the logic engine consumes
 (`engine/sensing.py`). Entity extraction and classification are sensing
 operations — the engine never extracts or classifies; it verifies what
-the senses produce. (PRD-005 GOAL-2 / GOAL-5.)
+the senses produce. (PRD-005 GOAL-2 / GOAL-5.) The golden path for the
+LLM transport is the **pi agent** (`pi -p`): pi owns the credential (and
+its refresh) and the engine process never sees it — the same isolation
+posture as the VM host-secret mechanism. A direct Mistral client is
+deliberately not used.
 
 **The judge layer with a capped correction loop.** The loop is sense →
 judge → solve. The judge validates the structured output (schema +

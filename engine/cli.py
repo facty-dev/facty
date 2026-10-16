@@ -45,6 +45,8 @@ TAGS = {
 HELP = ("  [Enter] next step · [a] auto-run the rest · [t] show the log so far · "
         "[q] quit · [?] this help")
 
+DEBUG = False  # set from --debug / REDYARN_DEBUG=1 in main()
+
 
 # ── UI ───────────────────────────────────────────────────────────────
 
@@ -131,6 +133,10 @@ def sense_extract(ui, tag, label, noun, schema_name, task, fallback, judge=None)
     never silent)."""
     ui.log(tag, f"{label} — calling Mistral Large 4 (mistral-subscription), streaming …")
     arrow = f"{TAGS['llm']}▸{NC} " if USE_COLOR else "▸ "
+    staged = sensing.staged_prompt_path(label.replace(" ", "-"))
+    if DEBUG:
+        ui.log(tag, f"debug: prompt staged at {staged}")
+        ui.log(tag, "debug: pi command: " + " ".join(sensing.pi_command(str(staged))))
 
     def on_stream(line):
         sys.stdout.write(f"  {arrow}{line}\n")
@@ -143,9 +149,12 @@ def sense_extract(ui, tag, label, noun, schema_name, task, fallback, judge=None)
         result = sensing.extract_structured(
             ENGINE_DIR / "schemas" / schema_name, task,
             stream=on_stream, label=label.replace(" ", "-"),
-            judge=judge, note=on_note)
+            judge=judge, note=on_note, debug=DEBUG)
     except Exception as exc:  # unreachable LLM, or retries exhausted
         ui.log(tag, f"LLM call failed ({exc})")
+        if DEBUG:
+            ui.log(tag, f"debug: no fallback in debug mode — staged prompt: {staged}")
+            raise SystemExit(2)
         ui.log(tag, "falling back to the recorded sensing (see SENSING.md) — "
                     "run this CLI from your own terminal to stream live")
         result = fallback
@@ -168,6 +177,45 @@ def build_facts_task(case_dir, files, evidence_index=None, entities=None):
             .replace("{{SCHEMA}}", str((ENGINE_DIR / "schemas" / "fact.schema.json").resolve()))
             .replace("{{EVIDENCE_INDEX}}", json.dumps(evidence_index or [], indent=2))
             .replace("{{ENTITIES}}", json.dumps(entities or [], indent=2)))
+
+
+def sense_one(ui, case, op, evidence_index=None, entities=None):
+    """Run a single sensing operation (classify | entities | facts |
+    ledger). Live LLM when reachable, recorded sensing otherwise.
+    evidence_index/entities guide the facts op (live pipeline passes the
+    live results; standalone runs fall back to the recorded ones)."""
+    evidence = sorted((case / "evidence").iterdir())
+    phase1 = [f for f in evidence if f.name != "ledger.txt"]
+    recorded_index = engine.load_validated(case / "evidence-index.json",
+                                           "evidence-index.schema.json")
+    recorded_entities = engine.load_validated(case / "entities.json",
+                                              "entities.schema.json")
+    recorded_facts = engine.load_validated(case / "facts.json", "facts.schema.json")
+    recorded_ledger = engine.load_validated(case / "facts-ledger.json", "facts.schema.json")
+    judge = make_facts_judge(case)
+    index = evidence_index if evidence_index is not None else recorded_index
+    ents = entities if entities is not None else recorded_entities
+    if op == "classify":
+        return sense_extract(ui, "sense:classify", "classify the evidence pile",
+                             "evidence items", "evidence-index.schema.json",
+                             sensing.CLASSIFY_TASK.replace("{{FILES}}", evidence_refs(phase1)),
+                             recorded_index)
+    if op == "entities":
+        return sense_extract(ui, "sense:entities", "extract the case entities",
+                             "entities", "entities.schema.json",
+                             sensing.ENTITIES_TASK.replace("{{FILES}}", evidence_refs(phase1)),
+                             recorded_entities)
+    if op == "facts":
+        return sense_extract(ui, "sense:facts", "extract the facts", "facts",
+                             "facts.schema.json",
+                             build_facts_task(case, phase1, index, ents),
+                             recorded_facts, judge=judge)
+    if op == "ledger":
+        return sense_extract(ui, "sense:facts", "extract the ledger facts", "facts",
+                             "facts.schema.json",
+                             build_facts_task(case, [case / "evidence" / "ledger.txt"]),
+                             recorded_ledger, judge=judge)
+    raise SystemExit(f"unknown op: {op} (expected classify|entities|facts|ledger)")
 
 
 # ── Event formatters ─────────────────────────────────────────────────
@@ -255,9 +303,20 @@ def main():
                     help="case directory (default: engine/cases/silver-blaze)")
     ap.add_argument("--auto", action="store_true",
                     help="run all steps without prompting")
+    ap.add_argument("--debug", action="store_true",
+                    help="debug mode: loud failures (no fallback), prompt path + pi command")
+    ap.add_argument("--sense-only", metavar="OP",
+                    help="run a single sensing op and exit (classify|entities|facts|ledger)")
     args = ap.parse_args()
+    global DEBUG
+    DEBUG = args.debug or os.environ.get("REDYARN_DEBUG") == "1"
     case = Path(args.case)
     ui = UI(auto=args.auto)
+
+    if args.sense_only:
+        result = sense_one(ui, case, args.sense_only)
+        print(json.dumps(result, indent=2))
+        return 0
 
     print()
     ui.log("case", "redyarn — interactive case walkthrough (a stepping stone to the Workbench UI)")
@@ -277,36 +336,17 @@ def main():
     ui.log("case", f"recorded sensing: {len(recorded)} facts (see SENSING.md)")
 
     # ── Step 2: the sensing motion (the LLM half, streamed) ────────
-    phase1_evidence = [f for f in evidence if f.name != "ledger.txt"]
-
     ui.step("sense", "Classify the evidence pile — messy input → typed evidence")
-    recorded_index = engine.load_validated(case / "evidence-index.json",
-                                           "evidence-index.schema.json")
-    evidence_index = sense_extract(
-        ui, "sense:classify", "classify the evidence pile", "evidence items",
-        "evidence-index.schema.json",
-        sensing.CLASSIFY_TASK.replace("{{FILES}}", evidence_refs(phase1_evidence)),
-        recorded_index)
+    evidence_index = sense_one(ui, case, "classify")
     for item in evidence_index:
         ui.log("sense", f"  {item['file']} → {item['evidenceClass']} ({item['confidence']})")
 
     ui.step("sense", "Extract the entities — extraction is sensing, not reasoning")
-    recorded_entities = engine.load_validated(case / "entities.json",
-                                              "entities.schema.json")
-    entities = sense_extract(
-        ui, "sense:entities", "extract the case entities", "entities",
-        "entities.schema.json",
-        sensing.ENTITIES_TASK.replace("{{FILES}}", evidence_refs(phase1_evidence)),
-        recorded_entities)
+    entities = sense_one(ui, case, "entities")
     ui.log("sense", f"entities: {', '.join(e['name'] for e in entities)}")
 
     ui.step("sense", "Sense the evidence → facts (judge: schema + compute checks)")
-    facts_judge = make_facts_judge(case)
-    facts = sense_extract(
-        ui, "sense:facts", "extract the facts", "facts",
-        "facts.schema.json",
-        build_facts_task(case, phase1_evidence, evidence_index, entities),
-        recorded, judge=facts_judge)
+    facts = sense_one(ui, case, "facts", evidence_index, entities)
 
     # ── Step 3: forward chain ──────────────────────────────────────
     ui.step("chain", "Forward chain — watch the rules fire")
@@ -370,12 +410,7 @@ def main():
 
     # ── Phase 2: the test runs ─────────────────────────────────────
     ui.step("test", "Run the recommended test — sense the ledger (the LLM half, streamed)")
-    ledger_recorded = engine.load_validated(case / "facts-ledger.json", "facts.schema.json")
-    ledger_facts = sense_extract(
-        ui, "sense:facts", "extract the ledger facts", "facts",
-        "facts.schema.json",
-        build_facts_task(case, [case / "evidence" / "ledger.txt"]),
-        ledger_recorded, judge=facts_judge)
+    ledger_facts = sense_one(ui, case, "ledger")
     facts2 = facts + ledger_facts
     ui.log("questions", "q1 [sabotage-payment] answered: the ledger shows payments from "
                         "S.B. and the 3 a.m. meeting → new facts enter the case")

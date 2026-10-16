@@ -46,6 +46,34 @@ are the pack (authored with the pack factory, hypotheses proposed by the
 sensing half); the engine's verdict is a deterministic function of those
 artifacts alone.
 
+## Debugging
+
+The golden path for the LLM transport is the **pi agent** (`pi -p`) — pi
+owns the credential and the engine process never sees it (ADR-0003; the
+same isolation posture as the VM host-secret mechanism). To debug the
+sensing steps:
+
+```bash
+# one sensing op, standalone (fast prompt iteration)
+make dss-sense OP=facts          # or: classify | entities | ledger
+
+# loud failures: no fallback, staged prompt path + exact pi command,
+# raw LLM response on rejection
+REDYARN_DEBUG=1 make dss-live
+# or: python3 engine/cli.py --debug ...
+
+# the staged prompts persist for inspection:
+ls .agentic/tmp/sensing-*.md
+
+# reproduce a call manually:
+pi -p --provider mistral-subscription --model mistral-large-4 "@<staged prompt>"
+```
+
+The fallback contract: when the LLM is unreachable (e.g. under an agent
+sandbox, where pi cannot read its credential), the CLI logs the failure
+and uses the recorded sensing (`SENSING.md`). In debug mode it fails loud
+instead (exit 2, no fallback).
+
 ## The score (deterministic, documented)
 
 ```

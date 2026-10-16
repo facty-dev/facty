@@ -15,7 +15,10 @@
 # passes the judge layer for real. An unreachable LLM fails fast: that
 # error cannot correct itself, so it is never retried.
 #
-# The LLM is called via `pi -p` (streaming). Callers fall back to recorded
+# The golden path for the LLM transport is the pi agent (`pi -p`): pi owns
+# the credential (and its refresh) and the engine process never sees it —
+# the same isolation posture as the VM host-secret mechanism. A direct
+# Mistral client is deliberately not used. Callers fall back to recorded
 # sensing artifacts when the LLM is unreachable or the retries exhaust.
 #
 # Library:
@@ -65,12 +68,23 @@ def describe(result, noun="items"):
     return type(result).__name__
 
 
+def staged_prompt_path(label):
+    """Where a sensing prompt is staged (persisted for inspection)."""
+    return ENGINE_DIR.parent / ".agentic" / "tmp" / f"sensing-{label}.md"
+
+
+def pi_command(staged_path):
+    """The exact pi invocation for a staged sensing prompt — printable,
+    copy-pasteable for debugging."""
+    return ["pi", "-p", "--provider", PROVIDER, "--model", MODEL,
+            f"Read your complete sensing assignment in @{Path(staged_path).resolve()} "
+            "and execute it in full. Respond with ONLY the JSON value."]
+
+
 def _pi_runner(staged_path, stream):
     """Call the LLM via `pi -p`, streaming. Returns the full response text.
     Raises RuntimeError if the call fails (unreachable / no credential)."""
-    cmd = ["pi", "-p", "--provider", PROVIDER, "--model", MODEL,
-           f"Read your complete sensing assignment in @{Path(staged_path).resolve()} "
-           "and execute it in full. Respond with ONLY the JSON value."]
+    cmd = pi_command(staged_path)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, bufsize=1)
     chunks = []
@@ -101,7 +115,7 @@ def _correction_prompt(task, schema_text, errors, previous):
 
 def extract_structured(schema, task, stream=None, label="extract",
                        judge=None, max_attempts=MAX_ATTEMPTS,
-                       runner=None, note=None):
+                       runner=None, note=None, debug=False):
     """Schema-guided extraction with a capped correction loop.
 
     Each turn: the LLM responds (streamed) → the judge layer parses and
@@ -120,6 +134,7 @@ def extract_structured(schema, task, stream=None, label="extract",
     runner:  optional callable(staged_path, stream) → response text
              (defaults to the pi -p runner; tests stub this).
     note:    optional callable(msg) for progress lines.
+    debug:   include the raw response in rejection notes.
     """
     if isinstance(schema, dict):
         schema_text = json.dumps(schema)
@@ -128,9 +143,8 @@ def extract_structured(schema, task, stream=None, label="extract",
         schema_text = Path(schema).read_text()
         schema_dict = json.loads(schema_text)
     runner = runner or _pi_runner
-    tmp = ENGINE_DIR.parent / ".agentic" / "tmp"
-    tmp.mkdir(parents=True, exist_ok=True)
-    staged = tmp / f"sensing-{label}.md"
+    staged = staged_prompt_path(label)
+    staged.parent.mkdir(parents=True, exist_ok=True)
 
     prompt = (
         f"{task}\n\n"
@@ -152,9 +166,11 @@ def extract_structured(schema, task, stream=None, label="extract",
                     note(f"attempt {attempt}/{max_attempts} accepted by the judge layer")
                 return obj
         if attempt < max_attempts:
+            detail = "; ".join(errs[:3])
+            if debug:
+                detail += f" | response: {text[:300]!r}"
             if note:
-                note(f"attempt {attempt}/{max_attempts} rejected — "
-                     f"{'; '.join(errs[:3])}; correcting")
+                note(f"attempt {attempt}/{max_attempts} rejected — {detail}; correcting")
             prompt = _correction_prompt(task, schema_text, errs, text)
             continue
         raise ValueError(f"judge rejected the output after {max_attempts} "

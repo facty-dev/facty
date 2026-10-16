@@ -16,6 +16,8 @@
 #   make dss-demo-2           # Apply the ledger test (phase 2)
 #   make dss-selftest         # Acceptance test — the PoC happy path, asserted
 #   make dss-test             # All tests: selftest + the sensing retry loop
+#   make dss-sense OP=facts   # One sensing op, standalone (debugging)
+#   REDYARN_DEBUG=1 make dss-live   # Debug mode: loud failures, no fallback
 #
 #   make vm-up                # Boot the pack-factory VM session (from YOUR terminal)
 #   make agent-decision PHASE=discovery TASK="..."
@@ -38,6 +40,8 @@ help:
 	@echo "  make dss-demo-2         Apply the ledger test (phase 2)"
 	@echo "  make dss-selftest       Acceptance test — the PoC happy path, asserted"
 	@echo "  make dss-test           All tests: selftest + the sensing retry loop"
+	@echo "  make dss-sense OP=<op>  Run one sensing op standalone (classify|entities|facts|ledger)"
+	@echo "  REDYARN_DEBUG=1 make dss-live   Debug mode: loud failures, no fallback"
 	@echo ""
 	@echo "═══ Pack-factory VM session ═══"
 	@echo "  make vm-up              Boot the SDLC VM session (from your terminal)"
@@ -77,7 +81,9 @@ info:
 # over canonical case artifacts. The LLM senses and proposes; the engine
 # decides. See docs/adr/0003-detective-dss-neurosymbolic-core.md.
 
-.PHONY: dss-demo dss-demo-2 dss-selftest dss-live dss-test
+.PHONY: dss-demo dss-demo-2 dss-selftest dss-live dss-test dss-sense
+
+OP ?= facts
 
 dss-live:
 	python3 engine/cli.py --case engine/cases/silver-blaze
@@ -93,6 +99,9 @@ dss-selftest:
 
 dss-test: dss-selftest
 	python3 engine/test_retry.py
+
+dss-sense:
+	python3 engine/cli.py --case engine/cases/silver-blaze --sense-only $(OP)
 
 # ── Agentic Runtime (SDLC) ──────────────────────────────────────────────────
 # Asset-oriented SDLC: OST → PRD → BDD → Implementation → ADRs
