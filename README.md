@@ -1,134 +1,99 @@
-# drawbridge — Agentic SDLC + multi-tenant agent isolation on Gondolin micro-VMs
+# redyarn — a detective toolkit for messy evidence
 
-An agent trio — **planner** (reasoning and decomposition), **decider**
-(typed routing/gating decisions), **coder** (specs, code, data) — runs your
-SDLC (discovery → PRD → BDD → implementation → review) inside isolated
-**gondolin micro-VMs**: web search and a full skill suite baked in, every
-run audited, secrets never leaving the host.
-**Operational** — the pipeline is proven end-to-end (discovery runs in ~76s,
-audited, zero secret exposure).
+*Follow the red yarn, not the red herring.*
 
-Docs: [Architecture](docs/ARCHITECTURE.md) · [ADR-0001](docs/adr/0001-session-execution-under-sandboxing.md) ·
-[SDLC](docs/SDLC.md) · Lineage: [vision](docs/vision.md) ←
-[clientsort-docs-archive](https://github.com/chartpath/clientsort-docs-archive) (full history imported)
+**ELI5:** Someone has a mystery and a pile of messy evidence — logs, tickets,
+chat messages, receipts. Redyarn turns the evidence into clean facts,
+thinks about *who or what could explain the facts*, throws out the
+explanations that don't survive the checks, and tells you the most likely
+answer — showing its work the whole way, like a detective pinning clues to
+a board.
 
-## Quick start
+Two halves do the thinking, and they never swap jobs:
 
-Prerequisites: `gondolin` + QEMU, `pi` (npm globals), Mistral credential via
-`pi auth`, and the gondolin-pi VM template with a built snapshot.
+- **The senses — Mistral Large 4 (an LLM).** Reads messy evidence and turns
+  it into facts, guesses what might explain them, suggests what to check
+  next. Probabilistic: great at reading, not at being right.
+- **The brain — a rules + constraints engine (plain deterministic code).**
+  Chains facts to conclusions, prunes impossible explanations, delivers the
+  verdict. Rules always beat vibes.
 
-```bash
-# 1. Boot the agent VM session — from YOUR terminal, leave it open
-make vm-up                # this terminal hosts the session
-
-# 2. Run SDLC phases — from any terminal (or a sandboxed agent session)
-make agent-decision PHASE=discovery TASK="Bootstrap the OST for <feature>"
-make agent-decision PHASE=prd        TASK="Generate PRD-007 from the OST"
-make agent-decision PHASE=bdd        TASK="Write specs from PRD-007"
-make agent-coding   TASK=.agentic/messages/decision-to-coding/001-task.md
-
-# 3. Lifecycle
-make vm-status             # session state (safe from sandboxed sessions)
-make vm-down               # stop the session (from your terminal)
+```mermaid
+flowchart LR
+    A[Messy evidence<br/>logs · tickets · chats] --> B[Mistral Large 4<br/>senses: reads & proposes]
+    B --> C[Facts<br/>clean JSON artifacts]
+    C --> D[Rules + constraints engine<br/>chains · checks · decides]
+    D --> E[Verdict + full reasoning trace]
+    E --> F[Analyst feedback] --> B
 ```
 
-Agents work directly on the repo (mounted at `/workspace` in the VM), so
-artifacts land on the host. Every run — success or failure — is appended to
-`.agentic/audit.jsonl` with role, phase, model, runtime, exit code, duration.
+## The case loop
 
-## Why OST-first
+New facts don't just add conclusions — they open questions: *what else should
+I check? what evidence is missing?* The engine keeps a list of open slots and
+the senses go fill them. Its favorite trick is cutting the strings that
+don't survive the evidence — the Pepe Silvias, the connections with
+nothing behind them.
 
-Most AI-SDLC frameworks start at **solution definition** — PRDs describe
-*what to build* before asking whether it's the right problem. Drawbridge
-operates one layer up: the [OST](docs/discovery/ost.md) is a live strategic
-asset, continuously fed by stakeholder-facing discovery upstream of PRDs.
-The loop spirals — opportunities → solutions with **testable assumptions** →
-lean production slices validating them, **ordered by business value rank**
-(cheapest assumption-killers first) → evidence back into the tree. Discovery
-never closes. It's the layering Jira Product Discovery added above delivery
-workflows — but agentic, auditable, and versioned in the asset graph.
-
-## Isolation model
-
-```
-┌──────────────────────────── YOUR MACHINE ─────────────────────────────┐
-│                                                                       │
-│  Your terminal                 Sandboxed pi session (host)           │
-│  ┌──────────────────┐          ┌──────────────────────────────┐      │
-│  │ make vm-up       │          │ drives agents over session   │      │
-│  │ (session host)   │          │ IPC — socket PATH only       │      │
-│  │ holds the real   │          │ (never sees secret values)  │      │
-│  │ API key env-var  │          └──────────────┬───────────────┘      │
-│  └────────┬─────────┘                          │ exec                  │
-│           │                                    ▼                      │
-│           │              ┌──────────────────────────────────────┐     │
-│           └─────────────►│  GONDOLIN VM SESSION (from snapshot) │     │
-│              host-secret │  pi + ddgr + 88 skills baked in      │     │
-│              (real key   │  sees MISTRAL_API_KEY = <placeholder>│     │
-│               held host-  │  /workspace = this repo (rw)        │     │
-│               side only) │  egress: explicit allow-list only     │     │
-│                          └──────────────────────────────────────┘     │
-│                                                                       │
-│  Never mounted into the VM:  ~/.ssh ❌  ~/.aws ❌  other projects ❌    │
-└───────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    A[Facts] --> B[Forward chain<br/>derive facts + open questions]
+    B --> C[Hypotheses<br/>who/what explains it]
+    C --> D[Constraints<br/>prune + rank]
+    D --> E[Verdict + trace]
+    D -.->|test needed| F[LLM: propose + collect evidence] --> A
 ```
 
-| Guarantee | Mechanism |
+## Agents
+
+Plan / decide / code agents work the case. Each can call both halves, and
+they all speak one shared language: the case artifacts (facts, rules,
+hypotheses, questions) — the same objects whether they live in files today or
+database rows later.
+
+```mermaid
+flowchart LR
+    A[Plan / Decide / Code agents] --> B[Symbolic tools<br/>rules + constraints]
+    A --> C[Probabilistic tools<br/>LLM sensing + proposals]
+    B --> D[Case artifacts<br/>one common protocol]
+    C --> D
+    D --> E[Audit trail] --> F[Human review gate]
+```
+
+## Domains are packs
+
+Fraud, outages, security findings, contracts — each is a **pack**: an
+ontology + rules + constraints. Same engine, different costume. (Sherlock was
+a detective, not a doctor — the method is the product.)
+
+## Status: PoC
+
+One exemplar happy path, end to end, from JSON files and schemas — no
+database yet. The exemplar is a classic: **Silver Blaze** — the horse that
+vanished and the dog that didn't bark. See
+[the PoC plan](docs/discovery/detective-dss-poc.md).
+
+## Where things live
+
+| You want… | Go to |
 |---|---|
-| **Secrets** | `--host-secret`: guest sees a placeholder; the host proxy substitutes the real value only into outbound requests to allowed hosts — usable, never readable |
-| **Project** | Only explicitly `--mount-hostfs`-ed directories exist in the guest |
-| **Network** | Synthetic DNS + explicit domain allow-list; everything else blocked |
-| **Process** | Hypervisor isolation (QEMU/krun micro-VM), snapshot-based images |
-| **Orchestration** | The driving session runs under pi-sandbox; unix-socket IPC is the only bridge |
+| The product direction & market reasoning | [docs/discovery/verticals.md](docs/discovery/verticals.md) |
+| The architecture decision | [ADR-0003](docs/adr/0003-detective-dss-neurosymbolic-core.md) |
+| The PoC plan (case vocabulary) | [docs/discovery/detective-dss-poc.md](docs/discovery/detective-dss-poc.md) |
+| The method's history | [docs/vision.md](docs/vision.md) |
+| The agent pipeline (how we build packs) | [docs/AGENTIC-RUNTIME.md](docs/AGENTIC-RUNTIME.md), [Makefile](Makefile) |
 
-## Agents — planner, decider, coder
+## Notes
 
-Three node types; one model for now (`zai-glm-5-3`), tuned per purpose:
-
-| Node | Purpose | Model profile | Today's runtime |
-|---|---|---|---|
-| **Planner** | OST, PRD, BDD, review, ADRs — logical decomposition over code generation | big model @ **max thinking** (GPQA / tau-bench class) | the `decision` role (`make agent-decision`) |
-| **Decider** | routing, gating, classification — typed JSON-schema decisions returning choice + confidence + probabilities; the classifier-replacement layer feeding the self-improvement loop | small decision models (GLiDE / Jev class) | deterministic rules + jq; model layer is roadmap |
-| **Coder** | specs, code, data, tests — generation over reasoning | big model @ low thinking (SWE-bench Verified / Terminal-Bench class) | the `coding` role (`make agent-coding`) |
-
-Role prompts: `templates/sdlc/agents/`. Per-run overrides:
-`AGENT_MODEL`, `AGENT_THINKING`, `AGENT_RUNTIME=auto|session|ephemeral`.
-
-## Sharp edges (ADR-0001)
-
-1. Never run `gondolin list` / id-based `exec` from a sandboxed session — the
-   pid-based session GC misfires under the sandbox and deletes live sessions'
-   registry files. The scripts use recorded socket paths instead.
-2. `gondolin exec` doesn't inherit the boot env — the secret placeholder is
-   stashed at boot (`/root/.session-env/`) and sourced by exec'd agents.
-3. The session lives as long as the terminal hosting `make vm-up` — launchd
-   hosting for unattended/CI operation is roadmap.
-
-## Roadmap
-
-- **Multi-tenant client sessions**: per-client manifests, host-secrets, and
-  egress policies (`pi-<client>-<provider>` naming)
-- **Unattended hosting**: launchd-supervised sessions
-- **CI wiring**: GitHub Actions phases on ephemeral VM boots (cached snapshot)
-- **Decider model layer**: promote routing/gating/classification from
-  deterministic rules to typed decision models (JSON schema in → choice +
-  confidence + probabilities out)
-- **Self-improvement loop**: distill metrics from the audit trail into
-  *proposed deterministic inputs* for the decision models — new routing rules,
-  gate thresholds, classification schemas — human-critic-gated, versioned in
-  the asset graph (PRD-005's neurosymbolic bridge, operationalized)
-
-## Project structure
-
-```
-drawbridge/
-├── Makefile                  # SDLC + session lifecycle targets
-├── scripts/
-│   ├── vm-session.sh         # SDLC VM session lifecycle (up/status/exec/down)
-│   ├── agent-pi.sh            # decision/coding agent runner (audited)
-│   └── sdlc-branch.sh         # git-native phase branches
-├── templates/sdlc/           # OST/PRD/BDD/ADR templates + agent role prompts
-├── docs/                     # architecture, SDLC, PRDs, ADRs, vision
-│   └── adr/                  # decision records (start with ADR-0001)
-└── .agentic/                 # audit trail, agent message queues
-```
+- **Security model (later):** the gondolin micro-VM pipeline is how cases
+  with sensitive data get run — agents never see real secrets, only
+  placeholders substituted host-side. The PoC runs in the dev session; VM
+  isolation is a deployment requirement, not a dev requirement.
+- **The SDLC is a future vertical.** This repo started as an agentic SDLC
+  framework (proven end-to-end, audited). That machinery is now the *pack
+  factory* — and SDLC management itself is a candidate pack, not the
+  foundation.
+- **Lineage:** the neurosymbolic method comes from
+  [docs/vision.md](docs/vision.md) (Reyearn, 2020–2024, Apache-2.0, full
+  history imported from
+  [chartpath/clientsort-docs-archive](https://github.com/chartpath/clientsort-docs-archive)).

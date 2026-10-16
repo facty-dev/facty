@@ -12,8 +12,8 @@
 #
 # Env:
 #   AGENT_MODEL / AGENT_THINKING  per-run overrides
-#     defaults: decision → zai-glm-5-3 / max   (strong reasoner)
-#               coding   → zai-glm-5-3 / low   (fast implementation)
+#     defaults: decision → mistral-large-4 / max   (strong reasoner)
+#               coding   → mistral-large-4 / low   (fast implementation)
 #   GONDOLIN_PI  path to gondolin-pi.sh
 #     (default: /Users/chart/code/gondolin-pi/gondolin-pi.sh)
 #   MISTRAL_API_KEY  required by the ephemeral VM runtime (passed as host-secret)
@@ -101,14 +101,14 @@ fi
 # ── Role config ──────────────────────────────────────────────────────────────
 case "$ROLE" in
   decision)
-    MODEL="${AGENT_MODEL:-zai-glm-5-3}"
+    MODEL="${AGENT_MODEL:-mistral-large-4}"
     THINKING="${AGENT_THINKING:-max}"
     [[ -n "$PHASE" ]] || { err "decision agent requires --phase"; usage; }
     case "$PHASE" in discovery|prd|bdd|review) ;; *) err "invalid phase: $PHASE"; exit 1 ;; esac
     ROLE_PROMPT="$PROJECT_DIR/templates/sdlc/agents/decision.md"
     ;;
   coding)
-    MODEL="${AGENT_MODEL:-zai-glm-5-3}"
+    MODEL="${AGENT_MODEL:-mistral-large-4}"
     THINKING="${AGENT_THINKING:-low}"
     [[ -n "$TASK" && -f "$PROJECT_DIR/$TASK" ]] || { err "coding agent requires --task <file> (repo-relative)"; exit 1; }
     ROLE_PROMPT="$PROJECT_DIR/templates/sdlc/agents/coding.md"

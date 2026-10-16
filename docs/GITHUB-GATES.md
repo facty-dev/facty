@@ -1,6 +1,6 @@
 # GitHub Actions Gating Strategy
 
-How drawbridge's agentic SDLC maps to GitHub Actions workflows with human review gates.
+How redyarn's agentic SDLC maps to GitHub Actions workflows with human review gates.
 
 ---
 

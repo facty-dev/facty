@@ -1,4 +1,4 @@
-# drawbridge — Agentic SDLC + multi-tenant agent isolation on Gondolin micro-VMs
+# redyarn — Agentic SDLC + multi-tenant agent isolation on Gondolin micro-VMs
 #
 # Two AI agents (decision + coding) run inside isolated gondolin micro-VMs,
 # driving a gated SDLC: discovery → PRD → BDD → implementation → review.
@@ -19,7 +19,7 @@
 .PHONY: help info
 
 help:
-	@echo "drawbridge — Agentic SDLC on Gondolin micro-VMs"
+	@echo "redyarn — Agentic SDLC on Gondolin micro-VMs"
 	@echo ""
 	@echo "═══ SDLC VM session ═══"
 	@echo "  make vm-up              Boot the SDLC VM session (from your terminal)"

@@ -1,4 +1,4 @@
-# AGENTS.md — drawbridge
+# AGENTS.md — redyarn
 
 Instructions for AI coding agents working in this repo. Read the
 [README.md](README.md) for the product pitch and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
@@ -112,7 +112,7 @@ record any significant tradeoff (template: `templates/sdlc/adr.md`).
 
 ### Agent runtime facts
 
-- Models: decision `zai-glm-5-3` @ max thinking; coding `zai-glm-5-3` @ low.
+- Models: decision `mistral-large-4` @ max thinking; coding `mistral-large-4` @ low.
   Per-run overrides: `AGENT_MODEL`, `AGENT_THINKING`. VM template path:
   `GONDOLIN_PI` (default `~/code/gondolin-pi/gondolin-pi.sh`).
 - Run modes: preferred `gondolin-pi-session` (long-lived VM session,

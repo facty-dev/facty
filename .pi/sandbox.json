@@ -1,7 +1,8 @@
 {
   "network": {
     "allowedDomains": [
-      "earendil-works.github.io"
+      "earendil-works.github.io",
+      "docassemble.org"
     ]
   }
 }

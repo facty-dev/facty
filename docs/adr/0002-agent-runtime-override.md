@@ -209,5 +209,5 @@ guard ADR-0001's security model. Do not "fix" them:
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 0.1 | 2026-10-15 | drawbridge decision agent | Initial proposal (implemented as task 001) |
-| 1.0 | 2026-10-15 | drawbridge decision agent | Accepted after code review (review 001) |
+| 0.1 | 2026-10-15 | redyarn decision agent | Initial proposal (implemented as task 001) |
+| 1.0 | 2026-10-15 | redyarn decision agent | Accepted after code review (review 001) |

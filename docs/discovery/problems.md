@@ -2,7 +2,7 @@
 # Discovery — Problems
 ---
 
-# Problems — drawbridge discovery
+# Problems — redyarn discovery
 
 **Status:** draft · **Version:** 0.1 · **Date:** 2026-10-15
 **Sources:** `docs/USE-CASES.md`, `README.md` (roadmap + known sharp edges), `docs/ARCHITECTURE.md`, ADR-0001

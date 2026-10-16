@@ -81,7 +81,7 @@ jobs:
         run: |
           BRANCH="agent/coding-${{ github.run_id }}"
           git config user.name "coding-agent"
-          git config user.email "coding-agent@drawbridge.dev"
+          git config user.email "coding-agent@redyarn.dev"
           git checkout -b "$BRANCH"
           git add -A
           git commit -m "feat(sdlc): coding agent implementation" || echo "No changes to commit"

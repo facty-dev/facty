@@ -13,7 +13,7 @@
 
 ## Context
 
-Drawbridge's SDLC agents (decision + coding) run inside gondolin micro-VM
+Redyarn's SDLC agents (decision + coding) run inside gondolin micro-VM
 sessions. The orchestrating sessions on the development host run under
 **pi-sandbox** (Seatbelt on macOS), which restricts filesystem reads, network
 egress, and — critically — **process signals and cross-process discovery**.

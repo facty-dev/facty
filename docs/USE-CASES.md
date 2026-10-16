@@ -1,6 +1,6 @@
-# Use cases — drawbridge multi-tenant isolation
+# Use cases — redyarn multi-tenant isolation
 
-Real-world scenarios for isolating client projects with drawbridge on
+Real-world scenarios for isolating client projects with redyarn on
 gondolin micro-VMs. Each client runs in its own VM session: its project
 mounted, its credentials injected host-side, its egress allow-listed.
 Nothing else exists inside the session.

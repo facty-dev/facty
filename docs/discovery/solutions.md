@@ -39,7 +39,7 @@
 
 ### S2-a: launchd-hosted detached sessions *(recommended, macOS-first)*
 - **Description:** ship a LaunchAgent plist template
-  (`scripts/com.drawbridge.vm.plist`); `make vm-up --detached` installs and
+  (`scripts/com.redyarn.vm.plist`); `make vm-up --detached` installs and
   loads it. The session process is owned by launchd, so it survives
   terminal/SSH death. `make vm-status`/`vm-down` keep using the recorded
   socket path.
