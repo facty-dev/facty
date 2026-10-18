@@ -4,10 +4,21 @@
     "version": "1",
     "pack": "triage-alert-flood",
     "when": [
-      { "subject": "alerts", "predicate": "classifiedCount", "value": 200 }
+      {
+        "subject": "alerts",
+        "predicate": "classifiedCount",
+        "value": 200
+      }
     ],
     "then": [
-      { "op": "raise", "hypotheses": ["H1", "H2", "H3"] }
+      {
+        "op": "raise",
+        "hypotheses": [
+          "H1",
+          "H2",
+          "H3"
+        ]
+      }
     ]
   },
   {
@@ -15,12 +26,44 @@
     "version": "1",
     "pack": "triage-alert-flood",
     "when": [
-      { "subject": "alerts", "predicate": "targetedAttackCount", "value": 77 },
-      { "subject": "alerts", "predicate": "targetedAttackTopSourceCount", "value": 60 }
+      {
+        "subject": "alerts",
+        "predicate": "targetedAttackCount",
+        "value": 122
+      },
+      {
+        "subject": "alerts",
+        "predicate": "targetedAttackTopSourceCount",
+        "value": 98
+      }
     ],
     "then": [
-      { "op": "derive", "fact": { "id": "d1", "type": "derived", "subject": "alerts", "predicate": "coordinatedAttackLikely", "value": true, "confidence": 0.9, "source": "rule:R1" } },
-      { "op": "open", "question": { "id": "q1", "text": "Are the top alert sources known-bad? Pull the threat intel on 185.220.44.7 and the other attack sources.", "slot": "threat-intel", "mandatory": true, "priority": 1, "discriminates": ["H1", "H2"] } }
+      {
+        "op": "derive",
+        "fact": {
+          "id": "d1",
+          "type": "derived",
+          "subject": "alerts",
+          "predicate": "coordinatedAttackLikely",
+          "value": true,
+          "confidence": 0.9,
+          "source": "rule:R1"
+        }
+      },
+      {
+        "op": "open",
+        "question": {
+          "id": "q1",
+          "text": "Are the top alert sources known-bad? Pull the threat intel on 185.220.44.7 and the other attack sources.",
+          "slot": "threat-intel",
+          "mandatory": true,
+          "priority": 1,
+          "discriminates": [
+            "H1",
+            "H2"
+          ]
+        }
+      }
     ]
   },
   {
@@ -28,12 +71,42 @@
     "version": "1",
     "pack": "triage-alert-flood",
     "when": [
-      { "subject": "alerts", "predicate": "targetedAttackCount", "value": 77 },
-      { "subject": "alerts", "predicate": "probingScanCount", "value": 54 }
+      {
+        "subject": "alerts",
+        "predicate": "targetedAttackCount",
+        "value": 122
+      },
+      {
+        "subject": "alerts",
+        "predicate": "probingScanCount",
+        "value": 66
+      }
     ],
     "then": [
-      { "op": "derive", "fact": { "id": "d2", "type": "derived", "subject": "alerts", "predicate": "mostlyFalsePositives", "value": false, "confidence": 0.9, "source": "rule:R2" } },
-      { "op": "derive", "fact": { "id": "d2b", "type": "derived", "subject": "alerts", "predicate": "scanDominates", "value": false, "confidence": 0.9, "source": "rule:R2" } }
+      {
+        "op": "derive",
+        "fact": {
+          "id": "d2",
+          "type": "derived",
+          "subject": "alerts",
+          "predicate": "mostlyFalsePositives",
+          "value": false,
+          "confidence": 0.9,
+          "source": "rule:R2"
+        }
+      },
+      {
+        "op": "derive",
+        "fact": {
+          "id": "d2b",
+          "type": "derived",
+          "subject": "alerts",
+          "predicate": "scanDominates",
+          "value": false,
+          "confidence": 0.9,
+          "source": "rule:R2"
+        }
+      }
     ]
   },
   {
@@ -41,10 +114,25 @@
     "version": "1",
     "pack": "triage-alert-flood",
     "when": [
-      { "subject": "alerts", "predicate": "topSourceIsKnownBad", "value": true }
+      {
+        "subject": "alerts",
+        "predicate": "topSourceIsKnownBad",
+        "value": true
+      }
     ],
     "then": [
-      { "op": "derive", "fact": { "id": "d3", "type": "derived", "subject": "alerts", "predicate": "attackConfirmed", "value": true, "confidence": 0.95, "source": "rule:R3" } }
+      {
+        "op": "derive",
+        "fact": {
+          "id": "d3",
+          "type": "derived",
+          "subject": "alerts",
+          "predicate": "attackConfirmed",
+          "value": true,
+          "confidence": 0.95,
+          "source": "rule:R3"
+        }
+      }
     ]
   }
 ]

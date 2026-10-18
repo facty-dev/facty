@@ -28,6 +28,7 @@
 # Tested headless (no TTY): engine/test_tui.py drives the board with
 # Textual's pilot (run_test).
 
+import json
 import sys
 import time
 from pathlib import Path
@@ -235,7 +236,8 @@ class DetailBlock(VerticalScroll):
 # (text-primary, text-success, …) so they adapt to the active theme.
 TOOL_BADGES = {
     "llm · induction": "#0891B2",               # cyan
-    "classifier · induction": "#0D9488",        # teal (the label sensor)
+    "classifier · induction": "#0D9488",        # teal (the label sensor, tier 1)
+    "decider · induction": "#7C3AED",           # violet (the Strom decision tier)
     "llm · commentary": "#7C3AED",              # violet (out-of-band explanations)
     "fwd chain · deduction": "#2563EB",         # blue
     "constraint solver · deduction": "#D97706", # amber
@@ -279,11 +281,23 @@ class PickerScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header()
         yield Label("Facty — the detective DSS · pick a case", classes="title")
-        sensor_cases = {c.name for c in cli.list_cases()
-                        if (c / "classify.json").exists()}
+        def sensor_mark(c):
+            """The case picker's sensor marker: which tiers the case's
+            label sensor runs (from classify.json's backend)."""
+            path = c / "classify.json"
+            if not path.exists():
+                return None
+            try:
+                backend = json.loads(path.read_text()).get("backend",
+                                                           "hybrid")
+            except ValueError:
+                backend = "hybrid"
+            return {"local": "· classifier", "strom": "· decider",
+                    "hybrid": "· classifier+decider"}.get(backend)
+        marks = {c.name: sensor_mark(c) for c in cli.list_cases()}
         yield ListView(*[
-            ListItem(Label(f"{c.name} [dim]· classifier[/dim]"
-                           if c.name in sensor_cases else c.name),
+            ListItem(Label(f"{c.name} [dim]{marks[c.name]}[/dim]"
+                           if marks[c.name] else c.name),
                      name=c.name)
             for c in cli.list_cases()],
             id="picker")
@@ -528,10 +542,14 @@ class CaseScreen(Screen):
         tag = "classifier · induction" if op == "label" else "llm · induction"
 
         def call(ui, stream, on_response):
+            # offline: the LLM ops replay the cache; the label op runs its
+            # local tier live (the classifier is offline-capable)
             return cli.sense_one(ui, self.case, op, *args, stream=stream,
                                  on_response=on_response,
-                                 mode="cache" if offline else None,
-                                 engine_context=engine_context)
+                                 mode=("cache" if offline else None)
+                                 if op != "label" else None,
+                                 engine_context=engine_context,
+                                 offline=offline)
 
         return self._live_call(label, tag, call,
                                strip=f"{op_label} — ")
@@ -618,10 +636,18 @@ class CaseScreen(Screen):
                                    "(judge: schema + compute checks)", "facts",
                                    index, ents, offline=offline)
             if (self.case / "classify.json").exists():
-                label_facts = self.run_stage("label the evidence pile — the "
-                                             "classifier (a small local model; "
-                                             "no LLM tokens)", "label",
-                                             offline=offline)
+                backend = json.loads((self.case / "classify.json")
+                                     .read_text()).get("backend", "strom")
+                stage = {
+                    "local": "label the evidence pile — the classifier "
+                             "(a small local model; no LLM tokens)",
+                    "strom": "label the evidence pile — the decision tier "
+                             "(Strom; calibrated probabilities)",
+                    "hybrid": "label the evidence pile — tier 1: the "
+                              "classifier; tier 2: Strom adjudicates the "
+                              "gated rows",
+                }[backend]
+                label_facts = self.run_stage(stage, "label", offline=offline)
                 facts = facts + label_facts
             self.entities = ents
             if add_facts is not None:

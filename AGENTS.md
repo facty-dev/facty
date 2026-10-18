@@ -82,7 +82,8 @@ Schemas: `engine/schemas/*.schema.json`. Codegen: `engine/emit.py` →
    `docs/prd/`, `docs/discovery/`, `docs/adr/` when acting as the coding
    agent — unless the PO directs a rename or reframe. Coding agents
    report to `.agentic/messages/coding-to-decision/<NNN>-result.md`.
-7. **VM egress is an explicit allow-list** (api.mistral.ai,
+7. **VM egress is an explicit allow-list** (api.mistral.ai, api.uprelic.com
+   for the Strom decider tier,
    registry.npmjs.org). Don't add network features that assume open
    egress — and don't add web-search tooling (ddgr or similar): cases
    handle sensitive data, so nothing leaves the VM except LLM calls.
@@ -97,8 +98,11 @@ Schemas: `engine/schemas/*.schema.json`. Codegen: `engine/emit.py` →
 ./facty selftest             # acceptance test — every case, asserted
 ./facty test                 # all tests: selftest + retry loop + the TUI (headless)
 ./facty sense <case> --op facts   # one sensing op, standalone (LLM, streamed)
-./facty sense <case> --op label    # the label sensor (small classifier, CPU-only)
+./facty sense <case> --op label    # the label sensor (classifier bulk + Strom adjudication)
 ./facty sense <case> --op parser   # generate the case's extract parser (prep=parser)
+./facty sense <case> --op decide   # draft the Strom decision questions (LLM, judged)
+./facty env                     # the secrets status (never values); --exports for VM hoisting
+./facty sense <case> --op label --offline   # offline mode: local tier live, LLM ops from cache
 ./facty walkthrough <case>   # terminal step-through (VMs, no-TTY)
 ./facty tui <case>           # the Textual workbench (needs `make deps`)
 ./facty emit                 # codegen projections (TS types + Datalog per case)
@@ -162,6 +166,41 @@ Phase vocabularies differ by surface: the decision agent uses
   `requirements-sensors.txt` (`make deps-sensors`) — heavy-ish and
   host/CI-only, never the gondolin VM snapshot. Sensor-sourced evidence
   (the `classify.json` file) is excluded from the LLM's phase-1 files.
+- The label sensor is a **ladder** (`classify.json` `backend`):
+  `strom` (default — the Strom decider tier scores every row, the local
+  classifier is the automatic fallback), `hybrid` (the classifier
+  scores the bulk, the decider adjudicates the gated rows — the demo
+  case pins this to show the ladder), `local` (the local NLI classifier
+  only — the offline mode). The Strom decider (`engine/strom.py`,
+  stdlib-only) is Uprelic's hosted decision model (`strom-1.0.7`,
+  EU/Paris GPUs, calibrated probabilities, ~$0.04 per 1M input tokens,
+  500 req/min); its key rides `UPRELIC_API_KEY` (env / gondolin
+  host-secret injection — never logged, never committed), its question
+  set is drafted per pack by the LLM (`--op decide` →
+  `sensor/decisions.json`, judged, committed), and its responses cache
+  like any sensing response. All tiers are induction-only — never in
+  the verdict path. The decider tier is probabilistic (re-asked rows
+  wobble past the 4th decimal; rows near the gate can flip) — the
+  recorded facts + cache are the deterministic layer. `--offline` /
+  `FACTY_OFFLINE=1` runs the local tier live and replays the LLM ops
+  from cache.
+- **Secrets / dotenv** (`engine/dotenv.py`, loaded by the CLI at
+  startup): real keys live in `~/.facty/.env` (machine-local, never
+  committed — the repo is mounted into the VMs); the project `.env`
+  holds non-secret defaults only. `.env.example` documents the known
+  keys (`UPRELIC_API_KEY`, `MISTRAL_API_KEY`). The real environment
+  always wins (setdefault). `./facty env` prints the status (never
+  values); `eval "$(./facty env --exports)"` hoists the keys into the
+  launching shell — gondolin reads them host-side (`--host-secret
+  KEY@host` in gondolin-pi.sh; the guest only ever sees placeholders).
+  The pi agent also has the **strom skill** (from
+  platform.uprelic.com/skill.md): installed for host pi sessions at
+  `~/.pi/agent/skills/strom`, and vendored in this repo at
+  `gondolin/skills/strom` — the full gondolin config ships in-repo
+  (runner + build script + skills; `make vm-image` rebuilds the
+  snapshot, which bakes the skill set). The vendored VM is the
+  facty-optimized config (no web-search tooling, by design; runtime
+  egress: api.mistral.ai + registry.npmjs.org + api.uprelic.com).
 - `engine/engine.py` is library + CLI (`run`, `selftest`); the selftest
   asserts the acceptance criteria and the deterministic replay. The
   primary interface is the `facty` CLI (`./facty`, `engine/cli.py`).
@@ -215,6 +254,7 @@ Phase vocabularies differ by surface: the decision agent uses
 |---|---|---|
 | Case evidence (raw) | `engine/cases/<case>/evidence/` | — |
 | Pack (rules/constraints/hypotheses) | `engine/cases/<case>/pack/` | — |
+| Sensor config + drafted artifacts | `engine/cases/<case>/classify.json` + `sensor/` (`extract.py` + tests, `decisions.json`) | — |
 | Sensed facts | `engine/cases/<case>/facts.json` (+ `facts-<drop>.json`) | — |
 | Sensing record | `engine/cases/<case>/SENSING.md` | — |
 | Expected outcome | `engine/cases/<case>/expected.md` | — |
@@ -263,11 +303,11 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
   may not be initialized as a git repo yet — the git-native pipeline
   (`sdlc-branch.sh`, `asset-sync.sh`) requires it; check before promising
   pipeline runs.
-- **Network egress** from a sandboxed session is restricted per
-  `.pi/sandbox.json` (currently only `earendil-works.github.io` +
-  `docassemble.org`). Web search/scraping skills will not work from the
-  sandbox — and the VM has no web-search tooling by design (cases handle
-  sensitive data; its egress is api.mistral.ai + registry.npmjs.org
+- **Network egress** from a sandboxed session is restricted by the
+  host's pi sandbox allow-list (the project ships no sandbox config).
+  Web search/scraping skills will not work from the sandbox — and the
+  VM has no web-search tooling by design (cases handle sensitive data;
+  its egress is api.mistral.ai + registry.npmjs.org + api.uprelic.com
   only). Do web research on the host, or skip it for sensitive cases.
 - **Cross-project paths** (`~/.cache/gondolin`) may be unreadable from
   the sandbox — expect prompts or failures when scripts probe them; run

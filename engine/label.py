@@ -115,6 +115,7 @@ def load_config(case_dir):
     cfg.setdefault("precision", "fp32")
     cfg.setdefault("prep", "none")
     cfg.setdefault("scoring", "margin")
+    cfg.setdefault("backend", "strom")
     if cfg["precision"] not in PRECISION_FILES:
         raise LabelError(f"classify.json: precision must be one of "
                          f"{sorted(PRECISION_FILES)}")
@@ -124,6 +125,19 @@ def load_config(case_dir):
     if cfg["scoring"] not in ("entail", "margin"):
         raise LabelError("classify.json: scoring must be one of "
                          "entail | margin")
+    if cfg["backend"] not in ("local", "strom", "hybrid"):
+        raise LabelError("classify.json: backend must be one of "
+                         "local | strom | hybrid")
+    crit = cfg.get("criteria")
+    if crit is not None:
+        if not isinstance(crit, dict) or not all(
+                isinstance(k, str) and isinstance(v, str) for k, v in crit.items()):
+            raise LabelError("classify.json: criteria must map labels to "
+                             "description strings")
+        unknown = set(crit) - set(cfg["labels"])
+        if unknown:
+            raise LabelError("classify.json: criteria keys must be labels "
+                             f"(unknown: {sorted(unknown)})")
     return cfg
 
 
@@ -131,6 +145,51 @@ def short_model(model):
     """'onnx-community/ModernBERT-base-nli-ONNX' → 'ModernBERT-base-nli'."""
     name = model.split("/")[-1]
     return name[:-5] if name.endswith("-ONNX") else name
+
+
+# ── The decider tier (Strom) ─────────────────────────────────────────
+
+def load_decisions(case_dir):
+    """Load the drafted decision questions (sensor/decisions.json) — the
+    committed artifact from `./facty sense <case> --op decide`. Returns
+    None when absent (the sensor then builds the default question set
+    from classify.json)."""
+    path = Path(case_dir) / "sensor" / "decisions.json"
+    if not path.exists():
+        return None
+    try:
+        doc = json.loads(path.read_text())
+    except ValueError as exc:
+        raise LabelError(f"sensor/decisions.json: unparseable JSON: {exc}")
+    errs = check_decisions(doc, load_config(case_dir))
+    if errs:
+        raise LabelError("sensor/decisions.json: " + "; ".join(errs[:3]))
+    return doc
+
+
+def choice_question(cfg):
+    """The default choice question for the label task, built from
+    classify.json (used when no decisions.json is drafted): the labels as
+    options, the criteria descriptions when configured (the model goes by
+    the name alone otherwise — Strom's docs)."""
+    import strom
+    crit = {lab: (cfg.get("criteria") or {}).get(lab, lab)
+            for lab in cfg["labels"]}
+    return strom.choice(f"Classify this {cfg['subject']}.", crit)
+
+
+def decision_questions(cfg, decisions=None):
+    """The Strom question set for the label task + the name of the choice
+    question that drives classifiedAs. Uses the drafted decisions.json when
+    given, else the default choice question. Raises LabelError when no
+    choice question covers the labels exactly."""
+    qs = decisions["questions"] if decisions else {"class": choice_question(cfg)}
+    for name, q in qs.items():
+        if (q.get("type") == "choice"
+                and set(q.get("criteria") or {}) == set(cfg["labels"])):
+            return qs, name
+    raise LabelError("no choice question covers the classify.json labels "
+                     "exactly — draft one: ./facty sense <case> --op decide")
 
 
 def _slug(label):
@@ -511,15 +570,99 @@ def validate_facts(facts):
 
 # ── The sensor pipeline ───────────────────────────────────────────────
 
+def _strom_score(cfg, rows, client, decisions=None, usage=None):
+    """The decider tier: score the rows with Strom (one request per row —
+    the state is the row's fields; the questions are the decision set;
+    many questions per request and byte-identical states, so Strom's
+    prompt cache reuses what it can — replays come back faster).
+    Returns (probs aligned to cfg["labels"], extras) where extras are the
+    non-choice answers as (row_index, question_name, answer) tuples.
+    Rows without text are skipped (they stay unclassified). When `usage`
+    is a dict it accumulates {calls, input_tokens, cached_input_tokens,
+    cost} — the response's usage, for the op's log line."""
+    import strom
+    client = client or strom.from_env()
+    questions, choice_name = decision_questions(cfg, decisions)
+    probs = [[0.0] * len(cfg["labels"]) for _ in rows]
+    extras = []
+    for i, row in enumerate(rows):
+        if row.get("text") is None:
+            continue
+        state = {k: v for k, v in row.items() if k not in ("row", "lines")}
+        resp = client.ask(state, questions)
+        if usage is not None:
+            u = resp.get("usage") or {}
+            usage["calls"] = usage.get("calls", 0) + 1
+            usage["input_tokens"] = (usage.get("input_tokens", 0)
+                                     + u.get("input_tokens", 0))
+            usage["cached_input_tokens"] = (
+                usage.get("cached_input_tokens", 0)
+                + u.get("cached_input_tokens", 0))
+            usage["cost"] = usage.get("cost", 0.0) + u.get("cost", 0.0)
+        answers = resp["answers"]
+        ch = answers[choice_name]
+        probs[i] = [float(ch["probabilities"].get(lab, 0.0))
+                    for lab in cfg["labels"]]
+        for qname in questions:
+            if qname != choice_name:
+                extras.append((i, qname, answers[qname]))
+    return probs, extras
+
+
+def _extras_facts(cfg, rows, extras):
+    """The non-choice decision answers (noul/score) → per-row facts: the
+    question name is the predicate (camelCase, stable — packs reference
+    it), the value is the answer (the noul probability / the score), the
+    confidence is the answer's confidence (noul answers carry none — the
+    probability is the value)."""
+    out = []
+    for i, qname, a in extras:
+        row = rows[i]
+        if a.get("type") == "noul":
+            value, conf = round(float(a["noul"]), 4), 1.0
+        else:
+            value = round(float(a["score"]), 4)
+            conf = round(float(a.get("confidence", 1.0)), 4)
+        out.append({
+            "id": f"dq-{qname}-{row['id']}",
+            "type": "evidence",
+            "subject": str(row["id"]),
+            "predicate": qname,
+            "value": value,
+            "confidence": conf,
+            "source": f"{cfg['file']}:row {row['row']}",
+        })
+    return out
+
+
 def run_sensor(case_dir, config=None, classifier=None, score_fn=None,
-               stream=None, runner=None):
-    """Run the label sensor over a case: prep → classify → facts, validated
-    against the facts schema. The fallback ladder (the source tag says which
-    path produced the facts): prep rows → classifier; prep or classifier
-    failure → raw chunks → classifier. `classifier`/`score_fn` are injectable
-    (tests stub them). Returns (facts, source)."""
+               stream=None, runner=None, client=None, decisions=None,
+               offline=None, usage=None):
+    """Run the label sensor over a case. The backend (classify.json)
+    selects the tiers:
+      strom (default) — the Strom decider tier scores every row
+        (calibrated decision model, the first-class path); the local
+        classifier is the automatic fallback when the API is
+        unreachable / the key is missing / the balance is empty;
+      hybrid — the local classifier (tier 1) scores the bulk; Strom
+        adjudicates the rows tier 1 gated (the confidence-gated
+        handoff, calibrated);
+      local — tier 1 only.
+    Offline (FACTY_OFFLINE=1 / --offline) runs the local tier only,
+    whatever the backend (no network, no decider). The prep fallback
+    ladder is unchanged: prep rows → classifier; prep or classifier
+    failure → raw chunks → classifier. `classifier`/`score_fn`/`client`/
+    `decisions`/`usage` are injectable (tests stub them; `usage` is a
+    dict the decider tier accumulates its API usage into). Returns
+    (facts, source)."""
     case = Path(case_dir)
     cfg = config or load_config(case)
+    if decisions is None:
+        decisions = load_decisions(case)
+    backend = cfg.get("backend", "strom")
+    if offline is None:
+        offline = os.environ.get("FACTY_OFFLINE") == "1"
+    # ── the prep ladder (shared): prep rows → classifier → raw chunks ──
     ladder = []
     try:
         ladder.append((_prep_rows(case, cfg, stream=stream, runner=runner),
@@ -527,23 +670,79 @@ def run_sensor(case_dir, config=None, classifier=None, score_fn=None,
     except Exception:
         ladder.append((None, "classifier"))
     ladder.append((raw_chunks(case, cfg), "raw-chunks"))
-    last_err = None
-    for rows, _tag in ladder:
+
+    def tier1():
+        """The local tier: the prep → classifier → raw-chunks ladder.
+        Returns (rows, probs, source-tag) or raises RuntimeError."""
+        last_err = None
+        for r, tag in ladder:
+            if r is None:
+                continue
+            try:
+                return r, _score(cfg, r, classifier, score_fn), tag
+            except Exception as exc:
+                last_err = exc
+        raise RuntimeError(f"label sensor failed on every path: {last_err}")
+
+    extras = []
+    if offline:
+        # offline mode: the local tier only (no network, no decider)
+        rows, probs, t1 = tier1()
+        source = f"{t1} (offline: the decider tier is skipped)"
+    elif backend == "strom":
+        # the decider tier is primary; tier 1 is the fallback
+        rows = ladder[0][0] if ladder[0][0] is not None else ladder[1][0]
         if rows is None:
-            continue
+            raise RuntimeError("label sensor: the evidence could not be "
+                               f"read ({cfg['file']}) — nothing to score")
         try:
-            probs = _score(cfg, rows, classifier, score_fn)
+            probs, extras = _strom_score(cfg, rows, client, decisions,
+                                         usage=usage)
+            source = "decider"
         except Exception as exc:
-            last_err = exc
-            continue
-        facts = build_facts(cfg, rows, probs, case)
-        errs = validate_facts(facts)
-        if errs:
-            raise ValueError("label-sensor facts failed schema validation: "
-                             + "; ".join(errs[:5]))
-        source = "classifier" if rows is ladder[0][0] else "raw-chunks"
-        return facts, source
-    raise RuntimeError(f"label sensor failed on every path: {last_err}")
+            err = _short(exc)
+            try:
+                rows, probs, t1 = tier1()
+                source = f"{t1} (decider failed: {err})"
+            except RuntimeError as exc2:
+                raise RuntimeError(f"the decider tier failed ({err}) and "
+                                   "the local classifier is unavailable "
+                                   f"({exc2})") from exc2
+    elif backend == "hybrid":
+        # tier 1 scores the bulk; the decider tier adjudicates the gated
+        rows, probs, t1 = tier1()
+        gated = [i for i, p in enumerate(probs)
+                 if rows[i].get("text") is not None
+                 and max(p) < cfg["threshold"]]
+        if gated:
+            try:
+                sub = [rows[i] for i in gated]
+                sub_probs, sub_extras = _strom_score(cfg, sub, client,
+                                                     decisions, usage=usage)
+                for k, i in enumerate(gated):
+                    probs[i] = sub_probs[k]
+                extras = [(gated[k], qname, a)
+                          for k, qname, a in sub_extras]
+                source = "classifier+decider"
+            except Exception as exc:
+                source = f"{t1} (decider skipped: {_short(exc)})"
+        else:
+            source = "classifier+decider (tier 1 gated nothing)"
+    else:  # local
+        rows, probs, t1 = tier1()
+        source = t1
+    facts = build_facts(cfg, rows, probs, case)
+    facts += _extras_facts(cfg, rows, extras)
+    errs = validate_facts(facts)
+    if errs:
+        raise ValueError("label-sensor facts failed schema validation: "
+                         + "; ".join(errs[:5]))
+    return facts, source
+
+
+def _short(exc):
+    text = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+    return text[:120]
 
 
 # ── The parser generator (the LLM writes the code; the judge judges it) ─
@@ -741,4 +940,224 @@ def write_parser(case_dir, obj):
     sensor.mkdir(parents=True, exist_ok=True)
     (sensor / "extract.py").write_text(obj["extract_py"])
     (sensor / "extract_test.py").write_text(obj["extract_test_py"])
+    return sensor
+
+
+# ── The decision-question generator (the LLM drafts the questions) ────
+
+DECISIONS_SCHEMA = {
+    "type": "object",
+    "required": ["decisions_json"],
+    "properties": {"decisions_json": {"type": "string"}},
+}
+
+DECISIONS_DOC_SCHEMA = {
+    "type": "object",
+    "required": ["model", "questions"],
+    "properties": {
+        "model": {"type": "string"},
+        "questions": {"type": "object", "minProperties": 1},
+    },
+}
+
+DECISIONS_TASK = """Draft the decision questions for this case's label sensor, as a
+JSON document (a string) under the key "decisions_json".
+
+Strom is a decision model: it never writes text — it answers typed
+questions about the state (one evidence row) with probabilities over the
+options YOU define. Question types:
+- {"type": "choice", "instructions": "...", "criteria": {"<option>": "<when it applies>", ...}}
+  — exactly one of the named options. The criteria descriptions say when
+  each option applies; be concrete (what distinguishes them).
+- {"type": "noul", "instructions": "..."} — the probability that the
+  statement holds (yes/no).
+- {"type": "score", "instructions": "...", "criteria": ["<level 0>", "<level 1>", ...]}
+  — a position on the ordered rubric (the first level is 0).
+
+The document:
+{{
+  "model": "strom-1.0.7",
+  "questions": {{
+    "<name>": <question>, ...
+  }}
+}}
+
+REQUIRED: one "choice" question whose criteria keys are EXACTLY these
+labels (the classification axis): {labels}
+
+The instructions read as a plain question about one row ("Classify this
+alert.", "Is this row a targeted attack?").
+
+OPTIONAL: extra noul/score questions that add decision facts per row
+(e.g. urgency on a rubric, "is this row from an external source?"). The
+question name becomes the fact predicate — keep names camelCase and
+stable (packs reference them).
+
+Sample rows from the evidence (the file's first lines):
+{{SAMPLE}}
+"""
+
+
+def check_decisions(doc, cfg, client=None, sample_rows=None):
+    """The decision-question judge: structure (schema), label coverage (a
+    choice question whose criteria keys are exactly the labels), and —
+    when a client + sample rows are given — a dry run against the API
+    (answers well-shaped, probabilities sane, not degenerate). Returns
+    the error list (empty = accepted)."""
+    errs = list(engine.validate(doc, DECISIONS_DOC_SCHEMA))
+    if errs:
+        return errs
+    qs = doc["questions"]
+    for name, q in qs.items():
+        if not isinstance(name, str) or not name:
+            errs.append("question names must be non-empty strings")
+            continue
+        if not isinstance(q, dict):
+            errs.append(f"question {name!r}: must be an object")
+            continue
+        t = q.get("type")
+        if t not in ("noul", "choice", "score"):
+            errs.append(f"question {name!r}: type must be noul | choice | score")
+            continue
+        if not isinstance(q.get("instructions"), str) or not q["instructions"].strip():
+            errs.append(f"question {name!r}: instructions must be a non-empty "
+                        "string")
+            continue
+        if t == "choice":
+            crit = q.get("criteria")
+            if not isinstance(crit, dict) or not crit:
+                errs.append(f"question {name!r}: choice needs a non-empty "
+                            "criteria object")
+            elif not all(isinstance(k, str) and isinstance(v, str)
+                         and v.strip() for k, v in crit.items()):
+                errs.append(f"question {name!r}: criteria values must be "
+                            "non-empty descriptions")
+        elif t == "score":
+            crit = q.get("criteria")
+            if (not isinstance(crit, list) or len(crit) < 2
+                    or not all(isinstance(c, str) and c.strip() for c in crit)):
+                errs.append(f"question {name!r}: score needs an ordered "
+                            "criteria list of ≥2 level descriptions")
+    covered = any(
+        isinstance(q, dict) and q.get("type") == "choice"
+        and set(q.get("criteria") or {}) == set(cfg["labels"])
+        for q in qs.values())
+    if not covered:
+        errs.append("no choice question covers the labels exactly: "
+                    + ", ".join(cfg["labels"]))
+    if errs or client is None or not sample_rows:
+        return errs
+    # ── the dry run: every question answered, well-shaped, sane ──
+    choice_answers = []
+    try:
+        for r in sample_rows:
+            state = {k: v for k, v in r.items() if k not in ("row", "lines")}
+            answers = client.ask(state, qs)["answers"]
+            if set(answers) != set(qs):
+                errs.append(f"dry run: answers missing for "
+                            f"{sorted(set(qs) - set(answers))}")
+                return errs
+            for name, a in answers.items():
+                if a.get("type") != qs[name]["type"]:
+                    errs.append(f"dry run: answer {name!r} has type "
+                                f"{a.get('type')!r}, expected "
+                                f"{qs[name]['type']!r}")
+                if qs[name]["type"] == "choice":
+                    probs = a.get("probabilities") or {}
+                    if set(probs) != set(qs[name]["criteria"]):
+                        errs.append(f"dry run: choice {name!r} probabilities "
+                                    "don't match the criteria")
+                    elif abs(sum(probs.values()) - 1.0) > 0.05:
+                        errs.append(f"dry run: choice {name!r} probabilities "
+                                    f"sum to {sum(probs.values()):.3f}")
+                    choice_answers.append(a)
+    except Exception as exc:
+        errs.append(f"dry run failed: {_short(exc)}")
+        return errs
+    # non-degeneracy: not every sampled row the same choice at >0.95
+    if len(choice_answers) >= 3:
+        picks = {a.get("choice") for a in choice_answers}
+        tops = [max((a.get("probabilities") or {"": 0}).values())
+                for a in choice_answers]
+        if len(picks) == 1 and min(tops) > 0.95:
+            errs.append("dry run is degenerate: every sampled row got the "
+                        f"same choice ({picks.pop()!r}) at >0.95 — the "
+                        "criteria don't distinguish the labels")
+    return errs
+
+
+def generate_questions(case_dir, config=None, runner=None, client=None,
+                       stream=None, max_attempts=3, note=None):
+    """Draft the case's Strom decision questions (sensor/decisions.json)
+    with an LLM, judged by the decision-question judge in a capped
+    correction loop (1 initial + max_attempts-1 revisions — the
+    sensing.py pattern; an unreachable LLM fails fast). The judge's dry
+    run needs a Strom client (the API is called on a row sample — a few
+    thousandths of a cent). Returns the accepted decisions doc. The
+    caller writes and commits the file."""
+    import sensing
+    case = Path(case_dir)
+    cfg = config or load_config(case)
+    if cfg.get("backend", "strom") == "local":
+        raise LabelError(f"{case.name}: classify.json backend is 'local' — "
+                         "decision questions are for the Strom tier")
+    rows = _prep_rows(case, cfg, stream=stream, runner=runner)
+    scored = [r for r in rows if r.get("text") is not None]
+    sample_rows = scored[::max(1, len(scored) // 6)][:6] if scored else []
+    sample = "\n".join(
+        json.dumps({k: v for k, v in r.items() if k not in ("row", "lines")},
+                   ensure_ascii=False)
+        for r in sample_rows)
+    task = (DECISIONS_TASK
+            .replace("{{SAMPLE}}", sample)
+            .replace("{labels}", json.dumps(cfg["labels"])))
+    runner = runner or sensing._pi_runner
+    label = f"{case.name}-decide"
+    staged = sensing.staged_prompt_path(label)
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    prompt = (f"{task}\n\n"
+              "Respond with ONLY a JSON object with the key decisions_json "
+              "— no prose, no markdown fences:\n\n"
+              + json.dumps(DECISIONS_SCHEMA))
+    for attempt in range(1, max_attempts + 1):
+        staged.write_text(prompt)
+        text = runner(str(staged), stream)  # RuntimeError = unreachable, fail fast
+        try:
+            obj = sensing.parse_and_validate(text, DECISIONS_SCHEMA)
+            doc = json.loads(obj["decisions_json"])
+            errs = check_decisions(doc, cfg, client=client,
+                                   sample_rows=sample_rows)
+        except ValueError as exc:
+            errs, doc = [str(exc)], None
+        if not errs:
+            if note:
+                note(f"attempt {attempt}/{max_attempts} accepted by the "
+                     "decision-question judge")
+            return doc
+        if attempt < max_attempts:
+            detail = "; ".join(errs[:5])
+            if note:
+                note(f"attempt {attempt}/{max_attempts} rejected — {detail}; "
+                     "correcting")
+            prev = (json.dumps(doc, indent=2)[:2000] if doc
+                    else text[:2000])
+            prompt = (f"{prompt}\n\nYour previous decision questions were "
+                      "rejected by the judge:\n\n"
+                      + "\n".join(f"- {e}" for e in errs[:8])
+                      + f"\n\nPrevious decisions_json:\n{prev}\n\n"
+                      "Fix it. Respond with ONLY the JSON object again.")
+            continue
+        raise ValueError(f"decision-question judge rejected the questions "
+                         f"after {max_attempts} attempts: "
+                         + "; ".join(errs[:5]))
+    raise ValueError("unreachable")  # pragma: no cover
+
+
+def write_decisions(case_dir, doc):
+    """Write the drafted decision questions into the case's sensor/ dir
+    (the artifact is meant to be committed and reviewed)."""
+    case = Path(case_dir)
+    sensor = case / "sensor"
+    sensor.mkdir(parents=True, exist_ok=True)
+    (sensor / "decisions.json").write_text(json.dumps(doc, indent=2) + "\n")
     return sensor

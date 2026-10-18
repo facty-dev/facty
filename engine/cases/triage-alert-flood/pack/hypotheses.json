@@ -1,17 +1,36 @@
 [
   {
     "id": "H1",
-    "statement": "Targeted attack — a coordinated source set drove the attack-classified alerts (78% from one source); route P1 to incident response and hand off to attribution to identify the operator.",
+    "statement": "Targeted attack \u2014 a coordinated source set drove the attack-classified alerts (80% from one source); route P1 to incident response and hand off to attribution to identify the operator.",
     "status": "open",
     "prior": 0.4,
     "mechanism": "attack",
     "claims": [
-      { "subject": "alerts", "predicate": "coordinatedAttackLikely", "value": true },
-      { "subject": "alerts", "predicate": "targetedAttackCount", "value": 77 },
-      { "subject": "alerts", "predicate": "targetedAttackTopSourceCount", "value": 60 },
-      { "subject": "alerts", "predicate": "attackConfirmed", "value": true }
+      {
+        "subject": "alerts",
+        "predicate": "coordinatedAttackLikely",
+        "value": true
+      },
+      {
+        "subject": "alerts",
+        "predicate": "targetedAttackCount",
+        "value": 122
+      },
+      {
+        "subject": "alerts",
+        "predicate": "targetedAttackTopSourceCount",
+        "value": 98
+      },
+      {
+        "subject": "alerts",
+        "predicate": "attackConfirmed",
+        "value": true
+      }
     ],
-    "evidenceFor": ["ag-targetedattackcount", "ag-targetedattacktopsourcecount"],
+    "evidenceFor": [
+      "ag-targetedattackcount",
+      "ag-targetedattacktopsourcecount"
+    ],
     "evidenceAgainst": [],
     "discriminatingTests": [
       "Correlate the top source with threat intel (q1)"
@@ -19,31 +38,50 @@
   },
   {
     "id": "H2",
-    "statement": "Background scanning noise — the flood is internet background radiation; route P3 to the tier-1 suppression queue.",
+    "statement": "Background scanning noise \u2014 the flood is internet background radiation; route P3 to the tier-1 suppression queue.",
     "status": "open",
     "prior": 0.2,
     "mechanism": "scan",
     "claims": [
-      { "subject": "alerts", "predicate": "probingScanCount", "value": 54 },
-      { "subject": "alerts", "predicate": "noAttackClassified", "value": true }
+      {
+        "subject": "alerts",
+        "predicate": "probingScanCount",
+        "value": 66
+      },
+      {
+        "subject": "alerts",
+        "predicate": "noAttackClassified",
+        "value": true
+      }
     ],
-    "evidenceFor": ["ag-probingscancount"],
-    "evidenceAgainst": ["d2b", "ag-targetedattackcount"],
+    "evidenceFor": [
+      "ag-probingscancount"
+    ],
+    "evidenceAgainst": [
+      "d2b",
+      "ag-targetedattackcount"
+    ],
     "discriminatingTests": [
       "Check whether the top source is known-bad (q1)"
     ]
   },
   {
     "id": "H3",
-    "statement": "Detector false-positive flood — the SIEM is crying wolf; route P2 to detection engineering for signature tuning.",
+    "statement": "Detector false-positive flood \u2014 the SIEM is crying wolf; route P2 to detection engineering for signature tuning.",
     "status": "open",
     "prior": 0.2,
     "mechanism": "fp",
     "claims": [
-      { "subject": "alerts", "predicate": "mostlyFalsePositives", "value": true }
+      {
+        "subject": "alerts",
+        "predicate": "mostlyFalsePositives",
+        "value": true
+      }
     ],
     "evidenceFor": [],
-    "evidenceAgainst": ["d2"],
+    "evidenceAgainst": [
+      "d2"
+    ],
     "discriminatingTests": []
   }
 ]

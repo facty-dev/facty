@@ -15,5 +15,6 @@
   "threshold": 0.65,
   "model": "onnx-community/ModernBERT-base-nli-ONNX",
   "precision": "fp32",
-  "prep": "none"
+  "prep": "none",
+  "backend": "hybrid"
 }

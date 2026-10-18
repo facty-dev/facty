@@ -41,12 +41,20 @@ graceful fallback. See
   extraction (schema + messy input → validated object, LLM streamed),
   with a judge layer (schema + compute checks) and a capped correction
   loop — rejections feed back to the LLM, max 3 turns
-- `label.py` — the label sensor: a small CPU-only zero-shot classifier
-  (see "The label sensor" below)
+- `label.py` — the label sensor: the sensor ladder (a small CPU-only
+  zero-shot classifier + the Strom decision tier; see "The label
+  sensor" below)
+- `strom.py` — the Strom decision-tier client (stdlib-only: retries,
+  rate-limit throttle, typed errors; the key never logged)
+- `dotenv.py` — the dotenv setup (`~/.facty/.env` + `./.env`,
+  setdefault — the real environment always wins)
 - `test_retry.py` — the correction loop, tested with a stubbed runner
   (no LLM needed)
 - `test_label.py` — the label sensor, tested with a stubbed classifier
   (no model needed)
+- `test_strom.py` — the decision tier + backend dispatch + the
+  question judge, tested with stubbed clients (no API, no key)
+- `test_dotenv.py` — the dotenv setup + `facty env` (no real secrets)
 - `cli.py` — the `facty` CLI: the workbench entry (bare `./facty`) +
   the scriptable control plane (subcommands)
 - `tui.py` — the Textual workbench (the primary interface; optional dep)
@@ -143,7 +151,9 @@ as triples: `subject / predicate = value`.
 | Tag | Tool | Inference |
 |---|---|---|
 | `llm · induction` | the senses — messy evidence → facts; proposes hypotheses + tests | induction |
-| `classifier · induction` | the label sensor — a small CPU-only classifier labels the evidence pile (per-row + aggregate facts, confidence-gated) | induction |
+| `classifier · induction` | the label sensor, tier 1 — a small CPU-only classifier labels the evidence pile (per-row + aggregate facts, confidence-gated) | induction |
+| `decider · induction` | the label sensor, tier 2 — the Strom decision model adjudicates rows (calibrated probabilities; drafted question set; API usage logged) | induction |
+| `offline` | offline mode — LLM ops replay the response cache; the label sensor runs the local tier only | — |
 | `llm · commentary` | out-of-band LLM explanations (entities / ranking / verdict) — presentation only, never the verdict path | commentary |
 | `fwd chain · deduction` | rules fire: derive facts, open questions, raise the hypothesis space | deduction |
 | `constraint solver · deduction` | prune impossible explanations, support the survivors | deduction |
@@ -187,32 +197,75 @@ cache has an entry for every sensing step of the case
 (`cli.cache_ready`); it is enabled automatically once a live run has
 populated the cache.
 
-## The label sensor
+## The label sensor (the sensor ladder)
 
-The numeric sense for categorical evidence (`engine/label.py`). A case
-declares its labeling task in `classify.json` — the evidence file, the
-text column, the label set, a confidence threshold, the model, the prep
-mode — and the sensor scores every row against the labels with a small
-NLI model (zero-shot: premise = the row text, hypothesis = the template
-with the label, entailment − contradiction softmaxed across the labels),
-emitting one fact per row plus aggregate facts. Below the threshold the
-fact says `unclassified` — the confidence-gated handoff (the LLM picks
-those rows up). The sensor never touches the verdict path; it emits
-facts, the engine decides.
+The numeric sense for categorical evidence (`engine/label.py` +
+`engine/strom.py`). A case declares its labeling task in
+`classify.json` — the evidence file, the text column, the label set, a
+confidence threshold, the model, the prep mode, the **backend** — and
+the sensor scores every row against the labels, emitting one fact per
+row plus aggregate facts. Below the threshold the fact says
+`unclassified` — the confidence-gated handoff (the next tier or the LLM
+picks those rows up). The sensors never touch the verdict path; they
+emit facts, the engine decides.
+
+The **backend** knob selects the tiers:
+
+- `strom` (default) — the **Strom decider tier** (`engine/strom.py`:
+  Uprelic's hosted decision model, `strom-1.0.7`, EU/Paris GPUs,
+  calibrated probabilities, ~$0.04 per 1M input tokens) scores every
+  row; the local classifier is the automatic fallback when the API is
+  unreachable, the key is missing, or the balance is empty. Measured on
+  the demo pile: 96.0% vs the classifier's 75.6% on the rows that
+  clear the gate. Note the decider tier is probabilistic (re-asked
+  rows wobble past the 4th decimal; rows near the gate can flip) and
+  rate-bound (500 req/min) — the recorded facts + response cache are
+  the deterministic layer.
+- `hybrid` — tier 1 scores the bulk; the decider tier adjudicates the
+  rows tier 1 gated (the confidence-gated handoff, calibrated). Faster
+  and less egress at volume; the demo case pins this to show the ladder.
+- `local` — tier 1 only (the offline mode; also forced by `--offline` /
+  `FACTY_OFFLINE=1`): the small local NLI classifier scores every row
+  (zero-shot: premise = the row text, hypothesis = the template with
+  the label, entailment − contradiction softmaxed across the labels).
+  Deterministic, free, local, unlimited.
+
+The Strom question set is drafted once per pack by the LLM
+(`--op decide` → `sensor/decisions.json`, a committed artifact) in a
+capped correction loop (1 initial + 2 revisions) judged by a
+**decision-question judge**: structure (schema), label coverage (a
+choice question whose criteria keys are exactly the labels), and a dry
+run against the API on a row sample. The drafted questions may add
+`noul`/`score` decision questions whose answers become per-row
+`dq-*` facts (the question name is the predicate). The key rides
+`UPRELIC_API_KEY` (env / gondolin host-secret injection) — never
+logged, never committed. With no key, a 402, or an outage, the decider
+tier is skipped (logged) and the gated rows stay `unclassified`.
 
 ```bash
 make deps-sensors                                   # onnxruntime + transformers<5 (host/CI)
-./facty sense alert-flood --op label                # label the pile (streamed log)
+./facty sense alert-flood --op label                # label the pile (streamed log, both tiers)
 ./facty sense alert-flood --op label --json         # machine-readable facts
 ./facty sense alert-flood --op parser               # generate sensor/extract.py (prep=parser cases)
+./facty sense alert-flood --op decide               # draft sensor/decisions.json (LLM, judged)
+./facty sense alert-flood --op label --offline      # offline mode: local tier live, LLM ops from cache
 FACTY_SENSE=cache ./facty sense alert-flood --op label   # replay the cache, no model call
 ```
+
+Secrets ride the dotenv setup (`engine/dotenv.py`, loaded at startup):
+real keys live in `~/.facty/.env` (machine-local, never committed —
+the repo is mounted into the VMs); `./facty env` prints the status
+(never values) and `eval "$(./facty env --exports)"` hoists the keys
+into the launching shell for the gondolin VMs (host-side `--host-secret`
+injection; the guest only ever sees placeholders). See `.env.example`.
 
 `classify.json` knobs: `labels` + `template` (the pack owns the
 vocabulary — phrasing is pack design, measured to matter), `scoring`
 (`margin` default — calibrated confidences; `entail`), `threshold`
 (per-pack calibration knob), `model` (an ONNX repo) + `precision`
-(`fp32` | `int8`), and `prep`:
+(`fp32` | `int8`), `backend` (`local` | `hybrid` | `strom`), optional
+`criteria` (label → description, for the Strom choice question), and
+`prep`:
 
 - `none` (default) — structured evidence (CSV): read the columns
   directly; the LLM never sees the pile (the token-saving case).
@@ -232,9 +285,9 @@ prep or classifier failure → raw chunks (classify the messy text
 as-is, threshold-gated) → facts; everything failed → the response cache,
 then the recorded facts. Sensor-sourced evidence is excluded from the
 LLM's phase-1 files (`cli.phase1_evidence`), so the pile never enters an
-LLM call. The demo case `triage-alert-flood` shows the classifier in
-the verdict loop; see its `SENSING.md` for the measured accuracy and
-calibration notes.
+LLM call. The demo case `triage-alert-flood` shows the ladder in the
+verdict loop (classifier bulk + Strom adjudication); see its
+`SENSING.md` for the measured accuracy and calibration notes.
 
 ## Workbench authentication
 

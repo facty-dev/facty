@@ -33,6 +33,8 @@ import engine          # noqa: E402
 import emit as emit_mod  # noqa: E402
 import sensing         # noqa: E402
 import label           # noqa: E402  (the label sensor — small classifier)
+import strom           # noqa: E402  (the Strom decision tier — stdlib client)
+import dotenv          # noqa: E402  (the dotenv setup — machine-local secrets)
 import procs           # noqa: E402  (subprocess registry — no dangling processes)
 
 CASES_DIR = ENGINE_DIR / "cases"
@@ -86,8 +88,10 @@ examples:
   ./facty test                       all tests (selftest + retry loop + the TUI, headless)
   ./facty walkthrough silver-blaze --auto   terminal step-through (VMs, no-TTY)
   ./facty explain silver-blaze         LLM commentary on the verdict (out-of-band)
-  ./facty sense alert-flood --op label     the label sensor (small classifier, CPU-only)
+  ./facty sense alert-flood --op label     the label sensor (classifier bulk + Strom adjudication)
   ./facty sense alert-flood --op parser    generate the case's extract parser (LLM, judged)
+  ./facty sense alert-flood --op decide    draft the Strom decision questions (LLM, judged)
+  ./facty sense alert-flood --op facts --offline   offline mode (cache replay + local tier only)
   ./facty completion bash >> ~/.bash_completion
 """
 
@@ -430,18 +434,27 @@ def _recorded_label_facts(case, cfg):
     return out or None
 
 
-def sense_label(ui, case, files, on_response=None, mode=None):
-    """The label sensor (small zero-shot classifier, CPU-only): evidence
-    rows → labeled facts + aggregates. The same contract as sense_extract:
-    live runs the model and caches the facts; FACTY_SENSE=cache replays the
-    cache (never calls the model); fallbacks: cache → the recorded facts
-    (the classifier facts already in facts.json, filtered by source)."""
+def sense_label(ui, case, files, on_response=None, mode=None, offline=None):
+    """The label sensor: evidence rows → labeled facts + aggregates. The
+    local classifier (tier 1, CPU-only) scores the bulk; the Strom
+    decision tier (tier 2) adjudicates the gated rows when the backend
+    is 'hybrid'/'strom' and a key is set. The same contract as
+    sense_extract: live runs the models and caches the facts;
+    FACTY_SENSE=cache replays the cache (never calls a model);
+    fallbacks: cache → the recorded facts (the classifier facts already
+    in facts.json, filtered by source). Offline mode (--offline /
+    FACTY_OFFLINE=1) runs the local tier only."""
     mode = mode or os.environ.get("FACTY_SENSE", "live")
+    if offline is None:
+        offline = os.environ.get("FACTY_OFFLINE") == "1"
     cfg = label.load_config(case)
+    backend = cfg.get("backend", "hybrid")
     lbl = f"label the {Path(cfg['file']).stem} pile"
-    cache_file = _cache_file(case.name, lbl, "facts.schema.json", files=files)
+    cache_file = _cache_file(case.name, lbl, f"facts.schema.json:{backend}",
+                             files=files)
     recorded = _recorded_label_facts(case, cfg)
     tag = "classifier · induction"
+    dtag = "decider · induction"
     judge = make_facts_judge(case)
 
     def replay(entry, source):
@@ -463,15 +476,45 @@ def sense_label(ui, case, files, on_response=None, mode=None):
             ui.log(tag, f"{lbl} — no cached sensor output, using the recorded "
                         "facts; run live to populate the cache")
     else:
-        ui.log(tag, f"{lbl} — the label sensor (a small local classifier, "
-                    "no LLM tokens)")
-        ui.log(tag, f"scoring the pile with {label.short_model(cfg['model'])} "
-                    f"({cfg['precision']}, CPU-only), threshold "
-                    f"{cfg['threshold']}")
+        if backend == "strom":
+            ui.log(dtag, f"{lbl} — the decision tier (Strom "
+                         f"{strom.DEFAULT_MODEL}: a hosted decision model, "
+                         "calibrated probabilities, EU-hosted; no LLM tokens)")
+        elif backend == "hybrid":
+            ui.log(tag, f"{lbl} — tier 1: the local classifier (bulk, "
+                        "no LLM tokens)")
+            ui.log(tag, f"scoring the pile with "
+                        f"{label.short_model(cfg['model'])} "
+                        f"({cfg['precision']}, CPU-only), threshold "
+                        f"{cfg['threshold']}")
+            ui.log(dtag, "tier 2: Strom adjudicates the gated rows "
+                         "(calibrated probabilities)")
+        else:
+            ui.log(tag, f"{lbl} — the label sensor (a small local "
+                        "classifier, no LLM tokens)")
+            ui.log(tag, f"scoring the pile with "
+                        f"{label.short_model(cfg['model'])} "
+                        f"({cfg['precision']}, CPU-only), threshold "
+                        f"{cfg['threshold']}")
+        if offline:
+            ui.log("offline", "offline mode — the decider tier is skipped")
+        usage = {}
         try:
-            facts, src_tag = label.run_sensor(case, cfg)
+            facts, src_tag = label.run_sensor(case, cfg, offline=offline,
+                                              usage=usage)
             source = "live"
-            if src_tag != "classifier":
+            note = _usage_note(usage)
+            if src_tag == "classifier+decider":
+                ui.log(dtag, "tier 2 done — the gated rows are adjudicated "
+                             f"(threshold {cfg['threshold']}, calibrated"
+                             + note + ")")
+            elif src_tag == "decider":
+                ui.log(dtag, "every row scored by the decision tier" + note)
+            elif src_tag.startswith("classifier+decider"):
+                ui.log(dtag, src_tag.split("(", 1)[1].rstrip(")"))
+            elif src_tag.startswith("classifier ("):
+                ui.log(dtag, f"decider tier: {src_tag.split('(', 1)[1].rstrip(')')}")
+            elif src_tag != "classifier":
                 ui.log(tag, f"fallback path: {src_tag} (the classifier could "
                             "not run — the raw text was classified as-is)")
         except (RuntimeError, label.LabelError) as exc:
@@ -576,6 +619,77 @@ def sense_parser(ui, case, files, stream=None, on_response=None, mode=None):
     if on_response is not None:
         on_response(raw, "live")
     return _write_and_report(ui, case, raw)
+
+
+def _usage_note(usage):
+    """The decider tier's API usage as a log suffix (empty when the
+    decider tier did not run). Strom's prompt cache shows up as the
+    cached share — replays come back faster; billed tokens are the
+    payload size either way."""
+    if not usage or not usage.get("calls"):
+        return ""
+    total = usage.get("input_tokens", 0)
+    cached = usage.get("cached_input_tokens", 0)
+    pct = f", {round(100 * cached / total)}% cached" if total else ""
+    return (f"; {usage['calls']} calls, {total:,} input tokens{pct}, "
+            f"${usage.get('cost', 0.0):.4f}")
+
+
+def sense_decide(ui, case, files, stream=None, on_response=None, mode=None):
+    """The decision-question op: the LLM drafts sensor/decisions.json (the
+    Strom question set for the case), judged by the decision-question
+    judge in a capped correction loop (1 initial + 2 revisions) whose dry
+    run calls the API on a row sample; the file is written for commit.
+    Cached like the sensing calls."""
+    mode = mode or os.environ.get("FACTY_SENSE", "live")
+    cfg = label.load_config(case)
+    lbl = "draft the decision questions"
+    cache_file = _cache_file(case.name, lbl, files=files)
+    tag = "llm · induction"
+    if mode == "cache":
+        if cache_file.exists():
+            raw = json.loads(cache_file.read_text())["response"]
+            ui.log(tag, f"{lbl} — response cache hit, no LLM call "
+                        f"({cache_file.name})")
+            return _write_decisions_and_report(ui, case, raw)
+        raise SystemExit("facty: no cached decision questions — the decide "
+                         "op drafts a new artifact, run it live")
+    ui.log(tag, f"{lbl} — calling Mistral Large 4 (mistral-subscription), "
+                "streaming …")
+    ui.log("decider · induction",
+           f"the judge dry-runs the drafted questions against Strom "
+           f"({strom.DEFAULT_MODEL}) on a row sample")
+    try:
+        client = strom.from_env()
+        doc = label.generate_questions(case, cfg, stream=stream, client=client)
+        raw = json.dumps(doc, indent=2)
+    except Exception as exc:
+        ui.log(tag, f"decision-question drafting failed ({exc})")
+        if DEBUG:
+            raise SystemExit(2)
+        raise SystemExit("facty: decision-question drafting failed — the "
+                         "judge dry-runs against the Strom API: set "
+                         f"{strom.ENV_KEY} and retry")
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    cache_file.write_text(json.dumps({
+        "case": case.name, "op": lbl, "model": sensing.MODEL,
+        "response": raw, "cached_at": time.time()}, indent=2))
+    ui.log(tag, f"response cached ({cache_file.name}) — FACTY_SENSE=cache "
+                "replays it without the LLM")
+    if on_response is not None:
+        on_response(raw, "live")
+    return _write_decisions_and_report(ui, case, raw)
+
+
+def _write_decisions_and_report(ui, case, raw):
+    doc = sensing.parse_and_validate(raw, label.DECISIONS_DOC_SCHEMA)
+    label.write_decisions(case, doc)
+    errs = label.check_decisions(doc, label.load_config(case))
+    verdict = ("judge ✓" if not errs
+               else "judge flagged: " + "; ".join(errs[:3]))
+    ui.log("decider · induction", "decision questions written "
+                                  "(sensor/decisions.json) — " + verdict)
+    return doc
 
 
 def evidence_refs(files):
@@ -718,6 +832,9 @@ def sensing_ops(case):
         if cfg["prep"] == "parser":
             ops["parser"] = ("generate the extract parser", None,
                              [case / cfg["file"]])
+        if cfg.get("backend", "strom") != "local":
+            ops["decide"] = ("draft the decision questions", None,
+                             [case / cfg["file"]])
     return ops
 
 
@@ -780,7 +897,8 @@ def cache_ready(case):
 
 
 def sense_one(ui, case, op, evidence_index=None, entities=None, stream=None,
-              on_response=None, mode=None, runner=None, engine_context=None):
+              on_response=None, mode=None, runner=None, engine_context=None,
+              offline=None):
     """Run a single sensing operation (classify | entities | facts | drop |
     label | parser). Live LLM/classifier when reachable (FACTY_SENSE=cache,
     or mode='cache', replays the response cache instead), recorded sensing
@@ -798,6 +916,14 @@ def sense_one(ui, case, op, evidence_index=None, entities=None, stream=None,
     ops = sensing_ops(case)
     if op not in ops:
         raise SystemExit(f"unknown op: {op} (expected {', '.join(ops)})")
+    if offline is None:
+        offline = os.environ.get("FACTY_OFFLINE") == "1"
+    if offline and mode != "cache" and op != "label":
+        # offline = no network, no LLM: the extract/parser/decide ops replay
+        # the response cache; the label op runs its local tier live (below)
+        ui.log("offline", "offline mode — LLM ops replay the response cache; "
+                          "the label sensor runs the local tier only")
+        mode = "cache"
     label, schema_name, files = ops[op]
     evidence = sorted((case / "evidence").iterdir())
     phase1 = phase1_evidence(case)
@@ -831,9 +957,13 @@ def sense_one(ui, case, op, evidence_index=None, entities=None, stream=None,
                              on_response=on_response, cache_ns=case.name,
                              runner=runner, evidence_files=files, mode=mode)
     if op == "label":
-        return sense_label(ui, case, files, on_response=on_response, mode=mode)
+        return sense_label(ui, case, files, on_response=on_response, mode=mode,
+                           offline=offline)
     if op == "parser":
         return sense_parser(ui, case, files, stream=stream,
+                            on_response=on_response, mode=mode)
+    if op == "decide":
+        return sense_decide(ui, case, files, stream=stream,
                             on_response=on_response, mode=mode)
     # drop — the recommended test's evidence, sensed with the earlier
     # context (the evidence index + entities, for consistent entity ids)
@@ -1313,8 +1443,17 @@ def walkthrough(case, auto=False):
         ui.step("llm · induction", "Sense the evidence → facts (judge: schema + compute checks)")
         facts = sense_one(ui, case, "facts", evidence_index, entities)
         if (case / "classify.json").exists():
-            ui.step("classifier · induction", "The label sensor — the evidence pile, "
-                                            "labeled (small classifier, CPU-only)")
+            backend = label.load_config(case).get("backend", "hybrid")
+            stage = {
+                "local": "The label sensor — the evidence pile, labeled "
+                         "(small local classifier, CPU-only)",
+                "strom": "The decision tier — the evidence pile, labeled "
+                         "(Strom decision model, calibrated probabilities)",
+                "hybrid": "The label sensor — the pile, labeled (tier 1: the "
+                          "local classifier; tier 2: Strom adjudicates the "
+                          "gated rows)",
+            }[backend]
+            ui.step("classifier · induction", stage)
             label_facts = sense_one(ui, case, "label")
             facts = facts + label_facts
             ui.log("classifier · induction", f"the pile is labeled — "
@@ -1474,7 +1613,7 @@ def cmd_test(args):
         return rc
     for script in ("test_retry.py", "test_tui.py", "test_cache.py",
                    "test_auth.py", "test_explain.py", "test_label.py",
-                   "test_session.py"):
+                   "test_strom.py", "test_dotenv.py", "test_session.py"):
         r = subprocess.run([sys.executable, str(ENGINE_DIR / script)])
         if r.returncode:
             return r.returncode
@@ -1484,6 +1623,8 @@ def cmd_test(args):
 def cmd_sense(args):
     global DEBUG
     DEBUG = args.debug or os.environ.get("FACTY_DEBUG") == "1"
+    if getattr(args, "offline", False):
+        os.environ["FACTY_OFFLINE"] = "1"
     case = resolve_case(args.case)
     ui = UI(auto=True, quiet=getattr(args, "json", False))
     result = sense_one(ui, case, args.op)
@@ -1547,10 +1688,27 @@ def cmd_version(args):
     return 0
 
 
+def cmd_env(args):
+    """`facty env` — the secrets status: which keys are set and where
+    they come from (never values). `--exports` prints `export KEY=...`
+    lines for `eval "$(./facty env --exports)"` — hoisting the keys into
+    the launching shell (the gondolin VMs read them host-side via
+    --host-secret; the guest only ever sees placeholders)."""
+    if args.exports:
+        print(dotenv.exports())
+        return 0
+    print("facty env — the secrets status (values are never printed)")
+    for key, origin in dotenv.status():
+        print(f"  {key:18s} {origin or '(unset)'}")
+    print("  real keys live in ~/.facty/.env (machine-local, never committed);")
+    print("  the project .env is mounted into the VMs — keep real keys out of it")
+    return 0
+
+
 def cmd_doctor(args):
     """`facty doctor` — the self-check: is everything where it should
-    be? (python, textual, env, the loaded workbench's keys, the response
-    cache per case, any running workbench processes)."""
+    be? (python, textual, env, the secrets, the loaded workbench's keys,
+    the response cache per case, any running workbench processes)."""
     print("facty doctor — is everything where it should be?")
     print(f"  python:     {sys.version.split()[0]} ({sys.executable})")
     print(f"  engine:     {ENGINE_DIR}")
@@ -1563,6 +1721,8 @@ def cmd_doctor(args):
                 "FACTY_PROVIDER", "FACTY_MODEL", "FACTY_THINKING",
                 "GONDOLIN_PI", "PI_SNAPSHOT"):
         print(f"  {var.lower()}:  {os.environ.get(var) or '(unset)'}")
+    for key, origin in dotenv.status():
+        print(f"  {key.lower()}:  {origin or '(unset)'}")
     gondolin_dir = ENGINE_DIR.parent / "gondolin"
     snap = gondolin_dir / "snapshots" / "pi-sandbox.qcow2"
     if (gondolin_dir / "gondolin-pi.sh").exists():
@@ -1614,7 +1774,7 @@ _facty() {
         return 0
     fi
     if [ "$prev" = "--op" ]; then
-        COMPREPLY=($(compgen -W "classify entities facts drop label parser" -- "$cur"))
+        COMPREPLY=($(compgen -W "classify entities facts drop label parser decide" -- "$cur"))
         return 0
     fi
     case "$prev" in
@@ -1631,7 +1791,7 @@ _facty() {
     esac
     case "$cur" in
         --*)
-            COMPREPLY=($(compgen -W "--json --add-facts --auto --debug --op" -- "$cur"))
+            COMPREPLY=($(compgen -W "--json --add-facts --auto --debug --op --offline" -- "$cur"))
             return 0
             ;;
     esac
@@ -1667,7 +1827,7 @@ _facty() {
             ;;
         sense)
             if [[ "$prev" == "--op" ]]; then
-                _values 'op' classify entities facts drop label parser
+                _values 'op' classify entities facts drop label parser decide
             fi
             ;;
         completion)
@@ -1692,6 +1852,8 @@ complete -c facty -f -n '__fish_seen_subcommand_from walkthrough tui' -l auto -d
 # ── CLI ──────────────────────────────────────────────────────────────
 
 def main(argv=None):
+    dotenv.load()  # the dotenv setup: ~/.facty/.env + ./.env (setdefault —
+    # the real environment wins; a missing file is fine)
     ap = argparse.ArgumentParser(
         prog="facty",
         description="Facty — the detective DSS. Bare `facty` opens the Textual "
@@ -1723,10 +1885,15 @@ def main(argv=None):
                                     "the classifier/parser sensors for classify.json cases)")
     p.add_argument("case", help="case name, unique slug, or path")
     p.add_argument("--op", required=True,
-                   choices=["classify", "entities", "facts", "drop", "label", "parser"],
+                   choices=["classify", "entities", "facts", "drop", "label",
+                            "parser", "decide"],
                    help="the sensing operation")
     p.add_argument("--json", action="store_true",
                    help="machine-readable output only (logs suppressed)")
+    p.add_argument("--offline", action="store_true",
+                   help="offline mode: LLM ops replay the response cache; the "
+                        "label sensor runs the local tier only (also "
+                        "FACTY_OFFLINE=1)")
     p.add_argument("--debug", action="store_true",
                    help="debug mode: loud failures (no fallback), prompt path + pi command")
     p.set_defaults(func=cmd_sense)
@@ -1757,6 +1924,12 @@ def main(argv=None):
     p.add_argument("shell", choices=["bash", "zsh", "fish"])
     p.set_defaults(func=cmd_completion)
 
+    p = sub.add_parser("env", help="the secrets status (never values); "
+                                   "--exports for eval-hoisting into VMs")
+    p.add_argument("--exports", action="store_true",
+                   help="print `export KEY=...` lines (secrets — your terminal "
+                        "only) for `eval \"$(./facty env --exports)\"`")
+    p.set_defaults(func=cmd_env)
     p = sub.add_parser("version", help="print the version")
     p.set_defaults(func=cmd_version)
 

@@ -1,0 +1,40 @@
+{
+  "model": "strom-1.0.7",
+  "questions": {
+    "classification": {
+      "type": "choice",
+      "instructions": "Classify this alert row.",
+      "criteria": {
+        "a targeted attack": "The row describes a specific, deliberate attack against a particular asset or account \u2014 e.g. SQL injection against /login, session token replay of an admin session, pass-the-hash lateral movement from a compromised host, or DNS tunneling exfiltration from a named internal host. The attacker has a concrete target and an achieved or attempted action, not just reconnaissance.",
+        "a probing scan": "The row describes reconnaissance or vulnerability probing \u2014 scanning, fingerprinting, or testing endpoints for weaknesses (e.g. a Heartbleed probe against TLS endpoints) \u2014 without evidence of a specific target being compromised or data being accessed.",
+        "a benign authorized activity": "The row describes activity consistent with legitimate, authorized use \u2014 e.g. an approved admin login, a scheduled backup, a vulnerability scanner run by the security team, or a user mistyping a password a few times \u2014 with no malicious indicators."
+      }
+    },
+    "isExternalSource": {
+      "type": "noul",
+      "instructions": "Is this row's source IP external to the organization (not an internal/private address)?"
+    },
+    "hasAchievedImpact": {
+      "type": "noul",
+      "instructions": "Does this row describe an action that succeeded or had concrete impact (e.g. blocked-but-attempted intrusion, data exfiltration, session replay, lateral movement), as opposed to a probe or failed attempt only?"
+    },
+    "urgency": {
+      "type": "score",
+      "instructions": "How urgent is the response to this row?",
+      "criteria": [
+        "routine \u2014 low priority, can be handled in normal operations",
+        "elevated \u2014 should be investigated within hours",
+        "high \u2014 active attack in progress, respond now",
+        "critical \u2014 confirmed compromise or data loss, immediate incident response"
+      ]
+    },
+    "involvesCredentialAbuse": {
+      "type": "noul",
+      "instructions": "Does this row involve credential abuse \u2014 brute force, password spraying, session token replay, pass-the-hash, or stolen credentials?"
+    },
+    "targetsSingleAsset": {
+      "type": "noul",
+      "instructions": "Is this row directed at one specific asset, account, or endpoint (as opposed to broad scanning across many hosts)?"
+    }
+  }
+}

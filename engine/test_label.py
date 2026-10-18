@@ -60,6 +60,7 @@ CLASSIFY = {
     "model": "onnx-community/ModernBERT-base-nli-ONNX",
     "precision": "fp32",
     "prep": "none",
+    "backend": "local",  # these tests exercise the classifier tier
 }
 
 LOG = """2026-10-12T02:10:01Z ALERT A-0001 src=185.220.44.7 sql injection attempt on /login
