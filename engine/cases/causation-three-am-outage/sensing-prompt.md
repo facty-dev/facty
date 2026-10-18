@@ -18,7 +18,7 @@ only to observe, honestly.
 
 ## Fact schema
 
-Read @{{SCHEMA}} — every fact you produce MUST validate against it.
+The fact schema follows — every fact you produce MUST validate against it.
 
 ## Rules
 

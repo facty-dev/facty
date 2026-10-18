@@ -83,6 +83,7 @@ examples:
   ./facty selftest                   acceptance test — every case, asserted
   ./facty test                       all tests (selftest + retry loop + the TUI, headless)
   ./facty walkthrough silver-blaze --auto   terminal step-through (VMs, no-TTY)
+  ./facty explain silver-blaze         LLM commentary on the verdict (out-of-band)
   ./facty completion bash >> ~/.bash_completion
 """
 
@@ -231,10 +232,22 @@ class UI:
 # the engine never does them. engine/sensing.py is the tool; the case's
 # sensing-prompt.md is the facts task (customizable per pack).
 
+def _source_exists(case, fname):
+    """A fact's source file, resolved tolerantly: as given (relative to
+    the case), or by its bare name inside the case's evidence dir (the
+    recorded convention cites evidence/<file>; a bare name still names
+    a real file)."""
+    p = Path(fname)
+    return (case / p).exists() or (case / "evidence" / p.name).exists()
+
+
 def make_facts_judge(case_dir):
     """The judge layer for fact extraction: schema validation (inside
     extract_structured) plus compute checks on the structured objects —
-    unique fact ids, and source files that actually exist."""
+    unique fact ids, source files that actually exist, and a value
+    normalization: the models often emit booleans as the STRINGS
+    "true"/"false", while the pack's rules bind real booleans — coerce
+    them (in place) so a paraphrased type cannot silence a rule."""
     case = Path(case_dir)
 
     def judge(facts):
@@ -244,35 +257,51 @@ def make_facts_judge(case_dir):
         if dupes:
             errs.append(f"duplicate fact ids: {', '.join(dupes)}")
         for f in facts:
+            v = f.get("value")
+            if isinstance(v, str) and v.strip().lower() in ("true", "false"):
+                f["value"] = v.strip().lower() == "true"
             fname = str(f.get("source", "")).split(":")[0]
-            if fname and not (case / fname).exists():
+            if fname and not _source_exists(case, fname):
                 errs.append(f"{f.get('id')}: source file not found: {fname}")
         return errs
 
     return judge
 
 
-def _cache_file(cache_ns, label, schema_name=None, files=None, task=None):
+# The sensing/commentary prompt-template version — part of every cache
+# key. Bump it when the prompt templates change (the task builders, the
+# vocabulary/context blocks, the sensing-prompt.md files): stale cached
+# responses must orphan, never replay under a new prompt.
+PROMPT_VERSION = "6"
+
+
+def _cache_file(cache_ns, label, schema_name=None, files=None, task=None,
+                context=None):
     """The response-cache file for one sensing call. Keyed by the case,
     the op label, the schema, and a content hash of the input evidence
     files — a changed case or evidence means a fresh key, never a stale
     response, and the key is stable across runs (the embedded
     evidence-index/entities are LLM context, not part of the key).
-    `task` (the full prompt) is the fallback key for direct callers."""
+    `task` (the full prompt) is the fallback key for direct callers.
+    `context` (the engine context a call depends on — e.g. the drop
+    sensing's open questions) is hashed too: a changed context means a
+    fresh key."""
     h = hashlib.sha256()
-    h.update(f"{cache_ns}|{label}|{schema_name}".encode())
+    h.update(f"{cache_ns}|{label}|{schema_name}|v{PROMPT_VERSION}".encode())
     if files:
         for f in sorted(files, key=lambda p: p.name):
             h.update(f.name.encode())
             h.update(Path(f).read_bytes())
     elif task is not None:
         h.update(task.encode())
+    if context is not None:
+        h.update(json.dumps(context, sort_keys=True, default=str).encode())
     return _cache_dir() / cache_ns / f"{label}-{h.hexdigest()[:16]}.json"
 
 
 def sense_extract(ui, tag, label, noun, schema_name, task, fallback, judge=None,
                   stream=None, on_response=None, cache_ns=None, runner=None,
-                  evidence_files=None, mode=None):
+                  evidence_files=None, mode=None, context=None):
     """One sensing operation: schema + messy input → validated object,
     with the LLM response streamed live (stream callback; default: stdout)
     and a capped correction loop (errors fed back to the LLM, max 3 turns).
@@ -287,13 +316,14 @@ def sense_extract(ui, tag, label, noun, schema_name, task, fallback, judge=None,
     source (live|cache|recorded) to the caller."""
     mode = mode or os.environ.get("FACTY_SENSE", "live")
     cache_file = (_cache_file(cache_ns, label, schema_name,
-                              files=evidence_files, task=task)
+                              files=evidence_files, task=task, context=context)
                   if cache_ns else None)
     arrow = f"{TAGS['llm']}▸{NC} " if USE_COLOR else "▸ "
     staged = sensing.staged_prompt_path(label.replace(" ", "-"))
     if DEBUG:
         ui.log(tag, f"debug: prompt staged at {staged}")
-        ui.log(tag, "debug: pi command: " + " ".join(sensing.pi_command(str(staged))))
+        ui.log(tag, "debug: pi command: " + " ".join(sensing.pi_command())
+                + "  (the staged assignment is sent inline as the prompt)")
 
     def on_stream(line):
         if stream is not None:
@@ -367,16 +397,116 @@ def sense_extract(ui, tag, label, noun, schema_name, task, fallback, judge=None,
 
 
 def evidence_refs(files):
-    return "\n".join(f"- {f.name}: @{f.resolve()}" for f in files)
+    """The evidence files, INLINED (a path header + the content) — the
+    model reads them in one shot, in the assignment itself. (@refs are
+    not expanded inside a prompt message: the model would have to read
+    every file through the read tool — an agentic loop of LLM round
+    trips per file, which is what made the sensing calls slow.) The
+    header carries the case-relative path (evidence/<file>) — the exact
+    form a fact's source span cites."""
+    return "\n\n".join(f"── evidence/{f.name} ──\n{f.read_text()}" for f in files)
 
 
-def build_facts_task(case_dir, files, evidence_index=None, entities=None):
+def _terms(node, key):
+    """Every literal string under `key` in a JSON structure (recursive).
+    Variable patterns ({"var": name}) are dicts, not strings — skipped."""
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k == key and isinstance(v, str):
+                yield v
+            else:
+                yield from _terms(v, key)
+    elif isinstance(node, list):
+        for v in node:
+            yield from _terms(v, key)
+
+
+def pack_vocabulary(case_dir):
+    """The pack's term vocabulary — (predicates, subjects): every
+    predicate the rules, constraints, and hypotheses speak (conditions,
+    claims, derived facts) and every subject they reference. The facts
+    task carries it so a fresh extraction speaks the pack's ontology:
+    without it the model invents its own terms (its own entity names,
+    its own paraphrases) and no rule can fire — the recorded sensing
+    was authored against these exact terms. This is domain knowledge
+    (the ontology), not the engine's conclusions — the model still
+    reads the evidence and reports only what it shows."""
+    case = Path(case_dir)
+    preds, subs = set(), set()
+    for name, schema in (("rules.json", "rule.schema.json"),
+                         ("constraints.json", "constraint.schema.json"),
+                         ("hypotheses.json", "hypothesis.schema.json")):
+        for item in engine.load_array(case / "pack" / name, schema):
+            preds.update(_terms(item, "predicate"))
+            subs.update(_terms(item, "subject"))
+    return sorted(preds), sorted(subs)
+
+
+def build_facts_task(case_dir, files, evidence_index=None, entities=None,
+                     engine_context=None):
     template = (case_dir / "sensing-prompt.md").read_text()
-    return (template
+    task = (template
             .replace("{{EVIDENCE}}", evidence_refs(files))
             .replace("{{SCHEMA}}", str((ENGINE_DIR / "schemas" / "fact.schema.json").resolve()))
             .replace("{{EVIDENCE_INDEX}}", json.dumps(evidence_index or [], indent=2))
             .replace("{{ENTITIES}}", json.dumps(entities or [], indent=2)))
+    preds, subs = pack_vocabulary(case_dir)
+    if preds or subs:
+        task += ("\n\n## The pack's term vocabulary (the ontology)\n\n"
+                 "The engine's rules, constraints, and hypotheses speak "
+                 "exactly these terms. When a fact matches one of them, use "
+                 "THAT predicate and THAT subject label, verbatim; invent "
+                 "new terms only when the evidence states something the "
+                 "pack does not cover. Values: quote the evidence's exact "
+                 "terms (singular/plural as written); booleans as the JSON "
+                 "literals true/false — never the strings \"true\"/\"false\""
+                 ".\n\n"
+                 "Subjects the pack references:\n"
+                 + (", ".join(subs) if subs else "(none)") + "\n\n"
+                 "Predicates the pack references:\n"
+                 + (", ".join(preds) if preds else "(none)") + "\n")
+    if engine_context is not None:
+        task += ("\n\n## The engine's context (phase 1)\n\n"
+                 + engine_context_block(engine_context))
+    return task
+
+
+def engine_context_block(r):
+    """The engine's phase-1 context for sensing the recommended test's
+    evidence: its OPEN QUESTIONS (where to look) and the hypothesis space
+    (statements only, in a neutral id order — never scores, rankings,
+    derived facts, or pruning verdicts). Feeding the engine's conclusions
+    back into the senses would bias the reading toward the current
+    verdict (confirmation / echo); the questions carry no conclusions —
+    they tell the senses where to look, never what to find."""
+    lines = ["The deterministic engine has already solved the case on the "
+             "initial evidence. It opened these questions — the checks that "
+             "best discriminate the surviving explanations — and this is the "
+             "hypothesis space it is working with (statements only, in no "
+             "particular order):", ""]
+    open_q = [q for q in (r.get("opened_questions") or [])
+              if q.get("status") == "open"]
+    if open_q:
+        lines.append("Open questions:")
+        for q in open_q:
+            disc = ", ".join(q.get("discriminates") or [])
+            lines.append(f"- {q['id']}: {q['text']}"
+                         + (f" (discriminates: {disc})" if disc else ""))
+        lines.append("")
+    ranking = sorted(r.get("ranking") or [], key=lambda x: x["id"])
+    if ranking:
+        lines.append("Hypotheses still in play (statements only):")
+        for rk in ranking:
+            lines.append(f"- {rk['id']}: {rk['statement']}")
+        lines.append("")
+    lines += ["Sense the evidence below into facts (the schema follows). "
+              "Prioritize evidence that bears on the open questions. Report "
+              "ONLY what the evidence shows, with source spans — do not "
+              "evaluate the hypotheses, do not tailor facts to the questions, "
+              "and do not restate the initial evidence's facts (the engine "
+              "already holds them). The questions tell you where to look, "
+              "never what to find."]
+    return "\n".join(lines)
 
 
 def sensing_ops(case):
@@ -401,14 +531,54 @@ def sensing_ops(case):
     return ops
 
 
+def _offline_facts(case):
+    """The facts an offline (cache-mode) run would use: the cached facts
+    response (the live pipeline's), else the recorded sensing."""
+    case = Path(case)
+    label, schema, files = sensing_ops(case)["facts"]
+    cache_file = _cache_file(case.name, label, schema, files=files)
+    if cache_file.exists():
+        try:
+            return json.loads(json.loads(cache_file.read_text())["response"])
+        except (ValueError, KeyError):
+            pass
+    return engine.load_array(case / "facts.json", "fact.schema.json")
+
+
+def context_key(r):
+    """The cache-key projection of the engine context a sensing call
+    depends on: the open questions + the hypothesis statements — the
+    part that shapes the prompt."""
+    return {
+        "questions": sorted(
+            ({k: q.get(k) for k in ("id", "text", "discriminates", "status")}
+             for q in (r.get("opened_questions") or [])),
+            key=lambda q: q["id"]),
+        "hypotheses": sorted(
+            ({k: h.get(k) for k in ("id", "statement")}
+             for h in (r.get("ranking") or [])),
+            key=lambda h: h["id"]),
+    }
+
+
 def cache_state(case):
     """(ready, total) — how many of the case's sensing steps have a
     cached response. The workbench shows this next to its offline
-    checkbox."""
+    checkbox. The drop's key carries the engine context an offline run
+    would sense with (the phase-1 solve on the cached facts, else the
+    recorded sensing), so the count answers: would offline replay
+    work?"""
     case = Path(case)
     ops = sensing_ops(case)
-    ready = sum(1 for label, schema, files in ops.values()
-                if _cache_file(case.name, label, schema, files=files).exists())
+    drop_key = None
+    if "drop" in ops:
+        drop_key = context_key(engine.run_case(case, facts=_offline_facts(case)))
+    ready = 0
+    for op, (label, schema, files) in ops.items():
+        context = drop_key if op == "drop" else None
+        if _cache_file(case.name, label, schema, files=files,
+                       context=context).exists():
+            ready += 1
     return ready, len(ops)
 
 
@@ -420,12 +590,19 @@ def cache_ready(case):
 
 
 def sense_one(ui, case, op, evidence_index=None, entities=None, stream=None,
-              on_response=None, mode=None, runner=None):
+              on_response=None, mode=None, runner=None, engine_context=None):
     """Run a single sensing operation (classify | entities | facts | drop).
     Live LLM when reachable (FACTY_SENSE=cache, or mode='cache', replays
     the response cache instead), recorded sensing otherwise. The
     phase-1 / phase-2 split is derived from the case: the drop's facts
-    name their source files; everything else is phase 1."""
+    name their source files; everything else is phase 1.
+
+    The drop op senses the recommended test's evidence WITH the engine's
+    phase-1 context (engine_context: the open questions + the hypothesis
+    space — statements only, never the engine's conclusions). Callers
+    that hold a live phase-1 solve pass it; otherwise the recorded
+    phase-1 solve is computed on the spot (cheap — the engine is
+    deterministic)."""
     case = Path(case)
     ops = sensing_ops(case)
     if op not in ops:
@@ -462,16 +639,131 @@ def sense_one(ui, case, op, evidence_index=None, entities=None, stream=None,
                              recorded_facts, judge=judge, stream=stream,
                              on_response=on_response, cache_ns=case.name,
                              runner=runner, evidence_files=files, mode=mode)
-    # drop
+    # drop — the recommended test's evidence, sensed with the earlier
+    # context (the evidence index + entities, for consistent entity ids)
+    # and the engine's phase-1 context (its open questions + the
+    # hypothesis space — never its conclusions).
     if recorded_drop is None:
         raise SystemExit(f"facty: case {case.name} has no phase-2 drop")
     drop_names = drop_source_names(case)
     drop_evidence = [f for f in evidence if f.name in drop_names]
+    if engine_context is None:
+        # the recorded phase-1 solve — on the facts an offline run would
+        # use (the cached facts, else the recorded sensing), so the cache
+        # key matches what cache_state checks
+        engine_context = engine.run_case(case, facts=_offline_facts(case))
     return sense_extract(ui, "llm · induction", label, "facts",
-                         schema_name, build_facts_task(case, drop_evidence),
+                         schema_name,
+                         build_facts_task(case, drop_evidence, index, ents,
+                                          engine_context=engine_context),
                          recorded_drop, judge=judge, stream=stream,
                          on_response=on_response, cache_ns=case.name,
-                         runner=runner, evidence_files=files, mode=mode)
+                         runner=runner, evidence_files=files, mode=mode,
+                         context=context_key(engine_context))
+
+
+# ── Out-of-band commentary (the LLM as explainer, never as decider) ──
+
+def explain_task(target, result, entities):
+    """The commentary prompt: a plain-language explanation of the engine's
+    result. Presentation only — the verdict is deterministic and never
+    depends on this call (ADR-0003: the LLM is never in the verdict
+    path); this is the LLM as explainer, fed the engine's conclusions
+    (unlike the senses, which never see them)."""
+    summary = {
+        "ranking": [{k: rk[k] for k in ("id", "statement", "score",
+                                        "claims_proven", "claims_total",
+                                        "support", "prior")}
+                    for rk in result.get("ranking", [])],
+        "verdict": (result.get("verdict") or {}).get("id"),
+        "recommended_test": result.get("recommended_test"),
+        "pruned": [p.get("id") if isinstance(p, dict) else p
+                   for p in result.get("pruned", [])],
+        "derived_facts": [{k: f.get(k) for k in ("id", "subject", "predicate", "value")}
+                          for f in result.get("derived_facts", [])],
+        "opened_questions": [{k: q.get(k) for k in ("id", "text", "discriminates")}
+                             for q in result.get("opened_questions", [])],
+    }
+    ents = [{k: e.get(k) for k in ("id", "name", "kind", "role")}
+            for e in (entities or [])]
+    if target == "entities":
+        ask = ("Summarize the extracted entities for a human reader: group "
+               "them by kind, one line each, and name the key players.")
+    elif target == "ranking":
+        ask = ("Explain the ranking for a human reader: why each hypothesis "
+               "scored where it did (claims proven, support, prior) — and "
+               "what the scores mean in plain language.")
+    else:
+        ask = ("Explain the whole result for a human reader, in plain "
+               "language, with short sections: (1) the case in one paragraph "
+               "— the key entities and what happened; (2) the competing "
+               "explanations and why each ranked where it did; (3) the "
+               "verdict and the reasoning behind it; (4) the recommended "
+               "next check and what would change the conclusion.")
+    return ("You are explaining a deterministic detective engine's result "
+            "to a human. The engine's output is below, verbatim — explain "
+            "it, do not re-derive it. Plain language, short sections, no "
+            "jargon, no speculation beyond what the output says. This is "
+            "commentary for a human reader; the engine's verdict stands on "
+            "its own.\n\n"
+            f"{ask}\n\n"
+            "Entities extracted (the case's people, animals, places, "
+            f"objects):\n{json.dumps(ents, indent=2)}\n\n"
+            "The engine's result (verbatim):\n"
+            f"{json.dumps(summary, indent=2)}\n\n"
+            "Write the commentary in plain language (markdown is fine).")
+
+
+def explain(ui, case, result, entities, target="verdict", stream=None,
+            on_response=None, mode=None, runner=None):
+    """Out-of-band LLM commentary: a plain-language explanation of the
+    engine's result (entities | ranking | verdict). Presentation only —
+    the verdict is deterministic and never depends on this call. The
+    commentary is cached like the sensing responses (keyed by the full
+    prompt, so a changed result means a fresh key) and replayed in cache
+    mode; with no cache entry it degrades to None (logged, never silent).
+    on_response(text, source) carries the raw commentary + its source
+    (live | cache) to the caller."""
+    mode = mode or os.environ.get("FACTY_SENSE", "live")
+    tag = "llm · commentary"
+    label = f"explain the {target}"
+    task = explain_task(target, result, entities)
+    cache_file = _cache_file(Path(case).name, label, task=task)
+
+    def on_stream(line):
+        if stream is not None:
+            stream(line)
+
+    if mode == "cache":
+        if cache_file.exists():
+            raw = json.loads(cache_file.read_text())["response"]
+            ui.log(tag, f"{label} — response cache hit, no LLM call ({cache_file.name})")
+            if on_response:
+                on_response(raw, "cache")
+            return raw
+        ui.log(tag, f"{label} — no cached commentary, run live to cache it")
+        return None
+    ui.log(tag, f"calling Mistral Large 4 ({sensing.PROVIDER}), streaming …")
+    source = "live"
+    try:
+        raw = sensing.llm_text(task, stream=on_stream,
+                               label=label.replace(" ", "-"), runner=runner)
+    except Exception as exc:  # unreachable LLM, or the call failed
+        ui.log(tag, f"commentary call failed ({exc})")
+        if cache_file.exists():
+            raw = json.loads(cache_file.read_text())["response"]
+            source = "cache"
+            ui.log(tag, f"falling back to the cached commentary ({cache_file.name})")
+        else:
+            return None
+    if on_response:
+        on_response(raw, source)
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    cache_file.write_text(json.dumps({
+        "case": Path(case).name, "target": target, "model": sensing.MODEL,
+        "response": raw, "cached_at": time.time()}, indent=2))
+    ui.log(tag, f"commentary cached ({cache_file.name})")
+    return raw
 
 
 # ── Event formatters ─────────────────────────────────────────────────
@@ -757,7 +1049,9 @@ def walkthrough(case, auto=False):
     # ── The recommended test runs ───────────────────────────────────
     ui.step("test", f"Run the recommended test — sense the {drop_label} evidence "
                     f"(the LLM half, streamed)")
-    drop_facts = sense_one(ui, case, "drop")
+    drop_facts = sense_one(ui, case, "drop", evidence_index, entities,
+                           engine_context={"opened_questions": questions,
+                                           "ranking": verdict1["ranking"]})
     facts2 = facts + drop_facts
     ui.log("llm · induction", f"the recommended test is answered — the {drop_label} "
                              f"evidence enters the case")
@@ -833,7 +1127,8 @@ def cmd_test(args):
     rc = engine.cmd_selftest(args)
     if rc:
         return rc
-    for script in ("test_retry.py", "test_tui.py", "test_cache.py", "test_auth.py"):
+    for script in ("test_retry.py", "test_tui.py", "test_cache.py",
+                   "test_auth.py", "test_explain.py"):
         r = subprocess.run([sys.executable, str(ENGINE_DIR / script)])
         if r.returncode:
             return r.returncode
@@ -847,6 +1142,20 @@ def cmd_sense(args):
     ui = UI(auto=True)
     result = sense_one(ui, case, args.op)
     print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_explain(args):
+    """Out-of-band LLM commentary on a solved case (presentation only —
+    the verdict is deterministic and never depends on this call)."""
+    case = resolve_case(args.case)
+    add = Path(args.add_facts) if args.add_facts else None
+    r = engine.run_case(case, add_facts=add)
+    entities = engine.load_validated(case / "entities.json", "entities.schema.json")
+    ui = UI(auto=True)
+    text = explain(ui, case, r, entities, args.target)
+    if text:
+        print(text)
     return 0
 
 
@@ -905,7 +1214,8 @@ def cmd_doctor(args):
     except ImportError:
         print("  textual:    NOT INSTALLED — the workbench needs it (`make deps`)")
     for var in ("TERM", "NO_COLOR", "FACTY_SENSE", "FACTY_CACHE_DIR",
-                "FACTY_PROVIDER", "FACTY_MODEL", "GONDOLIN_PI", "PI_SNAPSHOT"):
+                "FACTY_PROVIDER", "FACTY_MODEL", "FACTY_THINKING",
+                "GONDOLIN_PI", "PI_SNAPSHOT"):
         print(f"  {var.lower()}:  {os.environ.get(var) or '(unset)'}")
     gondolin_dir = ENGINE_DIR.parent / "gondolin"
     snap = gondolin_dir / "snapshots" / "pi-sandbox.qcow2"
@@ -1070,6 +1380,14 @@ def main(argv=None):
     p.add_argument("--debug", action="store_true",
                    help="debug mode: loud failures (no fallback), prompt path + pi command")
     p.set_defaults(func=cmd_sense)
+
+    p = sub.add_parser("explain", help="out-of-band LLM commentary: explain a case's "
+                                       "result in plain language (never the verdict path)")
+    p.add_argument("case", help="case slug (e.g. silver-blaze)")
+    p.add_argument("--target", choices=("entities", "ranking", "verdict"),
+                   default="verdict", help="what to explain (default: verdict)")
+    p.add_argument("--add-facts", help="a phase-2 facts drop (facts-<drop>.json)")
+    p.set_defaults(func=cmd_explain)
 
     p = sub.add_parser("walkthrough", help="interactive step-through of a case (terminal UI)")
     p.add_argument("case", help="case name, unique slug, or path")

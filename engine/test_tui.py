@@ -91,6 +91,25 @@ def stub_sense_one(ui, case, op, evidence_index=None, entities=None, stream=None
     return result
 
 
+EXPLAIN_CALLS = []
+
+
+def stub_explain(ui, case, result, entities, target="verdict", stream=None,
+                 on_response=None, mode=None, **_kw):
+    """The commentary boundary, stubbed (streamed, like the sensing stub).
+    Records the target / mode / inputs so the plumbing is testable."""
+    EXPLAIN_CALLS.append({"target": target, "mode": mode,
+                          "has_result": result is not None,
+                          "has_entities": entities is not None})
+    text = f"Commentary on the {target}: the verdict stands on its own."
+    if stream is not None:
+        for line in text.splitlines():
+            stream(line)
+    if on_response is not None:
+        on_response(text, "live")
+    return text
+
+
 async def wait_for(pilot, cond, timeout=15.0):
     """Pause until cond() holds (the run workers are threads — poll politely)."""
     deadline = time.monotonic() + timeout
@@ -113,6 +132,7 @@ async def run_board():
         cli.sense_one = stub_sense_one
     else:
         cli.sense_one = slow_stub_sense_one
+    cli.explain = stub_explain  # the commentary boundary, stubbed
     tui.auth.webbrowser.open = lambda url: None  # no real browser in tests
     # an empty response cache → the offline checkbox starts disabled
     os.environ["FACTY_CACHE_DIR"] = tempfile.mkdtemp(prefix="facty-tui-cache-")
@@ -141,6 +161,15 @@ async def run_board():
               and bool(auth_btn.tooltip))
         check("the workbench shows the Mistral subscription auth status",
               "Mistral" in str(app.query_one("#auth-status", Static).render()))
+
+        # out-of-band commentary: the button starts disabled, the key
+        # warns until there is a result to explain
+        check("the Explain button starts disabled (no result yet)",
+              app.query_one("#explain", Button).disabled)
+        await pilot.press("x")
+        await pilot.pause()
+        check("x before a run warns (nothing to explain yet)",
+              any("nothing to explain yet" in t for t in log_texts(app)))
 
         # the palette keeps the system commands (Maximize the focused widget)
         titles = [c.title for c in app.get_system_commands(app.screen)]
@@ -316,6 +345,44 @@ async def run_board():
             check("the recommended test prunes the inside job (H2) — one survivor "
                   "in the table",
                   app.query_one("#ranking", DataTable).row_count == 1)
+
+        # out-of-band LLM commentary (the LLM as explainer, never decider)
+        check("the Explain button is enabled once a result exists",
+              not app.query_one("#explain", Button).disabled)
+        n_before = len(EXPLAIN_CALLS)
+        await pilot.press("x")
+        ok3 = await wait_for(pilot, lambda: len(EXPLAIN_CALLS) > n_before)
+        check("key x asks the LLM for commentary (out-of-band)", ok3)
+        if ok3:
+            call = EXPLAIN_CALLS[-1]
+            check("the commentary call targets the verdict, with the result "
+                  "+ the sensed entities",
+                  call["target"] == "verdict" and call["has_result"]
+                  and call["has_entities"], str(call))
+            check("the run log shows the llm · commentary line (a distinct badge)",
+                  any("llm · commentary" in t for t in log_texts(app)))
+            live = [w for w in app.query(tui.LogLine)
+                    if w.response is not None
+                    and "explain the verdict" in str(w.render())]
+            check("the commentary line carries the streamed response (expandable)",
+                  len(live) >= 1 and live[-1].response.done)
+            if live:
+                live[-1].scroll_visible(animate=False)
+                await pilot.pause()
+                await pilot.click(live[-1])
+                await pilot.pause()
+                blocks = [b for b in app.query(tui.DetailBlock) if b.display]
+                check("the commentary expands inline (the explanation is readable)",
+                      any("Commentary on the verdict" in str(w.render())
+                          for b in blocks for w in b.query(tui.LogLine)))
+        offline = app.query_one("#offline", Checkbox)
+        offline.value = True
+        n_before = len(EXPLAIN_CALLS)
+        await pilot.press("x")
+        await wait_for(pilot, lambda: len(EXPLAIN_CALLS) > n_before)
+        check("offline mode asks for the cached commentary (no LLM call)",
+              EXPLAIN_CALLS[-1]["mode"] == "cache", str(EXPLAIN_CALLS[-1]))
+        offline.value = False
 
         # the help screen explains the flow and the run-log vocabulary
         await pilot.press("?")

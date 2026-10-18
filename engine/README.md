@@ -70,10 +70,18 @@ artifacts alone.
 
 ## Debugging
 
-The golden path for the LLM transport is the **pi agent** (`pi -p`) — pi
-owns the credential and the engine process never sees it (ADR-0003; the
-same isolation posture as the VM host-secret mechanism). To debug the
-sensing steps:
+The golden path for the LLM transport is the **pi agent, driven over its
+RPC mode** (`pi --mode rpc`) — pi owns the credential and the engine
+process never sees it (ADR-0003; the same isolation posture as the VM
+host-secret mechanism). The runner sends the staged assignment inline as
+a JSONL `prompt` command and streams the response back as `text_delta`
+events — real live output (unlike `pi -p`, which prints the whole
+response at the end). Each call is lean and one-shot: no tools, no
+skills/context files/MCP, no session files, thinking off (a measured
+~4.5x faster end-to-end on the demo cases), and pi is shut down the
+moment the agent settles — no lingering process after the response.
+Env knobs: `FACTY_PROVIDER`, `FACTY_MODEL`, `FACTY_THINKING`. To debug
+the sensing steps:
 
 ```bash
 # one sensing op, standalone (fast prompt iteration)
@@ -87,8 +95,11 @@ FACTY_DEBUG=1 make dss-live
 # the staged prompts persist for inspection:
 ls .agentic/tmp/sensing-*.md
 
-# reproduce a call manually:
-pi -p --provider mistral-subscription --model mistral-large-4 "@<staged prompt>"
+# reproduce a call manually (RPC mode; the staged prompt is the message):
+pi --mode rpc --no-session --no-tools --provider mistral-subscription \
+  --model mistral-large-4 --thinking off
+# then write {"id":"s","type":"prompt","message":<staged prompt contents>}
+# to its stdin and read the JSONL events on stdout
 ```
 
 The fallback contract: when the LLM is unreachable (e.g. under an agent
@@ -117,29 +128,48 @@ as triples: `subject / predicate = value`.
 | Tag | Tool | Inference |
 |---|---|---|
 | `llm · induction` | the senses — messy evidence → facts; proposes hypotheses + tests | induction |
+| `llm · commentary` | out-of-band LLM explanations (entities / ranking / verdict) — presentation only, never the verdict path | commentary |
 | `fwd chain · deduction` | rules fire: derive facts, open questions, raise the hypothesis space | deduction |
 | `constraint solver · deduction` | prune impossible explanations, support the survivors | deduction |
 | `bwd chain · deduction` | prove claims, rank, deliver the verdict | deduction |
 
 The workbench's run log is the colourful log: content is colour-coded
 by event. Lines that carry more detail — a streamed LLM response — are
-**expandable**: click an `llm · induction` line to reveal the response
-inline (collapsed by default, so the main output stays uncluttered; the
-detail live-appends while the response is still streaming).
+**expandable**: the LIVE line (the last line while the LLM streams;
+press `e` for the latest) reveals the response inline, and the detail
+live-appends while the response is still streaming (collapsed by
+default, so the main output stays uncluttered). The same machinery
+carries the out-of-band commentary (`x` — explain the verdict).
+
+The senses are guided by the pack's **term vocabulary** (the predicates
+and subjects the rules, constraints, and hypotheses reference) so a
+fresh extraction speaks the pack's ontology — and the recommended
+test's evidence is sensed with the engine's **open questions** and the
+hypothesis space (statements only — never scores, rankings, derived
+facts, or pruning verdicts: the engine's conclusions are never fed back
+into the senses). The live path is a fresh LLM roll each run; the
+recorded sensing and the response cache are the exact, replayable
+paths.
 
 ## The response cache
 
 Live LLM calls are cached as raw responses (`.agentic/cache/sensing/`,
 machine-local, gitignored), keyed by a content hash of the case's input
-evidence (stable across runs; a changed case means a fresh key). Demos
-stay live by default; `FACTY_SENSE=cache` never calls the LLM — it
-replays the cached responses (parsed + judged deterministically) or
-falls back to the recorded sensing. So the deterministic side runs
-offline, and demos replay reproducibly. Live mode falls back: cache →
-recorded sensing. The workbench has a **Run without the LLM (cached
-responses)** checkbox — enabled only when the cache has an entry for
-every sensing step of the case (`cli.cache_ready`); it is enabled
-automatically once a live run has populated the cache.
+evidence plus the prompt-template version (`PROMPT_VERSION` — bump it
+when the templates change, so stale entries orphan instead of
+replaying). The recommended test's sensing is keyed by its engine
+context too (the open questions + hypothesis statements) — a changed
+question set means a fresh key, never a stale response under new
+questions. The out-of-band commentary is cached the same way (keyed by
+the full prompt). Demos stay live by default; `FACTY_SENSE=cache` never
+calls the LLM — it replays the cached responses (parsed + judged
+deterministically) or falls back to the recorded sensing. So the
+deterministic side runs offline, and demos replay reproducibly. Live
+mode falls back: cache → recorded sensing. The workbench has a **Run
+without the LLM (cached responses)** checkbox — enabled only when the
+cache has an entry for every sensing step of the case
+(`cli.cache_ready`); it is enabled automatically once a live run has
+populated the cache.
 
 ## Workbench authentication
 

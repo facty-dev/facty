@@ -162,6 +162,24 @@ Phase vocabularies differ by surface: the decision agent uses
   them without the LLM (offline demos / deterministic-side testing).
   The workbench authenticates the Mistral subscription through the
   pi-mistral-subscription extension (the `a` key in `./facty`).
+- Sensing transport: the LLM half runs through the **pi agent's RPC
+  mode** (`pi --mode rpc`, `engine/sensing.py`) — the staged assignment
+  is sent inline (evidence inlined, no tools, thinking off, no session
+  files) and the response streams back live; pi is shut down the moment
+  the agent settles. Env knobs: `FACTY_PROVIDER`, `FACTY_MODEL`,
+  `FACTY_THINKING`. No VM is involved per call — pi is a subprocess;
+  the gondolin VM is the long-lived SDLC-agent session.
+- The senses are guided by the pack's **term vocabulary** (the
+  predicates + subjects the rules reference, embedded in the facts
+  task), and the recommended test's evidence is sensed with the
+  engine's **open questions** + hypothesis statements — never the
+  engine's conclusions (scores, rankings, derived facts, prunings);
+  feeding those back would bias the reading toward the current verdict.
+- Out-of-band **commentary**: `./facty explain <case> [--target
+  entities|ranking|verdict]` and the workbench's `x` key ask the LLM to
+  explain the result in plain language. Presentation only — the verdict
+  is deterministic and never depends on it; the commentary is cached
+  like the sensing responses and replayed offline.
 - In the gondolin VM the CLI + workbench run from the baked image
   (textual + git); `MISTRAL_API_KEY` arrives via gondolin's host-secret
   injection (guest sees a placeholder, the host proxy substitutes it).

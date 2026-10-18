@@ -15,11 +15,16 @@
 # passes the judge layer for real. An unreachable LLM fails fast: that
 # error cannot correct itself, so it is never retried.
 #
-# The golden path for the LLM transport is the pi agent (`pi -p`): pi owns
-# the credential (and its refresh) and the engine process never sees it —
-# the same isolation posture as the VM host-secret mechanism. A direct
-# Mistral client is deliberately not used. Callers fall back to recorded
-# sensing artifacts when the LLM is unreachable or the retries exhaust.
+# The golden path for the LLM transport is the pi agent, driven over its
+# RPC mode (`pi --mode rpc`): pi owns the credential (and its refresh) and
+# the engine process never sees it — the same isolation posture as the VM
+# host-secret mechanism. A direct Mistral client is deliberately not used.
+# RPC mode streams the response as text_delta events (real live output,
+# unlike `pi -p`, which prints the whole response at the end), and the
+# runner shuts pi down the moment the agent settles — no lingering
+# process, and `--no-session` means no session files pile up per call.
+# Callers fall back to recorded sensing artifacts when the LLM is
+# unreachable or the retries exhaust.
 #
 # Library:
 #   from sensing import extract_structured, CLASSIFY_TASK, ENTITIES_TASK
@@ -41,6 +46,11 @@ import procs   # noqa: E402  (subprocess registry — no dangling processes)
 # providers config (docs/PROVIDERS.md) will drive these same knobs.
 PROVIDER = os.environ.get("FACTY_PROVIDER", "mistral-subscription")
 MODEL = os.environ.get("FACTY_MODEL", "mistral-large-4")
+# Thinking level for the sensing/commentary calls. Default OFF: these are
+# one-shot extractions — the model reads the inlined assignment and
+# answers, it does not deliberate. Measured on the demo cases: ~4.5x
+# faster end-to-end (15s vs 69s per call) with comparable output.
+THINKING = os.environ.get("FACTY_THINKING", "off")
 MAX_ATTEMPTS = 3               # total turns: 1 initial + up to 2 corrections
 PREVIOUS_RESPONSE_CAP = 4000   # chars of the previous response fed back
 
@@ -78,36 +88,104 @@ def staged_prompt_path(label):
     return ENGINE_DIR.parent / ".agentic" / "tmp" / f"sensing-{label}.md"
 
 
-def pi_command(staged_path):
-    """The exact pi invocation for a staged sensing prompt — printable,
-    copy-pasteable for debugging."""
-    return ["pi", "-p", "--provider", PROVIDER, "--model", MODEL,
-            f"Read your complete sensing assignment in @{Path(staged_path).resolve()} "
-            "and execute it in full. Respond with ONLY the JSON value."]
+def pi_command():
+    """The exact pi invocation for a staged assignment — RPC mode (the
+    assignment itself travels over stdin as a JSONL `prompt` command,
+    inlined). Printable, copy-pasteable for debugging. Lean and one-shot:
+    no session files, no skills / context files / MCP / prompt templates
+    / themes, and NO TOOLS — the assignment carries everything it needs
+    (the evidence is inlined by the task builders), so the model answers
+    in a single LLM call instead of agentic-looping through the read
+    tool. The extensions stay (the mistral-subscription provider is
+    one)."""
+    cmd = ["pi", "--mode", "rpc", "--no-session", "--no-tools",
+           "--no-context-files", "--no-skills", "--no-mcp",
+           "--no-prompt-templates", "--no-themes",
+           "--provider", PROVIDER, "--model", MODEL]
+    if THINKING:
+        cmd += ["--thinking", THINKING]
+    return cmd
 
 
 def _pi_runner(staged_path, stream):
-    """Call the LLM via `pi -p`, streaming. Returns the full response text.
-    Raises RuntimeError if the call fails (unreachable / no credential).
-    The subprocess registers with procs — a quit mid-call leaves nothing
+    """Call the LLM via pi's RPC mode, streaming. The staged assignment
+    (self-contained — the evidence is inlined) travels as a JSONL
+    `prompt` command on stdin; `text_delta` events stream the response
+    (reassembled into lines for the stream callback). `agent_settled`
+    ends the call — pi is shut down immediately (no lingering after the
+    response, no session files). Returns the full response text. Raises
+    RuntimeError if the call fails (unreachable / no credential). The
+    subprocess registers with procs — a quit mid-call leaves nothing
     behind (kill_all on exit)."""
-    cmd = pi_command(staged_path)
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    proc = subprocess.Popen(pi_command(), stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, bufsize=1, start_new_session=True)
     procs.register(proc)
     try:
-        chunks = []
+        prompt = Path(staged_path).read_text()
+        try:
+            proc.stdin.write(json.dumps({"id": "sense", "type": "prompt",
+                                         "message": prompt}) + "\n")
+            proc.stdin.flush()
+        except (BrokenPipeError, OSError) as exc:
+            raise RuntimeError(f"pi exited before the prompt was accepted: {exc}")
+        chunks, pending, settled = [], "", False
         for line in proc.stdout:
-            chunks.append(line)
-            if stream:
-                stream(line.rstrip("\n"))
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue  # not a protocol record
+            rtype = rec.get("type")
+            if rtype == "message_update":
+                ev = rec.get("assistantMessageEvent") or {}
+                if ev.get("type") == "text_delta":
+                    delta = ev.get("delta", "")
+                    chunks.append(delta)
+                    if stream is not None:
+                        pending += delta
+                        while "\n" in pending:
+                            out, pending = pending.split("\n", 1)
+                            stream(out)
+            elif rtype == "response" and rec.get("id") == "sense" \
+                    and not rec.get("success", True):
+                raise RuntimeError(f"pi rejected the prompt: {rec.get('error')}")
+            elif rtype == "agent_settled":
+                settled = True
+                break
+        if stream is not None and pending:
+            stream(pending)  # the final partial line
+        proc.stdin.close()
+        try:
+            proc.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
         stderr = proc.stderr.read()
-        proc.wait()
+    except BaseException:
+        proc.kill()  # never leave a pi behind on the error path
+        raise
     finally:
         procs.unregister(proc)
     if proc.returncode != 0:
         raise RuntimeError(stderr.strip() or f"pi exited with code {proc.returncode}")
+    if not settled:
+        raise RuntimeError("pi RPC ended without agent_settled")
     return "".join(chunks)
+
+
+def llm_text(task, stream=None, label="explain", runner=None):
+    """One LLM call for prose (no schema, no judge, no correction loop):
+    stage the assignment, stream the response, return the full text.
+    Used for out-of-band commentary (cli.explain) — the response cache is
+    the caller's business."""
+    runner = runner or _pi_runner
+    staged = staged_prompt_path(label)
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    staged.write_text(task)
+    return runner(str(staged), stream)
 
 
 def _correction_prompt(task, schema_text, errors, previous):

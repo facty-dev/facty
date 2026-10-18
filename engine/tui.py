@@ -29,6 +29,7 @@
 # Textual's pilot (run_test).
 
 import sys
+import time
 from pathlib import Path
 
 ENGINE_DIR = Path(__file__).resolve().parent
@@ -71,9 +72,13 @@ THE RUN LOG — tools and inference types
   constraint solver · deduction  prune impossible explanations,
                                  support the survivors
   bwd chain · deduction          prove claims, rank, deliver the verdict
+  llm · commentary               out-of-band LLM explanations (entities,
+                                 ranking, verdict) — presentation only;
+                                 the verdict itself is deterministic
 
-  click an llm · induction line to EXPAND its streamed response inline
-  (collapsed by default; raw responses are also cached —
+  click the LIVE line — the last line while the LLM streams (or press
+  e) — to EXPAND its streamed response inline; it live-appends while
+  streaming (collapsed by default; raw responses are also cached —
   FACTY_SENSE=cache replays them offline)
 
 FACTS ARE TRIPLES
@@ -86,6 +91,7 @@ KEYS
   r  run the case · d  run the recommended test · s  re-sense facts (LLM)
   a  authenticate with your Mistral subscription (browser sign-in)
   e  expand/collapse the latest streamed response (keyboard — no mouse)
+  x  explain the verdict (LLM commentary — out-of-band, cached)
   enter  read an evidence file · ?  this help · esc  back
   ctrl+p  command palette
 
@@ -225,6 +231,7 @@ class DetailBlock(VerticalScroll):
 # (text-primary, text-success, …) so they adapt to the active theme.
 TOOL_BADGES = {
     "llm · induction": "#0891B2",               # cyan
+    "llm · commentary": "#7C3AED",              # violet (out-of-band explanations)
     "fwd chain · deduction": "#2563EB",         # blue
     "constraint solver · deduction": "#D97706", # amber
     "bwd chain · deduction": "#059669",         # emerald
@@ -292,6 +299,7 @@ class CaseScreen(Screen):
         ("s", "sense", "Re-sense facts (LLM)"),
         ("a", "auth", "Authenticate (Mistral)"),
         ("e", "expand", "Expand the latest response"),
+        ("x", "explain", "Explain the verdict (LLM)"),
         ("?", "help", "Help"),
         ("escape", "back", "Back"),
     ]
@@ -303,6 +311,7 @@ class CaseScreen(Screen):
         self.drop = cli.drop_file(self.case)
         self.auto = auto
         self.result = None
+        self.entities = None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -338,8 +347,11 @@ class CaseScreen(Screen):
             with Vertical(id="mid"):
                 yield Label("The run log — tools, prunes, proofs", classes="title")
                 yield Static("1 · Run the case — the LLM senses the evidence, the "
-                             "engine decides.\n2 · Run the recommended test — collect "
-                             "the evidence the engine recommends, re-solve.",
+                             "engine decides.\n2 · Run the recommended test — the "
+                             "engine opens its questions, the LLM senses that "
+                             "evidence with them, re-solve.\n3 · Explain the "
+                             "verdict — out-of-band LLM commentary (the verdict "
+                             "itself is deterministic).",
                              id="howto")
                 yield RunLog()
                 with Horizontal():
@@ -351,8 +363,16 @@ class CaseScreen(Screen):
                                  disabled=self.drop is None,
                                  tooltip="The engine names the one check that best "
                                          "discriminates the top explanations. Collect "
-                                         "that evidence (LLM) and re-solve — the "
+                                         "that evidence (LLM, with the engine's open "
+                                         "questions as context) and re-solve — the "
                                          "verdict updates.")
+                    yield Button("Explain the verdict (LLM)", id="explain",
+                                 disabled=True,
+                                 tooltip="Out-of-band LLM commentary: a plain-language "
+                                         "explanation of the entities, the ranking, "
+                                         "and the verdict. Presentation only — the "
+                                         "verdict is deterministic. Cached like the "
+                                         "sensing responses.")
             with Vertical(id="right"):
                 yield Label("Ranking — backward chain + score", classes="title")
                 yield DataTable(id="ranking")
@@ -441,6 +461,7 @@ class CaseScreen(Screen):
 
     def show_result(self, r):
         self.result = r
+        self.query_one("#explain", Button).disabled = False
         table = self.query_one("#ranking", DataTable)
         table.clear()
         for rk in r["ranking"]:
@@ -486,60 +507,83 @@ class CaseScreen(Screen):
         if idx is not None and 0 <= idx < len(self.files):
             self.app.push_screen(EvidenceScreen(self.files[idx]))
 
-    def run_stage(self, label, op, *args, offline=False):
-        """One sensing stage (called from the run worker). The streamed
-        LLM response is captured for the log line — the line is
-        expandable from the start (click or the e key), so the response
-        can be watched live; collapsed by default, so the main output
-        stays uncluttered. offline=True replays the response cache
-        (no LLM calls)."""
-        ui = _LogUI(self)
-        line = self.runlog.write(self._stage_text(label))
+    def run_stage(self, label, op, *args, offline=False, engine_context=None):
+        """One sensing stage (called from the run worker). See _live_call."""
+        op_label = cli.sensing_ops(self.case)[op][0]
+
+        def call(ui, stream, on_response):
+            return cli.sense_one(ui, self.case, op, *args, stream=stream,
+                                 on_response=on_response,
+                                 mode="cache" if offline else None,
+                                 engine_context=engine_context)
+
+        return self._live_call(label, "llm · induction", call,
+                               strip=f"{op_label} — ")
+
+    def _live_call(self, label, tag, call, strip=""):
+        """One live LLM call as a run-log line (called from a worker).
+
+        The LIVE line — the last line while the call streams — carries
+        the streamed response: expandable from the start (click it, or
+        press e), live-appending in the detail while the response
+        streams, green and expandable when it is ready. The stage's first
+        status message folds into the live line (as its suffix); later
+        status messages append below it as plain lines. Collapsed by
+        default, so the main output stays uncluttered."""
         resp = Response()
-        line.response = resp  # attached from the start — expandable mid-stream
+        ui = _StageUI(self, strip=strip)
+        line = self.runlog.write(f"{self._badge(tag)} ── {label}", resp)
+        ui.live_line = line  # expandable from the start — mid-stream included
         count = {"n": 0}
+        t0 = time.monotonic()
 
         def stream(chunk):
             count["n"] += 1
             resp.chunks.append(chunk + "\n")
             if count["n"] % 10 == 0:
                 self.app.call_from_thread(
-                    self._tick_stage, line,
-                    self._stage_text(
-                        label,
-                        " " + self._content(
-                            "foreground-muted",
-                            f"… streaming ▸ {count['n']} lines"
-                            " — click to watch live")))
+                    self._tick_live, line,
+                    f"… streaming ▸ {count['n']} lines · "
+                    f"{int(time.monotonic() - t0)}s — click to watch live")
 
         def on_response(text, source):
             if not resp.chunks:
                 resp.chunks.append(text)
             resp.source = source
 
-        result = cli.sense_one(ui, self.case, op, *args, stream=stream,
-                               on_response=on_response,
-                               mode="cache" if offline else None)
-        self.app.call_from_thread(self._finish_stage, line, label, resp)
-        return result
+        try:
+            return call(ui, stream, on_response)
+        finally:
+            self.app.call_from_thread(self._finish_live, line, resp)
 
-    def _tick_stage(self, line, text):
+    def _tick_live(self, line, suffix):
         if line.is_mounted:
-            line.update(text)
+            line.update(f"{line.base}  "
+                        + self._content("foreground-muted", suffix))
 
-    def _finish_stage(self, line, label, resp):
+    def _finish_live(self, line, resp):
         resp.done = True
         if line.is_mounted:
-            line.update(self._stage_text(
-                label, " " + self._content("text-success",
-                                           "▸ response ready — click to expand")))
+            n = len(resp.text().splitlines())
+            src = resp.source or "live"
+            line.update(f"{line.base}  "
+                        + self._content(
+                            "text-success",
+                            f"▸ response ready ({src} · {n} lines)"
+                            " — click to expand"))
 
     @work(thread=True)
     def do_run(self, add_facts, offline=False):
         """The e2e pipeline: the LLM senses the evidence (induction),
         then the engine decides (deduction). Falls back to the response
         cache / recorded sensing when the LLM is unreachable (logged).
-        offline=True runs without the LLM (cached responses)."""
+        offline=True runs without the LLM (cached responses).
+
+        With add_facts (the recommended test's evidence) the flow is:
+        sense the initial evidence → the engine solves phase 1 and opens
+        its questions → the LLM senses the test's evidence WITH that
+        context (the questions + the hypothesis space — never the
+        engine's conclusions) → the engine re-solves."""
         if offline:
             self.write(self._stage_text("running without the LLM (cached responses)"))
         index = self.run_stage("classify the evidence pile "
@@ -551,13 +595,25 @@ class CaseScreen(Screen):
         facts = self.run_stage("sense the evidence → facts "
                                "(judge: schema + compute checks)", "facts",
                                index, ents, offline=offline)
+        self.entities = ents
         if add_facts is not None:
+            # phase 1: the engine decides on the initial evidence — its
+            # open questions + hypothesis space are the context for
+            # sensing the recommended test's evidence
+            r1 = self._engine_run(facts, "on the initial evidence")
             label = Path(add_facts).stem.replace("facts-", "")
             facts = facts + self.run_stage(
-                f"sense the {label} evidence (the recommended test's evidence)",
-                "drop", offline=offline)
+                f"sense the {label} evidence (with the engine's open questions)",
+                "drop", index, ents, engine_context=r1, offline=offline)
+        self._engine_run(facts, "with the recommended test's evidence"
+                         if add_facts is not None else "on the initial evidence")
+
+    def _engine_run(self, facts, phase):
+        """One deterministic engine solve, logged + shown (called from a
+        worker). Returns the result — the phase-1 solve's questions are
+        the drop sensing's context."""
         self.write(f"{self._badge('fwd chain · deduction')} ── rules fire: "
-                   "derive, open questions, raise hypotheses")
+                   f"derive, open questions, raise hypotheses ({phase})")
 
         def engine_emit(e):
             tag = cli.TOOL_TAG[e["op"]]
@@ -571,10 +627,35 @@ class CaseScreen(Screen):
                     f"{self._badge(tag)} {self._content(token, line)}")
 
         r = engine.run_case(self.case, facts=facts, emit=engine_emit)
-        if add_facts is not None:
-            r["phase"] = "with the recommended test's evidence"
+        r["phase"] = phase
         self.app.call_from_thread(self.summarize, r)
         self.app.call_from_thread(self.show_result, r)
+        return r
+
+    @work(thread=True)
+    def do_explain(self, target="verdict"):
+        """Out-of-band LLM commentary: a plain-language explanation of the
+        engine's result (entities | ranking | verdict). Presentation only
+        — the verdict is deterministic and never depends on this call.
+        Cached like the sensing responses; offline mode replays the
+        cache."""
+        if self.result is None:
+            self.write(self._content(
+                "text-warning", "run the case first — nothing to explain yet"))
+            return
+        offline = self._offline()
+        label = (f"explain the {target} — LLM commentary, out-of-band "
+                 "(the verdict itself is deterministic)")
+
+        def call(ui, stream, on_response):
+            return cli.explain(ui, self.case, self.result, self.entities,
+                               target, stream=stream, on_response=on_response,
+                               mode="cache" if offline else None)
+
+        self._live_call(label, "llm · commentary", call)
+
+    def action_explain(self):
+        self.do_explain("verdict")
 
     @work(thread=True)
     def do_sense(self):
@@ -683,6 +764,33 @@ class _LogUI:
         self.log(tag, f"── {title} ")
 
 
+class _StageUI(_LogUI):
+    """A stage's UI adapter: the FIRST log line folds into the stage's
+    live line (as its status suffix — the live line stays the LAST line
+    while the LLM streams, and it carries the streamed response, so it
+    is expandable mid-stream); later lines append below it as plain log
+    lines. `strip` removes the op-label prefix the status repeats."""
+
+    def __init__(self, screen, strip=""):
+        super().__init__(screen)
+        self.strip = strip
+        self.live_line = None
+        self._folded = False
+
+    def log(self, tag, msg):
+        lines = str(msg).splitlines() or [""]
+        if not self._folded and self.live_line is not None:
+            self._folded = True
+            first = lines[0]
+            if self.strip and first.startswith(self.strip):
+                first = first[len(self.strip):]
+            self.screen.app.call_from_thread(
+                self.screen._tick_live, self.live_line, f"— {first}")
+            lines = lines[1:]
+        for line in lines:
+            super().log(tag, line)
+
+
 class FactyCommands(Provider):
     """The command palette (ctrl+p): every action, with its help text."""
 
@@ -703,6 +811,16 @@ class FactyCommands(Provider):
             cmds.append(("Expand/collapse the latest response",
                          lambda: s._toggle_latest(),
                          "Reveal the streamed LLM response inline (keyboard-friendly)"))
+            cmds.append(("Explain the verdict (LLM commentary)",
+                         lambda: s.do_explain("verdict"),
+                         "Plain-language explanation of the result — out-of-band; "
+                         "the verdict itself is deterministic"))
+            cmds.append(("Summarize the extracted entities (LLM commentary)",
+                         lambda: s.do_explain("entities"),
+                         "A plain-language summary of the sensed entities"))
+            cmds.append(("Explain the ranking (LLM commentary)",
+                         lambda: s.do_explain("ranking"),
+                         "Why each hypothesis scored where it did"))
         cmds.append(("Show help", lambda: self.app.push_screen(HelpScreen()),
                      "The flow, the run-log vocabulary, the triples"))
         if len(self.app.screen_stack) > 1:
