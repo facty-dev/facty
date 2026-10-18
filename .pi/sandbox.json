@@ -2,7 +2,10 @@
   "network": {
     "allowedDomains": [
       "earendil-works.github.io",
-      "docassemble.org"
+      "docassemble.org",
+      "mistral.ai",
+      "docs.mistral.ai",
+      "huggingface.co"
     ]
   }
 }

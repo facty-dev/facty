@@ -1,4 +1,4 @@
-# Learning Design Approach
+# The Facty Method — learning design and neurosymbolic architecture
 
 An absence of knowledge engineering to manage data science causes models to become biased and inflexible. This is known as [concept drift](https://en.wikipedia.org/wiki/Concept_drift). Products are theories of reality, and science already knows how to evolve theories. When support for new business domains need to be added to a product that includes learning, there needs to be an organized label structure to query the annotated training data through, otherwise models will calcify and become unable to adapt. Just like regular code debt caused by tightly coupled concerns.
 
@@ -6,7 +6,7 @@ There are many kinds of models that fit different problems and not everything ne
 
 To manage the challenges of model bias and over fitting that stem from unstructured target labels and neglect of semantics, one general solution is to train multiple models. That is, one model for each domain or class of facts that is possible to maintain a high level of accuracy about. Then reasoning can be externalized by deciding which model has more authority in a given context, making classifiers more programmable.
 
-Reyearn uses a forest of taxonomic trees, a directed graph. Each branch in a tree represents a nested set of labelled observations. These observations are leaves on a tree (at the very edge of the graph). This label tree idea is related to [Hierarchical Multilabel Classification](https://en.wikipedia.org/wiki/Multiclass_classification#Hierarchical_classification). It's programmed at the application level rather than being used to structure word embeddings inside statistical models (although that is an interesting technique on its own). The ensemble of models approach has been demonstrated by [MILABOT](https://arxiv.org/abs/1709.02349) for the Alexa Prize, [Microsoft LUIS](https://docs.microsoft.com/en-us/azure/cognitive-services/luis/luis-concept-prebuilt-model#prebuilt-domains) and others.
+Facty uses a forest of taxonomic trees, a directed graph. Each branch in a tree represents a nested set of labelled observations. These observations are leaves on a tree (at the very edge of the graph). This label tree idea is related to [Hierarchical Multilabel Classification](https://en.wikipedia.org/wiki/Multiclass_classification#Hierarchical_classification). It's programmed at the application level rather than being used to structure word embeddings inside statistical models (although that is an interesting technique on its own). The ensemble of models approach has been demonstrated by [MILABOT](https://arxiv.org/abs/1709.02349) for the Alexa Prize, [Microsoft LUIS](https://docs.microsoft.com/en-us/azure/cognitive-services/luis/luis-concept-prebuilt-model#prebuilt-domains) and others.
 
 Making the ensemble of models configurable by data at runtime allows users to shape the behavior of the system, and the operational overhead of training and deploying very large models is reduced. It also allows us to mix vastly different types of models more easily, e.g. some can be CNNs, RNNs, some Bayesian, some expression parsers, rule matchers etc. Any function or third party endpoint can act as a classifier in principle.
 
@@ -14,20 +14,20 @@ Making the ensemble of models configurable by data at runtime allows users to sh
 
 There is so much activity in the area of open source ML that it is hard to keep up. This is a running list of similar projects doing things in different but complimentary ways.
 
-- [Creme](https://github.com/creme-ml/creme): Solving the concept drift problem at a lower level. A library focussed on stream-based online learning, with great ML algorithm support. It might be a candidate to supply more classifiers out of the box in Reyearn if its code can be properly serialized to run on Dask.
+- [Creme](https://github.com/creme-ml/creme): Solving the concept drift problem at a lower level. A library focussed on stream-based online learning, with great ML algorithm support. It might be a candidate to supply more classifiers out of the box in Facty if its code can be properly serialized to run on Dask.
 - [Weights and Biases](https://docs.wandb.com/): A commercial product with full UI for experiment management. Stores model metadata such as accuracy reports and hyperparameters to enable multivariate testing to iterate model performance in a rational way. It also seems really nice for reporting and communications.
 - [ConceptNet Numberbatch](https://github.com/commonsense/conceptnet-numberbatch): training general purpose language models by querying for training data through a semantic network. The semantic qualities are great for combatting model bias because training data can be balanced by its conceptual meanings ("priors" are inherently normalized). This is a problem faced by all training pipeline designers but the implementation isn't usually so elegant.
-- [Grakn KGLIB](https://github.com/graknlabs/kglib): training models by querying for training data through arbitrary knowledge (property) graphs with deductive logic. Inference is backward chaining (finding facts given conclusions a.k.a. modus tolens). This is best for applications like drug discovery where you can start with a symptom (conclusion) and find the networks of affecting systems like enzymes or hormones, in order to better match drug actions to those systems. Reyearn needs to use forward chaining (finding conclusions given facts a.k.a. modus ponens) for finding solutions in relatively knowable spaces like black letter law. For example, each new event or piece of evidence in a fact pattern adds to the context of the scenario, allowing possible case outcomes to be predicted.
+- [Grakn KGLIB](https://github.com/graknlabs/kglib): training models by querying for training data through arbitrary knowledge (property) graphs with deductive logic. Inference is backward chaining (finding facts given conclusions a.k.a. modus tolens). This is best for applications like drug discovery where you can start with a symptom (conclusion) and find the networks of affecting systems like enzymes or hormones, in order to better match drug actions to those systems. Facty needs to use forward chaining (finding conclusions given facts a.k.a. modus ponens) for finding solutions in relatively knowable spaces like black letter law. For example, each new event or piece of evidence in a fact pattern adds to the context of the scenario, allowing possible case outcomes to be predicted.
 
 ## Why?
 
 We need to embrace the modern statistical methods (because they are uniquely capable of dealing with unseen observations compared to straight code and logic), but this is just the foundation layer of the overall system. It is the base layer on which the rest of the stack is built, so that these statistical (a.k.a. connectionist) methods can be leveraged by traditional symbolic methods. Why? It can unlock domains where previously only humans could be trusted to handle the mundane computation, in order to help them be more creative by freeing them up to focus on harder problems.
 
-The rest of this document is about leveraging the incremental learning capabilities described above by integrating them with traditional expert systems. This is where the concept of "non-expert learning system" comes from. It is an inversion of the approaches which try to solve bias and drift inside the models themselves. Instead, Reyearn applies similar techniques at the application, orchestration and preprocessing levels rather than at the training and vector embedding levels. This permits systems to be more easily explainable, configurable, and programmable than their purely statistical cousins. It's not to compete with lower level optimizations but to complement them by broadening the spectrum of abstraction available to applications that might have stricter constraints on training data, expertise, and time.
+The rest of this document is about leveraging the incremental learning capabilities described above by integrating them with traditional expert systems. This is where the concept of "non-expert learning system" comes from. It is an inversion of the approaches which try to solve bias and drift inside the models themselves. Instead, Facty applies similar techniques at the application, orchestration and preprocessing levels rather than at the training and vector embedding levels. This permits systems to be more easily explainable, configurable, and programmable than their purely statistical cousins. It's not to compete with lower level optimizations but to complement them by broadening the spectrum of abstraction available to applications that might have stricter constraints on training data, expertise, and time.
 
 # High-Level Application Vision
 
-One of the inspirations for the motivation behind Reyearn is the [British Columbia Civil Resolution Tribunal](https://civilresolutionbc.ca) (BCCRT), which is an online dispute resolution service with real world jurisdiction for small claims. In particular, the service provides a "Solution Explorer" which allows people to interactively learn about possible solutions to their legal problem and how to proceed. Despite being somewhat conservative on UX, as a government project [developed by PwC](https://www.pwc.com/ca/en/industries/government-and-public-services/citizen-experience.html), the almost-conversational experience is a good example of an expert system UI metaphor. It validates that such systems are possible and successful even in one of the most conservative and challenging domains. The legal profession is notoriously slow to innovate (not always a bad thing), but combine that with the challenges faced by large government projects, and it must be appreciated for not failing miserably. For a deep dive [this is a very good talk](https://www.youtube.com/watch?v=1YWMgpueDIM) by Shannon Salter, the chair of the tribunal.
+One of the inspirations for the motivation behind Facty is the [British Columbia Civil Resolution Tribunal](https://civilresolutionbc.ca) (BCCRT), which is an online dispute resolution service with real world jurisdiction for small claims. In particular, the service provides a "Solution Explorer" which allows people to interactively learn about possible solutions to their legal problem and how to proceed. Despite being somewhat conservative on UX, as a government project [developed by PwC](https://www.pwc.com/ca/en/industries/government-and-public-services/citizen-experience.html), the almost-conversational experience is a good example of an expert system UI metaphor. It validates that such systems are possible and successful even in one of the most conservative and challenging domains. The legal profession is notoriously slow to innovate (not always a bad thing), but combine that with the challenges faced by large government projects, and it must be appreciated for not failing miserably. For a deep dive [this is a very good talk](https://www.youtube.com/watch?v=1YWMgpueDIM) by Shannon Salter, the chair of the tribunal.
 
 A deeper motivation is to get software into domains that are too mission critical to be left up to machine learning alone. The law is a great example of this, and it stands to benefit regular people, so it is the primary target use case. Any policy-oriented domain would be a good fit, and the system is designed in an orthogonal way so that any domain can be supported by plugging in different classifiers while still benefiting from the opinionated architecture and operations automation.
 
@@ -45,7 +45,7 @@ Tracking state by slot filling without a dialog model is insufficient for conver
 
 To handle dialog management, a topic stack can be used. The topic stack is a stack of frames where each frame represents a turn of dialog (one volley in an agent-to-agent exchange). There is no hard limit to the number of agents in principle, but for learning about a fact pattern from an end user, we only need two, the user for input and the application to find explanations that apply to the situation and trigger the next action. Human agents are not required, and running multiple communicating virtual agents would be an interesting area to explore. This state tracking is loosely inspired by [COLLAGEN](https://www.merl.com/publications/docs/TR97-21a.pdf) and [RavenClaw](https://www.microsoft.com/en-us/research/publication/ravenclaw-dialog-management-using-hierarchical-task-decomposition-expectation-agenda/). Although it implements a dialectical approach, it doesn't have to rely on natural language or a conversational interface. In theory it could talk to itself.
 
-To walk through the knowledge graph as new facts come in from the user, Reyearn needs an inference engine. Traditionally this has meant first-order logic, but there's no reason why inference needs to be so narrowly defined. The dialog system can be implemented by calling multiple classifier backends, where the manager process asks one or many classifiers what they predict a new fact should mean. Then, based on configuration, weights or other rules, recommends a solution by pushing a new frame onto the topic stack that describes the decision and triggers an action. One of the classifier backend modules is inspired by [CLIPS](http://www.clipsrules.net/AboutCLIPS.html), and is used for finding explanations that might apply to the user's situation by comparing their facts to the rules. The other module is inspired by the cases module of [SHYSTER](http://users.cecs.anu.edu.au/~James.Popple/shyster/) and is used for finding explanations by analogy represented as a ranking of structural distances to canonical explanations (via k-NN). This component is not strictly required to navigate basic use cases, since common solutions might not rely on references to a large variety of past solutions, and are more likely to be decidable by rules alone.
+To walk through the knowledge graph as new facts come in from the user, Facty needs an inference engine. Traditionally this has meant first-order logic, but there's no reason why inference needs to be so narrowly defined. The dialog system can be implemented by calling multiple classifier backends, where the manager process asks one or many classifiers what they predict a new fact should mean. Then, based on configuration, weights or other rules, recommends a solution by pushing a new frame onto the topic stack that describes the decision and triggers an action. One of the classifier backend modules is inspired by [CLIPS](http://www.clipsrules.net/AboutCLIPS.html), and is used for finding explanations that might apply to the user's situation by comparing their facts to the rules. The other module is inspired by the cases module of [SHYSTER](http://users.cecs.anu.edu.au/~James.Popple/shyster/) and is used for finding explanations by analogy represented as a ranking of structural distances to canonical explanations (via k-NN). This component is not strictly required to navigate basic use cases, since common solutions might not rely on references to a large variety of past solutions, and are more likely to be decidable by rules alone.
 
 An interactive dashboard can be built for users to explore, with the ability to iterate on it by editing or adding facts and developing the details of the situation. They might want to iterate on the rules, weights and authoritative explanations (e.g. past decisions) at the same time. The dashboard should be a separate project.
 
@@ -63,7 +63,7 @@ We might also say [deductive](https://www.wikiwand.com/en/Modus_ponens#/Explanat
 
 Neither deduction alone or induction alone would seem to be reliable for explaining real situations. What happens when we learn there are multiple subtypes of cats and cuteness, or need to support birds that are only sometimes cute? What if all cats are not cute? Is loud meowing _ever_ indicative of cuteness? Let's say "sometimes", based on a large set of training data. Am I even _present_ to feed Fluffball in the morning? Not if I'm out of town, which might be deduced from my calendar. This repeated application of inference by modus ponens (forward chaining deductive logic) or by statistical, inductive generalization, can lead to the best hypothetical explanations given the facts. If the domain is about solutions to problems, then an explanation might be a solution to the user's problem.
 
-We can use a flavor of the scientific method that [has worked forever to make discoveries](http://philsci-archive.pitt.edu/15321/1/Abduction.pdf) and also to mete out various [forms of justice](https://plato.stanford.edu/entries/legal-reas-prec/). In legal reasoning, there doesn't seem to be a one-size-fits-all logical framework (although positivism is popular). Reyearn tries to be agnostic about jurisprudence. It [might not be important](http://users.cecs.anu.edu.au/~James.Popple/shyster/book/) (chapter 1.2) to legal expert systems.
+We can use a flavor of the scientific method that [has worked forever to make discoveries](http://philsci-archive.pitt.edu/15321/1/Abduction.pdf) and also to mete out various [forms of justice](https://plato.stanford.edu/entries/legal-reas-prec/). In legal reasoning, there doesn't seem to be a one-size-fits-all logical framework (although positivism is popular). Facty tries to be agnostic about jurisprudence. It [might not be important](http://users.cecs.anu.edu.au/~James.Popple/shyster/book/) (chapter 1.2) to legal expert systems.
 
 Statistics and logic are both used in a rhetorical way. Assuming we know about the implementation of a given classifier, the reason why we trust its answers can be seen as an appeal to its authority on account of its having seen a lot of training data in the past and our assent to its map of annotations. It has experience, like an expert. We could even call it [sophistry](https://en.wikipedia.org/wiki/Rhetoric#Sophists) that these things only appeal to probability. Whether a justification is an analogy to a canonical example, or a correspondence to a majority of past examples, proof isn't necessary to be useful, only agreement that it's good enough in the circumstances, which may include rules that take precedence over the probabilities.
 
@@ -85,7 +85,7 @@ There are a few major moving parts.
 
 ## Update to leverage LLMs in 2024 and beyond
 
-Since the design of the Reyearn architecture as an "abductive reasoning machine" for building an "Explainable AI", LLMs have largely replaced custom classifiers for many tasks in industry.
+Since the design of the Facty architecture as an "abductive reasoning machine" for building an "Explainable AI", LLMs have largely replaced custom classifiers for many tasks in industry.
 
 At this point, most practitioners have built prototypes that wrap one of the largre commercail LLM vendors, experimented with [Retrieval Augmented Generation (RAG)](https://en.wikipedia.org/wiki/Prompt_engineering#Retrieval-augmented_generation), and had an opportunity to observe the limitations of these models and wrapper approaches.
 
@@ -95,7 +95,7 @@ There is a great amount of coverage of the limitations of LLMs in the literature
 
 What I discovered is that all the same limitations of traditional statistical models and custom neural nets with respect to reasoning and planning are also true of LLMs.
 
-There is a recent groundbreaking paper which demonstrates a direct throughline from the design of the Reyearn architecture into a Generative AI world.
+There is a recent groundbreaking paper which demonstrates a direct throughline from the design of the Facty architecture into a Generative AI world.
 
 ### LLMs Can't Plan, But Can Help Planning in LLM-Modulo Frameworks
 
@@ -105,7 +105,7 @@ This is not a reason to avoid using ML, just as the inability of logical rules t
 
 Here are the main takeaways from the paper that will help to articulate he throughline from what a neuro-symbolic system looked like in 2020 to what it looks like in 2024. The most significant observation is that it's not different at all.
 
-The primary difference is that LLMs can be swapped with custom classifiers to save a lot of development time, but otherwise the Reyearn architecture remains the same.
+The primary difference is that LLMs can be swapped with custom classifiers to save a lot of development time, but otherwise the Facty architecture remains the same.
 
 #### Takeways
 
@@ -120,13 +120,18 @@ The primary difference is that LLMs can be swapped with custom classifiers to sa
 - Direct LLM self-critique _just doesn't work_.
 - That said, approximate retrieval and extraction of knowledge from LLMs _can_ be used to help with planning in a neuro-symbolic system.
 - By incorporating human soundness critics, plans generated with their feedback can be useful for sythetic generation of fine-tuning data which would extend self-critique retrieval coverage linearly.
-- The soundness of the framework is _derived_ from the soundness of the critics. This can be seen as a limitation, but it is also a strength because it is a direct throughline from the human-in-the-loop design of the Reyearn architecture.
+- The soundness of the framework is _derived_ from the soundness of the critics. This can be seen as a limitation, but it is also a strength because it is a direct throughline from the human-in-the-loop design of the Facty architecture.
+
+In Facty, the symbolic rules + constraints layer **is** the programmatic
+soundness critic — authored by humans, accountable to humans, improvable by
+humans. See [docs/PHILOSOPHY.md](PHILOSOPHY.md) for the full stance on
+determinism, LLM liability, and the human role.
 - Fine-tuning _without_ domain-grounded prompting _won't work_.
 - Humans are only required once per domain and once per problem. After that, the critic role can be simulated programmatically.
 
 ### Implications
 
-Here is a rough sketch of how the Reyearn architecture is be applied to leverage LLMs.
+Here is a rough sketch of how the Facty architecture is be applied to leverage LLMs.
 
 - Use [GraphRAG](https://www.microsoft.com/en-us/research/blog/graphrag-unlocking-llm-discovery-on-narrative-private-data/) plus rules for planning and reasoning.
   - Using a representation of the ontological (taxonomic and logical) context around the initial raw examples from vector search or other forms of retrieval.
@@ -140,4 +145,29 @@ Here is a rough sketch of how the Reyearn architecture is be applied to leverage
   - However, models can extract the slot values from the collected outputs, and rules can determine when ther are all filled.
 - If answers are opposites of ideal cases, they can be recycled to further ground the prompts with negative examples.
 
-It seems that there is enough discourse in the literature to suggest that the Reyearn architecture remains a valid approach to building Explainable AI, even moreso in the age of LLMs.
+It seems that there is enough discourse in the literature to suggest that the Facty architecture remains a valid approach to building Explainable AI, even moreso in the age of LLMs.
+
+## Liability, agency, and the human role
+
+The 2024 *Moffatt v. Air Canada* case (2024 BCCRT 149) is a canonical
+example of why this architecture matters: an airline was held liable for a
+chatbot's hallucinated refund policy. The tribunal rejected the defense
+that the AI was "a separate legal entity responsible for its own actions."
+
+**The lesson:** ML models — including LLMs — can never be conscious, have
+moral agency, or hold legal personhood. Liability always flows back to the
+humans accountable for the decisions they make, regardless of their tool
+choices. LLMs are tools used by deterministic processes and humans; the
+tool does not become the decision-maker.
+
+Cory Doctorow's concept of the **"reverse centaur"** (*The Reverse Centaur's
+Guide to Life After AI*, 2026) warns against the inversion of the ideal
+human-machine relationship: instead of a human directing a machine (the
+centaur), we get a human conscripted to serve a machine — a delivery driver
+whose route and breaks are dictated by an algorithm, a programmer forced
+to crank out code at machine pace. **Facty's UX must keep humans at the
+head**: humans are the knowledge engineers curating rulesets, the soundness
+critics reviewing verdicts, and the accountable decision-makers. The system
+amplifies human judgment; it never replaces it.
+
+See [docs/PHILOSOPHY.md](PHILOSOPHY.md) for the full philosophy.

@@ -1,0 +1,70 @@
+[
+  {
+    "id": "H1",
+    "statement": "External invoice fraud — an impersonator registered a lookalike vendor, invoiced under the real vendor's name, and collected the payment into a fresh mule account. Disposition: recall the payment, escalate to the fraud unit, notify the bank.",
+    "status": "open",
+    "prior": 0.35,
+    "mechanism": "impersonation",
+    "claims": [
+      { "subject": "INV-2261", "predicate": "impersonatesVendor", "value": true },
+      { "subject": "INV-2261", "predicate": "bypassedThreeWayMatch", "value": true },
+      { "subject": "account DE44 5001 0517 5402 1337 00", "predicate": "predatesVendorRecord", "value": true },
+      { "subject": "INV-2261", "predicate": "linkedToVendorRecordCreation", "value": true }
+    ],
+    "evidenceFor": ["f14", "f21"],
+    "evidenceAgainst": [],
+    "discriminatingTests": [
+      "Pull the vendor-master audit log and the AP clerk's session records (q1)",
+      "Check the invoice email's SPF/DKIM headers and originating IP (q2)"
+    ]
+  },
+  {
+    "id": "H2",
+    "statement": "Inside job — AP clerk Mara Hart created the fake vendor record and approved the payment herself; the real vendor's denial is an unrelated coincidence.",
+    "status": "open",
+    "prior": 0.25,
+    "mechanism": "insider",
+    "claims": [
+      { "subject": "Northwind Facilities Ltd", "predicate": "createdBy", "value": "m.hart" },
+      { "subject": "INV-2261", "predicate": "enteredBy", "value": "m.hart" },
+      { "subject": "INV-2261", "predicate": "approvedBy", "value": "m.hart" }
+    ],
+    "evidenceFor": ["f08", "f11", "f12"],
+    "evidenceAgainst": ["f22"],
+    "discriminatingTests": [
+      "Pull the vendor-master audit log and session records (q1)"
+    ]
+  },
+  {
+    "id": "H3",
+    "statement": "Payment diversion (BEC) — a genuine invoice from the real vendor was paid into an account an attacker swapped in.",
+    "status": "open",
+    "prior": 0.25,
+    "mechanism": "diversion",
+    "claims": [
+      { "subject": "Northwind Facility Services Ltd", "predicate": "sentInvoice", "value": "INV-2261" },
+      { "subject": "Northwind Facility Services Ltd", "predicate": "bankDetailChangeRequested", "value": true }
+    ],
+    "evidenceFor": [],
+    "evidenceAgainst": ["f17", "f19"],
+    "discriminatingTests": [
+      "Trace the purchase order and any bank-detail change request (q4)"
+    ]
+  },
+  {
+    "id": "H4",
+    "statement": "Honest error — a genuine invoice was paid to a wrongly configured new vendor account through clerical mistakes in onboarding.",
+    "status": "open",
+    "prior": 0.15,
+    "mechanism": "clerical",
+    "claims": [
+      { "subject": "Northwind Facility Services Ltd", "predicate": "sentInvoice", "value": "INV-2261" },
+      { "subject": "INV-2261", "predicate": "purchaseOrderOnFile", "value": true }
+    ],
+    "evidenceFor": [],
+    "evidenceAgainst": ["f10", "f17"],
+    "discriminatingTests": [
+      "Trace the purchase order behind the invoice (q4)"
+    ]
+  }
+]

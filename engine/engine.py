@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# engine.py — the redyarn symbolic engine (the deterministic half).
+# engine.py — the Facty symbolic engine (the deterministic half).
 #
 # Forward + backward chaining over rules, with a constraint layer, over
 # canonical case artifacts (facts, rules, hypotheses, constraints,
@@ -8,14 +8,17 @@
 # network, no database, no LLM in the verdict path.
 #
 # Usage:
-#   python3 engine/engine.py run --case engine/cases/silver-blaze [--add-facts FILE] [--json]
+#   python3 engine/engine.py run --case engine/cases/attribution-silver-blaze [--add-facts FILE] [--json]
 #   python3 engine/engine.py selftest
 #
 # See docs/adr/0003-detective-dss-neurosymbolic-core.md.
+# The primary interface is the `facty` CLI (engine/cli.py) — see ADR-0004.
 
 import argparse
 import json
 from pathlib import Path
+
+__version__ = "0.1.0"
 
 ENGINE_DIR = Path(__file__).resolve().parent
 SCHEMA_DIR = ENGINE_DIR / "schemas"
@@ -332,8 +335,18 @@ def load_case(case_dir, add_facts=None):
     return facts, rules, hypotheses, constraints
 
 
-def run_case(case_dir, add_facts=None, emit=None):
-    facts, rules, hypotheses, constraints = load_case(case_dir, add_facts)
+def run_case(case_dir, add_facts=None, emit=None, facts=None):
+    """Run a case end-to-end. `facts` overrides the recorded sensing
+    (facts.json + add_facts) — the e2e path senses live with the LLM and
+    hands the sensed facts straight to the engine."""
+    case = Path(case_dir)
+    if facts is None:
+        facts = load_array(case / "facts.json", "fact.schema.json")
+        if add_facts:
+            facts = facts + load_array(add_facts, "fact.schema.json")
+    rules = load_array(case / "pack" / "rules.json", "rule.schema.json")
+    hypotheses = load_array(case / "pack" / "hypotheses.json", "hypothesis.schema.json")
+    constraints = load_array(case / "pack" / "constraints.json", "constraint.schema.json")
     derived, fired, questions, raised = forward_chain(facts, rules, emit=emit)
     all_facts = facts + derived
     active = [h for h in hypotheses if h["id"] in raised] if raised else hypotheses
@@ -341,7 +354,8 @@ def run_case(case_dir, add_facts=None, emit=None):
     verdict = combine(survivors, all_facts, questions, emit=emit)
     return {
         "case": str(Path(case_dir).name),
-        "phase": "phase 2 (test applied)" if add_facts else "phase 1 (initial evidence)",
+        "phase": ("with the recommended test's evidence" if add_facts
+                  else "on the initial evidence"),
         "facts_sensed": len(facts),
         "rules": len(rules),
         "hypotheses_total": len(hypotheses),
@@ -375,7 +389,7 @@ def confidence_note(v, open_questions):
 def report(r):
     a = []
     add = a.append
-    add(f"=== redyarn engine — case: {r['case']} ({r['phase']}) ===")
+    add(f"=== Facty engine — case: {r['case']} ({r['phase']}) ===")
     add(f"Sensed facts: {r['facts_sensed']} · Rules: {r['rules']} · "
         f"Hypotheses: {r['hypotheses_total']}")
     add("")
@@ -407,15 +421,77 @@ def report(r):
     v = r["verdict"]
     if v:
         add(f"VERDICT: {v['id']} — {v['statement']}  (score {v['score']:.4f})")
-        add(f"  killer: {v['killer']} · horse fate: {v['horse_fate']} · "
+        extras = [f"{k}: {v[k]}" for k in ("killer", "horse_fate") if v.get(k)]
+        prefix = " · ".join(extras)
+        add(f"  {prefix + ' · ' if prefix else ''}"
             f"confidence: {confidence_note(v, r['opened_questions'])}")
     return "\n".join(a)
 
 
-# ── Selftest (the PoC acceptance criteria, asserted) ─────────────────
+# ── Selftest (the acceptance criteria, asserted) ─────────────────────
+#
+# Three layers: (1) the PoC happy path — attribution-silver-blaze,
+# case-specific; (2) the abduction proof — the same skeleton asserted
+# for EVERY case; (3) per-case narrative checks (fraud: the funnel ·
+# RCA: the timeline).
+
+CASES = [
+    # (case directory, phase-2 facts drop)
+    ("attribution-silver-blaze", "facts-ledger.json"),
+    ("adjudication-phantom-invoice", "facts-trail.json"),
+    ("causation-three-am-outage", "facts-postmortem.json"),
+]
+
+
+def prove_abduction(case_name, drop, check):
+    """The abductive skeleton, asserted for any case: sensed facts →
+    forward chain (derive + open questions) → constraint pruning →
+    ranked hypotheses → discriminating test (the facts drop) →
+    backward-chained verdict → deterministic replay."""
+    case = ENGINE_DIR / "cases" / case_name
+    r1 = run_case(case)
+    r2 = run_case(case, add_facts=case / drop)
+    tag = f"[{case_name}]"
+    check(f"{tag} artifacts validate against schemas (facts, rules, hypotheses, constraints)",
+          True)  # load_case raises SystemExit on any violation
+    check(f"{tag} forward chain derives facts AND opens ≥1 question (the awareness loop)",
+          len(r1["derived_facts"]) > 0 and len(r1["opened_questions"]) >= 1,
+          f"{len(r1['derived_facts'])} derived, {len(r1['opened_questions'])} questions")
+    check(f"{tag} a hypothesis space is raised (≥2 competing explanations)",
+          len(r1["raised_hypotheses"]) >= 2, str(r1["raised_hypotheses"]))
+    pruned1 = {p["hypothesis"] for p in r1["pruned"]}
+    check(f"{tag} constraints prune ≥1 hypothesis on the initial evidence",
+          len(pruned1) >= 1, str(pruned1))
+    scores = [rk["score"] for rk in r1["ranking"]]
+    check(f"{tag} phase 1 leaves ≥2 hypotheses ranked by score (competition survives)",
+          len(r1["ranking"]) >= 2 and scores == sorted(scores, reverse=True),
+          str([rk["id"] for rk in r1["ranking"]]))
+    v2 = r2["verdict"]
+    check(f"{tag} phase 2: backward chain validates the winner (all claims proven)",
+          v2 is not None and v2["claims_proven"] == v2["claims_total"],
+          f"{v2 and v2['claims_proven']}/{v2 and v2['claims_total']}")
+    pruned2 = {p["hypothesis"] for p in r2["pruned"]}
+    check(f"{tag} the discriminating test changes the outcome (verdict or pruned set)",
+          r1["verdict"] is None or r2["verdict"] is None
+          or r1["verdict"]["id"] != r2["verdict"]["id"]
+          or pruned1 != pruned2)
+    r2b = run_case(case, add_facts=case / drop)
+    same = json.dumps(r2, sort_keys=True) == json.dumps(r2b, sort_keys=True)
+    check(f"{tag} deterministic replay (identical verdict, no LLM in the verdict path)", same)
+    try:
+        load_validated(case / "facts.json", "facts.schema.json")
+        load_validated(case / "evidence-index.json", "evidence-index.schema.json")
+        load_validated(case / "entities.json", "entities.schema.json")
+        sensed = True
+    except SystemExit:
+        sensed = False
+    check(f"{tag} recorded sensing artifacts validate (facts, evidence-index, entities)",
+          sensed)
+    return r1, r2
+
 
 def cmd_selftest(args):
-    case = ENGINE_DIR / "cases" / "silver-blaze"
+    case = ENGINE_DIR / "cases" / "attribution-silver-blaze"
     ledger = case / "facts-ledger.json"
     checks = []
 
@@ -479,6 +555,65 @@ def cmd_selftest(args):
     check("all artifacts are schema-validated JSON files; no DB, no VM, no network",
           True)
 
+    # ── 2. the abduction proof — every case, one skeleton ────────────
+
+    print("")
+    print("--- the abduction proof (every case, one skeleton) ---")
+    proof = {name: prove_abduction(name, drop, check) for name, drop in CASES}
+
+    # ── 3a. fraud case (adjudication): the funnel ────────────────────
+
+    print("")
+    print("--- fraud case (adjudication-phantom-invoice): the funnel, asserted ---")
+    f1, f2 = proof["adjudication-phantom-invoice"]
+    pruned1 = {p["hypothesis"] for p in f1["pruned"]}
+    check("phase 1 prunes the payment diversion (H3) and the honest error (H4)",
+          {"H3", "H4"} <= pruned1, str(pruned1))
+    ids = [rk["id"] for rk in f1["ranking"]]
+    check("phase 1 ranks the inside job (H2) above external fraud (H1) — the evidence points at the clerk first",
+          ids[:2] == ["H2", "H1"], str(ids))
+    check("recommended test is the vendor-provenance audit (the discriminating question)",
+          f1["recommended_test"] is not None
+          and f1["recommended_test"]["slot"] == "vendor-provenance",
+          str(f1["recommended_test"]))
+    pruned2 = {p["hypothesis"] for p in f2["pruned"]}
+    check("phase 2: the audit trail prunes the inside job (H2) — the clerk is exonerated",
+          "H2" in pruned2, str(pruned2))
+    v = f2["verdict"]
+    check("phase 2: external invoice fraud (H1) wins the verdict",
+          v is not None and v["id"] == "H1", str(v and v["id"]))
+    derived = {f["id"] for f in f2["derived_facts"]}
+    check("phase 2: the killer link is derived — one IP sent the invoice and created the vendor record",
+          "d5" in derived, str(derived))
+    check("phase 2: the verdict is high-confidence (score ≥ 0.9)",
+          v is not None and v["score"] >= 0.9, str(v and v["score"]))
+
+    # ── 3b. RCA case (causation): the timeline ───────────────────────
+
+    print("")
+    print("--- RCA case (causation-three-am-outage): the timeline, asserted ---")
+    c1, c2 = proof["causation-three-am-outage"]
+    pruned1 = {p["hypothesis"] for p in c1["pruned"]}
+    check("phase 1 prunes the expired certificate (H2) and the attack (H4)",
+          {"H2", "H4"} <= pruned1, str(pruned1))
+    ids = [rk["id"] for rk in c1["ranking"]]
+    check("phase 1 ranks the deploy regression (H1) above the upstream outage (H3) — our change first",
+          ids[:2] == ["H1", "H3"], str(ids))
+    check("recommended test is the deploy diff (rule out our own change first)",
+          c1["recommended_test"] is not None
+          and c1["recommended_test"]["slot"] == "deploy-diff",
+          str(c1["recommended_test"]))
+    pruned2 = {p["hypothesis"] for p in c2["pruned"]}
+    check("phase 2: the diff prunes the deploy regression (H1)",
+          "H1" in pruned2, str(pruned2))
+    v = c2["verdict"]
+    check("phase 2: the upstream outage (H3) wins the verdict",
+          v is not None and v["id"] == "H3", str(v and v["id"]))
+    derived = {f["id"]: f for f in c2["derived_facts"]}
+    check("phase 2: the detection gap is derived (no upstream health check — the fix)",
+          "d6" in derived and derived["d6"].get("value") == "no upstream health check",
+          str(derived.get("d6")))
+
     print("")
     failed = len(checks) - sum(checks)
     print(f"{sum(checks)}/{len(checks)} checks passed")
@@ -489,14 +624,14 @@ def cmd_selftest(args):
 
 def main():
     ap = argparse.ArgumentParser(prog="engine.py",
-                                 description="redyarn symbolic engine (the deterministic half)")
+                                 description="Facty symbolic engine (the deterministic half)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p_run = sub.add_parser("run", help="run a case end-to-end")
     p_run.add_argument("--case", required=True, help="case directory (engine/cases/<case>)")
     p_run.add_argument("--add-facts", default=None,
                        help="extra sensed-facts file to apply (e.g. the ledger drop)")
     p_run.add_argument("--json", action="store_true", help="emit the full result as JSON")
-    sub.add_parser("selftest", help="acceptance test — the Silver Blaze PoC happy path")
+    sub.add_parser("selftest", help="acceptance test — every case asserted (abduction proof + per-case outcomes)")
     args = ap.parse_args()
     if args.cmd == "run":
         r = run_case(args.case, args.add_facts)

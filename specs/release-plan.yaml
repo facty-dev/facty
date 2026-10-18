@@ -1,0 +1,13 @@
+version: 1
+epics:
+  - id: e24s03
+    title: "TBD — story e24s03"
+    status: discovery
+    priority: P1
+    description: |
+      Placeholder epic for story e24s03.
+      To be defined during the discover phase (scope-work, elaborate-spec).
+    created: "2026-10-16"
+    target_release: null
+    stories: []
+releases: []

@@ -1,0 +1,10 @@
+[
+  { "id": "e-inc-551", "name": "INC-551", "kind": "object", "role": "the 02:47–03:12 checkout degradation under postmortem", "mentions": ["evidence/monitoring.txt", "evidence/alert.txt", "evidence/slack.txt"], "confidence": 0.98 },
+  { "id": "e-d-2214", "name": "deploy d-2214", "kind": "object", "role": "the 18:40 checkout deploy — retry backoff tuning", "mentions": ["evidence/deploy-log.txt", "evidence/slack.txt", "evidence/deploy-diff.txt"], "confidence": 0.95 },
+  { "id": "e-cert", "name": "cert checkout.kestrel.example", "kind": "object", "role": "the checkout edge TLS certificate, valid until 2026-11-15", "mentions": ["evidence/monitoring.txt", "evidence/slack.txt"], "confidence": 0.95 },
+  { "id": "e-checkout", "name": "checkout", "kind": "object", "role": "the e-commerce checkout service (payments team)", "mentions": ["evidence/monitoring.txt", "evidence/deploy-log.txt", "evidence/services.txt"], "confidence": 0.98 },
+  { "id": "e-payline", "name": "Payline", "kind": "organization", "role": "the external payment provider (payline-gateway, eu-central)", "mentions": ["evidence/monitoring.txt", "evidence/services.txt", "evidence/provider-incident.txt"], "confidence": 0.98 },
+  { "id": "e-monitoring", "name": "monitoring", "kind": "object", "role": "error-rate alerting on checkout; no synthetic check on Payline", "mentions": ["evidence/services.txt", "evidence/detection.txt"], "confidence": 0.9 },
+  { "id": "e-a-osei", "name": "A. Osei", "kind": "person", "role": "on-call engineer, payments team", "mentions": ["evidence/alert.txt", "evidence/slack.txt"], "confidence": 0.95 },
+  { "id": "e-status-page", "name": "status-page", "kind": "object", "role": "customer status page, updated manually during INC-551", "mentions": ["evidence/slack.txt", "evidence/detection.txt"], "confidence": 0.85 }
+]

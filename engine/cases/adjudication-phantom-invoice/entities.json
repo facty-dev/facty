@@ -1,0 +1,8 @@
+[
+  { "id": "e-inv-2261", "name": "INV-2261", "kind": "object", "role": "the disputed invoice — EUR 38,400 to 'Northwind Facilities Ltd'", "mentions": ["evidence/ap-register.txt", "evidence/email-thread.txt", "evidence/approval-log.txt"], "confidence": 0.98 },
+  { "id": "e-p-8891", "name": "payment P-8891", "kind": "object", "role": "the SEPA payment under investigation", "mentions": ["evidence/ap-register.txt", "evidence/approval-log.txt", "evidence/bank-record.txt"], "confidence": 0.98 },
+  { "id": "e-v-8842", "name": "Northwind Facilities Ltd", "kind": "organization", "role": "the payee vendor record — created 2026-10-10 02:13, callback verification blank", "mentions": ["evidence/ap-register.txt", "evidence/vendor-master.txt", "evidence/email-thread.txt", "evidence/audit-log.txt"], "confidence": 0.95 },
+  { "id": "e-v-1103", "name": "Northwind Facility Services Ltd", "kind": "organization", "role": "the real vendor since 2024-03-12 — denies sending INV-2261", "mentions": ["evidence/vendor-master.txt", "evidence/complaint.txt", "evidence/ap-register.txt"], "confidence": 0.98 },
+  { "id": "e-m-hart", "name": "Mara Hart (m.hart)", "kind": "person", "role": "AP clerk — entered and approved INV-2261; flagged the payment herself", "mentions": ["evidence/vendor-master.txt", "evidence/approval-log.txt", "evidence/hart-note.txt", "evidence/session-log.txt"], "confidence": 0.95 },
+  { "id": "e-mule-account", "name": "account DE44 5001 0517 5402 1337 00", "kind": "object", "role": "the receiving account — first payment in its history", "mentions": ["evidence/ap-register.txt", "evidence/vendor-master.txt", "evidence/bank-record.txt"], "confidence": 0.95 }
+]

@@ -87,7 +87,7 @@ jobs:
       - name: Commit agent artifacts
         run: |
           git config user.name "decision-agent"
-          git config user.email "decision-agent@redyarn.dev"
+          git config user.email "decision-agent@facty.dev"
           git add -A
           git commit -m "feat(sdlc): ${{ inputs.phase }} — decision agent output" || echo "No changes to commit"
           git push || echo "Push failed (may be up to date)"

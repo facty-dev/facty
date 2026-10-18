@@ -26,6 +26,7 @@
 #   obj = extract_structured("engine/schemas/facts.schema.json", task, stream=print)
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -33,9 +34,13 @@ from pathlib import Path
 ENGINE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(ENGINE_DIR))
 import engine  # noqa: E402
+import procs   # noqa: E402  (subprocess registry — no dangling processes)
 
-PROVIDER = "mistral-subscription"
-MODEL = "mistral-large-4"
+# The provider/model the sensing calls use — env-overridable so custom
+# providers work today (via pi's own provider config); the future
+# providers config (docs/PROVIDERS.md) will drive these same knobs.
+PROVIDER = os.environ.get("FACTY_PROVIDER", "mistral-subscription")
+MODEL = os.environ.get("FACTY_MODEL", "mistral-large-4")
 MAX_ATTEMPTS = 3               # total turns: 1 initial + up to 2 corrections
 PREVIOUS_RESPONSE_CAP = 4000   # chars of the previous response fed back
 
@@ -83,17 +88,23 @@ def pi_command(staged_path):
 
 def _pi_runner(staged_path, stream):
     """Call the LLM via `pi -p`, streaming. Returns the full response text.
-    Raises RuntimeError if the call fails (unreachable / no credential)."""
+    Raises RuntimeError if the call fails (unreachable / no credential).
+    The subprocess registers with procs — a quit mid-call leaves nothing
+    behind (kill_all on exit)."""
     cmd = pi_command(staged_path)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            text=True, bufsize=1)
-    chunks = []
-    for line in proc.stdout:
-        chunks.append(line)
-        if stream:
-            stream(line.rstrip("\n"))
-    stderr = proc.stderr.read()
-    proc.wait()
+                            text=True, bufsize=1, start_new_session=True)
+    procs.register(proc)
+    try:
+        chunks = []
+        for line in proc.stdout:
+            chunks.append(line)
+            if stream:
+                stream(line.rstrip("\n"))
+        stderr = proc.stderr.read()
+        proc.wait()
+    finally:
+        procs.unregister(proc)
     if proc.returncode != 0:
         raise RuntimeError(stderr.strip() or f"pi exited with code {proc.returncode}")
     return "".join(chunks)
@@ -115,7 +126,7 @@ def _correction_prompt(task, schema_text, errors, previous):
 
 def extract_structured(schema, task, stream=None, label="extract",
                        judge=None, max_attempts=MAX_ATTEMPTS,
-                       runner=None, note=None, debug=False):
+                       runner=None, note=None, debug=False, on_response=None):
     """Schema-guided extraction with a capped correction loop.
 
     Each turn: the LLM responds (streamed) → the judge layer parses and
@@ -135,6 +146,9 @@ def extract_structured(schema, task, stream=None, label="extract",
              (defaults to the pi -p runner; tests stub this).
     note:    optional callable(msg) for progress lines.
     debug:   include the raw response in rejection notes.
+    on_response: optional callable(raw_text) — called with the raw
+             response of the accepted attempt (the response cache
+             stores it).
     """
     if isinstance(schema, dict):
         schema_text = json.dumps(schema)
@@ -164,6 +178,8 @@ def extract_structured(schema, task, stream=None, label="extract",
             if not errs:
                 if note:
                     note(f"attempt {attempt}/{max_attempts} accepted by the judge layer")
+                if on_response:
+                    on_response(text)
                 return obj
         if attempt < max_attempts:
             detail = "; ".join(errs[:3])

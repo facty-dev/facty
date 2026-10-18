@@ -7,7 +7,7 @@
 **Status:** accepted
 **Deciders:** chart (product owner, session directives 2026-10-15)
 **Technical Story:** [docs/discovery/verticals.md](../discovery/verticals.md); continues [PRD-005](../prd/PRD-005-neurosymbolic-bridge.md); lineage [docs/vision.md](../vision.md)
-**Product:** redyarn — *follow the red yarn, not the red herring.* (Renamed from drawbridge, 2026-10-15 — a full replacement, not an addition.)
+**Product:** Facty — *evidence in, verdict out.*
 
 ---
 
@@ -20,18 +20,27 @@ Domains are *packs* (ontology + rules + constraints), not code. The SDLC
 machinery stays as the pack factory; SDLC management is a future vertical,
 not the foundation.
 
-[vision.md](../vision.md) specified this split in 2020–2024 (Reyearn: the
-"abductive reasoning machine", rules + classifiers held in balance,
-Rete/CLIPS forward chaining, backward chaining only sketched via Grakn, and
-the 2024 LLM-Modulo update: "LLMs can be swapped with custom classifiers…
-otherwise the Reyearn architecture remains the same"). This ADR is that
-architecture, modernized, plus the two things the original only sketched:
-**backward chaining** and a **constraint layer**.
+[vision.md](../vision.md) specified this split: the "abductive reasoning
+machine" — rules + classifiers held in balance, Rete/CLIPS forward chaining,
+backward chaining only sketched via Grakn, and the 2024 LLM-Modulo update:
+"LLMs can be swapped with custom classifiers… otherwise the architecture
+remains the same"). This ADR is that architecture, modernized, plus the two
+things the original only sketched: **backward chaining** and a **constraint
+layer**.
 
 **What problem are we solving?**
 
 One reasoning engine that is deterministic where it can be and probabilistic
 where it must be — and auditable everywhere.
+
+**Why determinism is the baseline (not a mode):** The 2024 *Moffatt v. Air
+Canada* case (2024 BCCRT 149) held an airline liable for a chatbot's
+hallucinated refund policy. The tribunal rejected the "the AI is a separate
+entity" defense. **Liability flows to humans, not machines.** Facty's
+architecture makes that failure mode structurally impossible: the engine
+owns the verdict, hypotheses come from the pack, constraints eliminate
+contradictions, and every verdict replays with a full trace. See
+[docs/PHILOSOPHY.md](../PHILOSOPHY.md) for the full stance.
 
 **What constraints do we have?**
 
@@ -108,6 +117,19 @@ findings vision.md cites: LLMs cannot plan, cannot self-verify, and direct
 self-critique doesn't work. The LLM never sits in the inner loop of rule
 firing and never issues the verdict; every verdict is a deterministic
 artifact the engine can replay without the LLM.
+
+**The symbolic layer is the programmatic soundness critic.** In the original
+LLM-Modulo architecture, human soundness critics verify LLM-generated plans.
+Facty's rules + constraints layer is that critic, made programmatic —
+authored by humans, accountable to humans, improvable by humans. The
+soundness of the framework is *derived* from the soundness of the critics
+(see [docs/PHILOSOPHY.md](../PHILOSOPHY.md) §3).
+
+**LLMs are tools, not agents.** They can never be conscious, morally
+agentic, or legal persons. Liability always flows back to the humans
+accountable for the decisions they make, regardless of tool choices. The
+LLM senses and proposes; the engine decides; the human owns the
+consequence (see [docs/PHILOSOPHY.md](../PHILOSOPHY.md) §2).
 
 **Schema-guided extraction is the sensing contract.** The LLM half's
 interface is (JSON schema + messy field input) → typesafe,
@@ -232,6 +254,12 @@ rule packs + case fixtures).
 
 **Kept:** asset graph, audit trail, VM isolation (deployment security
 requirement), git-native pipeline, review gates, self-improvement loop.
+
+**Philosophy:** determinism as baseline and unique value proposition;
+LLM liability (no consciousness, no moral agency, no legal personhood);
+humans as knowledge engineers and soundness critics; no reverse centaurs
+(humans direct machines, not serve them). See
+[docs/PHILOSOPHY.md](../PHILOSOPHY.md).
 
 **Spike/assumption framing:** spikes, OST assumptions, acceptance/API
 contract tests, and case-based hypotheses are one structure with four names —

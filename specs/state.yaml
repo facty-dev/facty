@@ -1,0 +1,16 @@
+project: Facty
+active_flow: planning
+active_story: e24s03
+lifecycle_phase: discover
+last_updated: "2026-10-16T00:00:00Z"
+metrics:
+  story_start: "2026-10-16T00:00:00Z"
+handoff:
+  next_skill: scope-work
+  notes: |
+    Survey complete. Phase: Discover (planning workflow initiated).
+    Repo: Facty — neurosymbolic DSS engine with its own SDLC.
+    Existing artifacts: 6 PRDs (docs/prd/PRD-001..006), OST with 3 opportunities,
+    engine + Silver Blaze PoC, git-native pipeline design.
+    Blocker: Story e24s03 is a placeholder — needs definition before scope-work.
+    Next: scope-work (after user defines the story) or elaborate-spec (if idea is rough).

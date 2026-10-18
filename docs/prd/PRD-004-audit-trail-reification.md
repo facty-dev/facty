@@ -181,7 +181,7 @@ Feature is complete when:
 
 ```json
 {
-  "$schema": "https://redyarn.dev/schemas/audit-event.schema.json",
+  "$schema": "https://facty.dev/schemas/audit-event.schema.json",
   "event_id": "evt-uuid",
   "timestamp": "2026-10-06T10:00:00Z",
   "event_type": "asset.materialized",

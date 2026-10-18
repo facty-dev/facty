@@ -1,0 +1,8 @@
+DEPLOY d-2214 — FULL DIFF (checkout/retry.py)
+
+-  backoff_base_ms = 100
++  backoff_base_ms = 150
+
+One constant changed. No timeout values, no error paths, no
+upstream call logic touched. Canary clean; soak clean 18:40 → 02:47
+(error rate flat at baseline for 8 hours before the incident).

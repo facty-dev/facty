@@ -1,0 +1,10 @@
+ENDPOINT + VPN LOGS — user m.hart, 2026-10-09 18:00 → 2026-10-10 08:00
+
+Workstation WS-114:
+  2026-10-09 17:58  last interactive login
+  2026-10-09 18:02  workstation shut down
+  2026-10-10 06:11  workstation powered on
+VPN:
+  2026-10-09 17:58  session opened
+  2026-10-09 18:01  session closed (workstation off)
+  [ no VPN session overnight ]

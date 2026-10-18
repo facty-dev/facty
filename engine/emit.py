@@ -85,11 +85,15 @@ def emit_datalog(case_dir):
 def main():
     OUT_DIR.mkdir(exist_ok=True)
     ts = emit_ts()
-    dl = emit_datalog(ENGINE_DIR / "cases" / "silver-blaze")
     (OUT_DIR / "types.ts").write_text(ts)
-    (OUT_DIR / "rules.dl").write_text(dl)
     print(f"emitted: {OUT_DIR / 'types.ts'} ({len(ts.splitlines())} lines)")
-    print(f"emitted: {OUT_DIR / 'rules.dl'} ({len(dl.splitlines())} lines)")
+    cases = sorted(d for d in (ENGINE_DIR / "cases").iterdir()
+                   if (d / "pack" / "rules.json").exists())
+    for case in cases:
+        dl = emit_datalog(case)
+        out = OUT_DIR / f"rules-{case.name}.dl"
+        out.write_text(dl)
+        print(f"emitted: {out} ({len(dl.splitlines())} lines)")
 
 
 if __name__ == "__main__":

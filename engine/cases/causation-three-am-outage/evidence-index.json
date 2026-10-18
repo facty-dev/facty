@@ -1,0 +1,7 @@
+[
+  { "file": "monitoring.txt", "evidenceClass": "log", "summary": "Checkout monitoring export: 5xx spike 02:47–03:12, 502s from payline-gateway, app tier healthy, traffic flat, cert valid until 2026-11-15.", "confidence": 0.95 },
+  { "file": "deploy-log.txt", "evidenceClass": "log", "summary": "Deploy log: d-2214 (18:40, checkout, retry backoff) is the last deploy; nothing deployed in the incident window.", "confidence": 0.95 },
+  { "file": "alert.txt", "evidenceClass": "report", "summary": "Pager alert INC-551: fired 02:49 on checkout 5xx, resolved 03:12, first customer report 02:51.", "confidence": 0.95 },
+  { "file": "slack.txt", "evidenceClass": "correspondence", "summary": "On-call transcript: app clean, cert valid, traffic flat, WAF silent — 'looks upstream'.", "confidence": 0.9 },
+  { "file": "services.txt", "evidenceClass": "roster", "summary": "Service roster: checkout depends synchronously on Payline; monitoring has no synthetic check on the provider.", "confidence": 0.95 }
+]

@@ -1,0 +1,9 @@
+PAYLINE — STATUS HISTORY / INCIDENT RECORD (pulled 2026-10-13)
+
+Incident: degraded service, eu-central region
+Window:   2026-10-12 02:47:12 – 03:11:58 UTC
+Symptom:  checkout API timeouts and 5xx for customers routing
+          through eu-central
+Root cause (Payline postmortem): database failover automation error —
+          a standby promoted with a stale config; queries timed out.
+Resolved: 03:11:58 — failover completed, traffic drained back.

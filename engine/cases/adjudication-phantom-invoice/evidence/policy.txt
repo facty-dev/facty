@@ -1,0 +1,8 @@
+MERIDIAN SUPPLIES — AP CONTROLS (excerpt from the finance policy)
+
+1. Three-way match: no payment without a purchase order, a receiving
+   record, and a matching invoice.
+2. Callback verification: every new vendor must be verified by phone
+   against a known number before the first payment.
+3. Segregation of duties: no single user may enter and approve the
+   same invoice.

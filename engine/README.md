@@ -1,4 +1,4 @@
-# engine — the redyarn symbolic engine
+# engine — the Facty symbolic engine
 
 The deterministic half of the neurosymbolic split
 ([ADR-0003](../docs/adr/0003-detective-dss-neurosymbolic-core.md)):
@@ -10,12 +10,28 @@ path.
 
 ## Run
 
+The primary interface is the **`facty` CLI** (`./facty`, or
+`python3 engine/cli.py`):
+
 ```bash
-make dss-live        # interactive walkthrough — step through, streamed LLM sensing
-make dss-demo        # phase 1 — the case as first heard (batch)
-make dss-demo-2      # phase 2 — the ledger test applied (batch)
-make dss-selftest    # acceptance test — the PoC happy path, asserted
+./facty                  # the Textual workbench (TUI — the primary interface)
+./facty tui <case>       # the workbench, straight into a case
+./facty cases            # the demo cases (type · pack · phase-2 drop)
+./facty run <case>       # run a case (phase 1) · --add-facts <drop> = phase 2 · --json
+./facty selftest         # acceptance test — every case, asserted
+./facty test             # all tests: selftest + retry loop + the TUI (headless)
+./facty sense <case> --op facts    # one sensing op, standalone (streamed LLM)
+./facty walkthrough <case>         # terminal step-through (VMs, no-TTY)
+./facty emit             # codegen projections (TS types + Datalog per case)
+./facty completion bash  # shell completion (bash|zsh|fish)
+make deps                # install the optional deps (Textual — the workbench)
 ```
+
+The engine core (`engine/engine.py`) and the control plane stay
+dependency-free — they run in the gondolin VM snapshot and CI. Textual
+(`engine/tui.py`) is the one optional dependency, imported lazily with a
+graceful fallback. See
+[ADR-0004](../docs/adr/0004-cli-primary-interface.md).
 
 ## Layout
 
@@ -27,15 +43,21 @@ make dss-selftest    # acceptance test — the PoC happy path, asserted
   loop — rejections feed back to the LLM, max 3 turns
 - `test_retry.py` — the correction loop, tested with a stubbed runner
   (no LLM needed)
-- `cli.py` — the interactive CLI: step-through walkthrough with
-  module-tagged log lines and live LLM streaming (a stepping stone to
-  the Workbench UI)
-- `cases/silver-blaze/` — the exemplar case: `evidence/` (raw files),
-  `pack/` (rules, constraints, hypotheses), the recorded sensing
-  (`evidence-index.json`, `entities.json`, `facts.json`,
-  `facts-ledger.json`), `sensing-prompt.md` (the facts task),
-  `SENSING.md` (the sensing record), `expected.md` (the outcome the
-  selftest asserts)
+- `cli.py` — the `facty` CLI: the workbench entry (bare `./facty`) +
+  the scriptable control plane (subcommands)
+- `tui.py` — the Textual workbench (the primary interface; optional dep)
+- `test_tui.py` — the workbench, tested headless (Textual's pilot)
+- `cases/<type>-<slug>/` — the demo cases, prefixed with the
+  investigation type
+  ([docs/INVESTIGATION-TYPES.md](../docs/INVESTIGATION-TYPES.md)).
+  Each case: `evidence/` (raw files), `pack/` (rules, constraints,
+  hypotheses), the recorded sensing (`evidence-index.json`,
+  `entities.json`, `facts.json`, `facts-<drop>.json`),
+  `sensing-prompt.md` (the facts task), `SENSING.md` (the sensing
+  record), `expected.md` (the outcome the selftest asserts):
+  - `attribution-silver-blaze/` — the exemplar (detective work)
+  - `adjudication-phantom-invoice/` — invoice fraud (adjudication)
+  - `causation-three-am-outage/` — incident RCA (causation)
 - `emit.py` → `emit/` — codegen projections (TypeScript types, Datalog)
 
 ## The protocol
@@ -59,7 +81,7 @@ make dss-sense OP=facts          # or: classify | entities | ledger
 
 # loud failures: no fallback, staged prompt path + exact pi command,
 # raw LLM response on rejection
-REDYARN_DEBUG=1 make dss-live
+FACTY_DEBUG=1 make dss-live
 # or: python3 engine/cli.py --debug ...
 
 # the staged prompts persist for inspection:
@@ -84,3 +106,59 @@ score = 0.6 * claims_proven_ratio   (backward chaining)
 
 Rules take precedence over probabilities: the LLM's prior is the
 smallest term, and the verdict never calls the LLM.
+
+## The run log — tools and inference types
+
+Every line in a run log (the walkthrough, the workbench) is tagged with
+the tool that produced it and whether the inference was a **deduction**
+(the engine) or an **induction** (the LLM senses). Facts are expressed
+as triples: `subject / predicate = value`.
+
+| Tag | Tool | Inference |
+|---|---|---|
+| `llm · induction` | the senses — messy evidence → facts; proposes hypotheses + tests | induction |
+| `fwd chain · deduction` | rules fire: derive facts, open questions, raise the hypothesis space | deduction |
+| `constraint solver · deduction` | prune impossible explanations, support the survivors | deduction |
+| `bwd chain · deduction` | prove claims, rank, deliver the verdict | deduction |
+
+The workbench's run log is the colourful log: content is colour-coded
+by event. Lines that carry more detail — a streamed LLM response — are
+**expandable**: click an `llm · induction` line to reveal the response
+inline (collapsed by default, so the main output stays uncluttered; the
+detail live-appends while the response is still streaming).
+
+## The response cache
+
+Live LLM calls are cached as raw responses (`.agentic/cache/sensing/`,
+machine-local, gitignored), keyed by a content hash of the case's input
+evidence (stable across runs; a changed case means a fresh key). Demos
+stay live by default; `FACTY_SENSE=cache` never calls the LLM — it
+replays the cached responses (parsed + judged deterministically) or
+falls back to the recorded sensing. So the deterministic side runs
+offline, and demos replay reproducibly. Live mode falls back: cache →
+recorded sensing. The workbench has a **Run without the LLM (cached
+responses)** checkbox — enabled only when the cache has an entry for
+every sensing step of the case (`cli.cache_ready`); it is enabled
+automatically once a live run has populated the cache.
+
+## Workbench authentication
+
+`./facty` (the workbench) authenticates the user's Mistral subscription
+**through the pi-mistral-subscription extension**: the `a` key (or the
+command palette) runs the extension's own OAuth login (a small node
+driver, `engine/mistral-oauth-login.mjs`) and the credential lands in
+pi's auth storage, where the sensing path reads it. The workbench
+shows the auth status (never token values). The same machinery is the
+seam for **custom providers** — see
+[docs/PROVIDERS.md](../docs/PROVIDERS.md) (contemplated design).
+
+## In the gondolin VM
+
+The snapshot bakes `textual` (pip, system python3) and git, so the CLI
+and the workbench run inside the VM with zero runtime installs (the
+runtime egress allow-list has no pypi, by design). The runner injects
+`MISTRAL_API_KEY` via gondolin's host-secret interface — the guest sees
+a placeholder, the host proxy substitutes the real value into outbound
+requests to api.mistral.ai. The `facty` launcher prefers the project
+venv only when it actually runs (a mounted host venv's binaries don't
+run in the guest — the system python3 takes over).

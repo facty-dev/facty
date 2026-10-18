@@ -11,6 +11,26 @@ export interface Constraint {
   reason?: string;
 }
 
+export type Entities = Entity[];
+
+export interface Entity {
+  id: string;
+  name: string;
+  kind: "person" | "animal" | "place" | "object" | "organization";
+  role?: string;
+  mentions?: string[];
+  confidence: number;
+}
+
+export type EvidenceIndex = EvidenceItem[];
+
+export interface EvidenceItem {
+  file: string;
+  evidenceClass: "log" | "report" | "correspondence" | "roster" | "note" | "financial-record" | "other";
+  summary?: string;
+  confidence: number;
+}
+
 export interface Fact {
   id: string;
   type: "case" | "evidence" | "world" | "derived";
@@ -21,6 +41,8 @@ export interface Fact {
   source: string;
   observedAt?: string;
 }
+
+export type Facts = Fact[];
 
 export interface Hypothesis {
   id: string;

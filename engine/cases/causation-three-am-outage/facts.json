@@ -1,0 +1,20 @@
+[
+  { "id": "f01", "type": "case", "subject": "incident INC-551", "predicate": "checkoutDegraded", "value": true, "confidence": 0.98, "source": "evidence/monitoring.txt:8", "observedAt": "2026-10-17" },
+  { "id": "f02", "type": "evidence", "subject": "incident INC-551", "predicate": "windowStart", "value": "2026-10-12T02:47:12", "confidence": 0.95, "source": "evidence/monitoring.txt:8", "observedAt": "2026-10-17" },
+  { "id": "f03", "type": "evidence", "subject": "incident INC-551", "predicate": "windowEnd", "value": "2026-10-12T03:11:58", "confidence": 0.95, "source": "evidence/monitoring.txt:8", "observedAt": "2026-10-17" },
+  { "id": "f04", "type": "evidence", "subject": "incident INC-551", "predicate": "errorSignature", "value": "HTTP 502 — upstream payline-gateway timeouts", "confidence": 0.95, "source": "evidence/monitoring.txt:9-10", "observedAt": "2026-10-17" },
+  { "id": "f05", "type": "evidence", "subject": "incident INC-551", "predicate": "appTierErrorRate", "value": "normal", "confidence": 0.95, "source": "evidence/monitoring.txt:11", "observedAt": "2026-10-17" },
+  { "id": "f06", "type": "evidence", "subject": "incident INC-551", "predicate": "trafficDuringWindow", "value": "flat", "confidence": 0.9, "source": "evidence/monitoring.txt:12", "observedAt": "2026-10-17" },
+  { "id": "f07", "type": "evidence", "subject": "deploy d-2214", "predicate": "deployedAt", "value": "2026-10-12T18:40", "confidence": 0.98, "source": "evidence/deploy-log.txt:4", "observedAt": "2026-10-17" },
+  { "id": "f08", "type": "evidence", "subject": "deploy d-2214", "predicate": "touchedService", "value": "checkout", "confidence": 0.95, "source": "evidence/deploy-log.txt:4", "observedAt": "2026-10-17" },
+  { "id": "f09", "type": "evidence", "subject": "deploy-log", "predicate": "deploysInIncidentWindow", "value": 0, "confidence": 0.9, "source": "evidence/deploy-log.txt:10-11", "observedAt": "2026-10-17" },
+  { "id": "f10", "type": "evidence", "subject": "cert checkout.kestrel.example", "predicate": "validUntil", "value": "2026-11-15", "confidence": 0.98, "source": "evidence/monitoring.txt:14", "observedAt": "2026-10-17" },
+  { "id": "f11", "type": "evidence", "subject": "cert checkout.kestrel.example", "predicate": "validThroughIncidentWindow", "value": true, "confidence": 0.95, "source": "evidence/monitoring.txt:8,14", "observedAt": "2026-10-17" },
+  { "id": "f12", "type": "evidence", "subject": "incident INC-551", "predicate": "tlsHandshakeErrors", "value": 0, "confidence": 0.95, "source": "evidence/monitoring.txt:13", "observedAt": "2026-10-17" },
+  { "id": "f13", "type": "evidence", "subject": "incident INC-551", "predicate": "wafBlockedRequests", "value": 0, "confidence": 0.9, "source": "evidence/slack.txt:7", "observedAt": "2026-10-17" },
+  { "id": "f14", "type": "world", "subject": "checkout", "predicate": "dependsOn", "value": "Payline", "confidence": 0.95, "source": "evidence/services.txt:3-4", "observedAt": "2026-10-17" },
+  { "id": "f15", "type": "evidence", "subject": "incident INC-551", "predicate": "pagerFiredAt", "value": "2026-10-12T02:49", "confidence": 0.98, "source": "evidence/alert.txt:4", "observedAt": "2026-10-17" },
+  { "id": "f16", "type": "evidence", "subject": "incident INC-551", "predicate": "firstCustomerReportAt", "value": "2026-10-12T02:51", "confidence": 0.95, "source": "evidence/alert.txt:6", "observedAt": "2026-10-17" },
+  { "id": "f17", "type": "evidence", "subject": "incident INC-551", "predicate": "startedAfterLastDeploy", "value": true, "confidence": 0.9, "source": "evidence/monitoring.txt:8, evidence/deploy-log.txt:4", "observedAt": "2026-10-17" },
+  { "id": "f18", "type": "evidence", "subject": "deploy d-2214", "predicate": "soakCleanBeforeIncident", "value": true, "confidence": 0.9, "source": "evidence/deploy-log.txt:6-7", "observedAt": "2026-10-17" }
+]

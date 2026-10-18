@@ -1,4 +1,4 @@
-# AGENTS.md — redyarn
+# AGENTS.md — Facty
 
 Instructions for AI agents working in this repo. Read the
 [README.md](README.md) for the ELI5 pitch and
@@ -8,10 +8,10 @@ breaking it.
 
 ## What this repo is
 
-**redyarn** — a domain-agnostic abductive decision-support system (the
-"detective DSS"). Evidence in → ranked hypotheses with confidence →
-discriminating tests → verdict with a full reasoning trace. Two halves,
-never swapping jobs:
+**Facty** (`facty.dev`) — a domain-agnostic abductive decision-support
+system (the "detective DSS"). *Evidence in, verdict out.* Evidence in →
+ranked hypotheses with confidence → discriminating tests → verdict with a
+full reasoning trace. Two halves, never swapping jobs:
 
 - **The brain — the symbolic engine** (`engine/`): forward + backward
   chaining rules engine with a constraint layer. Plain deterministic
@@ -24,9 +24,10 @@ Domains are **packs** (ontology + rules + constraints) — fraud, incidents,
 security findings, contracts. The engine is the same; the pack is the
 costume. (Sherlock was a detective, not a doctor.)
 
-The repo is the engine + one exemplar case + the pack factory:
+The repo is the engine + typed demo cases + the pack factory:
 
-- `engine/` — schemas, the engine, cases (the Silver Blaze PoC), codegen
+- `engine/` — schemas, the engine + `facty` CLI, typed demo cases
+  (attribution / adjudication / causation), codegen
 - `scripts/*.sh` — session lifecycle, agent runner, git-native pipeline, asset sync (bash)
 - `templates/sdlc/` — pack-factory templates + agent role prompts (`agents/decision.md`, `agents/coding.md`)
 - `docs/` — architecture, discovery, PRDs, ADRs (heavily cross-referenced — follow links)
@@ -88,10 +89,28 @@ Schemas: `engine/schemas/*.schema.json`. Codegen: `engine/emit.py` →
 ## Common commands
 
 ```bash
-# The engine (the product)
-make dss-demo               # run the Silver Blaze case (phase 1)
+# The engine (the product) — primary interface: ./facty (see `./facty --help`)
+./facty cases                # list the demo cases (type · pack · drop)
+./facty run <case>           # run a case (phase 1) · --add-facts <drop> = phase 2
+./facty run <case> --json    # machine-readable verdict + trace
+./facty selftest             # acceptance test — every case, asserted
+./facty test                 # all tests: selftest + retry loop + the TUI (headless)
+./facty sense <case> --op facts   # one sensing op, standalone (LLM, streamed)
+./facty walkthrough <case>   # terminal step-through (VMs, no-TTY)
+./facty tui <case>           # the Textual workbench (needs `make deps`)
+./facty emit                 # codegen projections (TS types + Datalog per case)
+./facty completion bash      # shell completion
+make deps                    # install the optional deps (Textual — the workbench)
+
+# Make wrappers (kept for muscle memory)
+make dss-demo               # run the attribution case (phase 1)
 make dss-demo-2             # apply the ledger test (phase 2)
-make dss-selftest           # acceptance test — the PoC happy path, asserted
+make dss-demo-fraud[-2]     # the fraud case (phases 1/2)
+make dss-demo-rca[-2]       # the RCA case (phases 1/2)
+make dss-selftest           # acceptance test (every case, asserted)
+make dss-test               # all tests
+make dss-live               # walkthrough
+make dss-sense OP=facts     # one sensing op
 
 # Session lifecycle (user terminal only for up/down)
 make vm-up                     # boot the pack-factory VM session (foreground, keep open)
@@ -122,12 +141,28 @@ Phase vocabularies differ by surface: the decision agent uses
 
 ### Python (the engine)
 
-- stdlib only — deterministic, portable, no install step (the VM snapshot
-  has no pip guarantees)
+- Dependencies are allowed — the stdlib-only rule was retired (PO,
+  2026-10-17; see ADR-0004). #1 focus: knowledge-developer experience.
+- The invariants that remain: (1) the verdict path is deterministic —
+  same artifacts → byte-identical verdict, never an LLM call, a clock,
+  or a random source in it; (2) case records are auditable text-file
+  artifacts (JSON files now, a DB later) — the artifact model is the
+  audit trail; (3) the engine core + CLI control plane stay
+  dependency-free so they run in the gondolin VM snapshot (no pip
+  guarantees there) — optional DX layers (the Textual workbench,
+  `./facty`) import lazily and degrade gracefully. Root
+  `requirements.txt` holds the optional deps (`make deps`, uv-managed).
 - `engine/engine.py` is library + CLI (`run`, `selftest`); the selftest
-  asserts the PoC acceptance criteria and the deterministic replay
-- Deterministic: same artifacts → byte-identical verdict. Never add an
-  LLM call, a clock, or a random source to the verdict path
+  asserts the acceptance criteria and the deterministic replay. The
+  primary interface is the `facty` CLI (`./facty`, `engine/cli.py`).
+- LLM response cache: live sensing calls are cached as raw responses
+  (`.agentic/cache/sensing/`, gitignored); `FACTY_SENSE=cache` replays
+  them without the LLM (offline demos / deterministic-side testing).
+  The workbench authenticates the Mistral subscription through the
+  pi-mistral-subscription extension (the `a` key in `./facty`).
+- In the gondolin VM the CLI + workbench run from the baked image
+  (textual + git); `MISTRAL_API_KEY` arrives via gondolin's host-secret
+  injection (guest sees a placeholder, the host proxy substitutes it).
 
 ### Bash scripts (match `scripts/vm-session.sh` / `agent-pi.sh`)
 
@@ -151,6 +186,10 @@ Phase vocabularies differ by surface: the decision agent uses
 | ADRs | `docs/adr/NNNN-<slug>.md` | **4-digit** (`0001-`) |
 | Agent tasks | `.agentic/messages/decision-to-coding/<NNN>-task.md` | 3-digit, next free |
 | Agent results | `.agentic/messages/coding-to-decision/<NNN>-result.md` | 3-digit, next free |
+
+Case directories carry the investigation type as a prefix
+(`attribution-`, `adjudication-`, `causation-`, …) —
+[docs/INVESTIGATION-TYPES.md](docs/INVESTIGATION-TYPES.md).
 
 - Sensed facts carry `confidence` + `source` spans; the engine never
   re-scores them. The pack (rules, constraints, hypotheses) is authored
@@ -201,10 +240,11 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
 | Doc | Contents |
 |---|---|
 | [README.md](README.md) | ELI5 pitch + tagline |
+| [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) | Determinism as baseline, LLM liability, human role (Air Canada case, reverse centaurs) |
 | [docs/discovery/verticals.md](docs/discovery/verticals.md) | Product direction + market reasoning |
 | [docs/adr/0003-detective-dss-neurosymbolic-core.md](docs/adr/0003-detective-dss-neurosymbolic-core.md) | The neurosymbolic core (the architecture) |
 | [docs/discovery/detective-dss-poc.md](docs/discovery/detective-dss-poc.md) | The PoC plan (case vocabulary) |
-| [docs/vision.md](docs/vision.md) | The method's lineage (Reyearn, imported) |
+| [docs/vision.md](docs/vision.md) | The method's philosophical foundations |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Isolation model, session lifecycle, why socket-path-only IPC |
 | [docs/SDLC.md](docs/SDLC.md) | Phase-by-phase gates, outputs, review roles (pack factory) |
 | [docs/AGENTIC-RUNTIME.md](docs/AGENTIC-RUNTIME.md) | Two-agent pattern, message protocol, state machine, CI mapping |
@@ -212,5 +252,7 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
 | [docs/GIT-NATIVE-PIPELINE.md](docs/GIT-NATIVE-PIPELINE.md) | Branches = assets, merges = materializations, skip-ahead rules |
 | [docs/GITHUB-GATES.md](docs/GITHUB-GATES.md) | Workflow wiring, CODEOWNERS, branch protection |
 | [docs/USE-CASES.md](docs/USE-CASES.md) | Multi-tenant client isolation scenarios |
+| [docs/INVESTIGATION-TYPES.md](docs/INVESTIGATION-TYPES.md) | The seven judgement-driven investigation families + the case-prefix convention |
+| [docs/PROVIDERS.md](docs/PROVIDERS.md) | Custom LLM providers — contemplated design (config, auth flow, workbench UI) |
 | [docs/adr/](docs/adr/) | Decision records (start at ADR-0001) |
 | [engine/README.md](engine/README.md) | The engine: layout, protocol, run commands |

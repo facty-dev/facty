@@ -1,4 +1,4 @@
-# redyarn — the detective DSS (symbolic engine + LLM sensing)
+# Facty — the detective DSS (symbolic engine + LLM sensing)
 #
 # The product: a domain-agnostic abductive decision-support engine
 # (engine/) — evidence in, ranked hypotheses out, full reasoning trace.
@@ -11,13 +11,16 @@
 #
 # ── Quick start ──────────────────────────────────────────────────────────────
 #
-#   make dss-live             # Interactive walkthrough (streamed LLM sensing)
-#   make dss-demo             # Run the Silver Blaze case (phase 1)
-#   make dss-demo-2           # Apply the ledger test (phase 2)
-#   make dss-selftest         # Acceptance test — the PoC happy path, asserted
-#   make dss-test             # All tests: selftest + the sensing retry loop
-#   make dss-sense OP=facts   # One sensing op, standalone (debugging)
-#   REDYARN_DEBUG=1 make dss-live   # Debug mode: loud failures, no fallback
+#   ./facty                   # The workbench (Textual TUI — the primary interface)
+#   ./facty cases             # The demo cases (type · pack · phase-2 drop)
+#   ./facty run phantom-invoice   # Run a case (phase 1; --add-facts <drop> = phase 2)
+#   ./facty selftest          # Acceptance test — every case, asserted
+#   ./facty test              # All tests: selftest + retry loop + the TUI (headless)
+#   ./facty walkthrough silver-blaze   # Terminal step-through (VMs, no-TTY)
+#   make deps                 # Install the optional deps (Textual — the workbench)
+#
+# The dss-* targets below are thin wrappers over ./facty, kept for muscle
+# memory. See `./facty --help` and engine/README.md.
 #
 #   make vm-up                # Boot the pack-factory VM session (from YOUR terminal)
 #   make agent-decision PHASE=discovery TASK="..."
@@ -32,16 +35,17 @@
 .PHONY: help info
 
 help:
-	@echo "redyarn — the detective DSS (symbolic engine + LLM sensing)"
+	@echo "Facty — the detective DSS (symbolic engine + LLM sensing)"
 	@echo ""
-	@echo "═══ redyarn engine (the product) ═══"
-	@echo "  make dss-live           Interactive walkthrough (streamed LLM sensing)"
-	@echo "  make dss-demo           Run the Silver Blaze case (phase 1)"
-	@echo "  make dss-demo-2         Apply the ledger test (phase 2)"
-	@echo "  make dss-selftest       Acceptance test — the PoC happy path, asserted"
-	@echo "  make dss-test           All tests: selftest + the sensing retry loop"
-	@echo "  make dss-sense OP=<op>  Run one sensing op standalone (classify|entities|facts|ledger)"
-	@echo "  REDYARN_DEBUG=1 make dss-live   Debug mode: loud failures, no fallback"
+	@echo "═══ Facty engine (the product) ═══"
+	@echo "  ./facty                 The workbench (Textual TUI — primary interface)"
+	@echo "  ./facty cases           List the demo cases (type · pack · drop)"
+	@echo "  ./facty run <case>      Run a case (--add-facts <drop> = phase 2)"
+	@echo "  ./facty selftest        Acceptance test — every case, asserted"
+	@echo "  ./facty test            All tests: selftest + retry loop + the TUI (headless)"
+	@echo "  ./facty walkthrough <case>   Terminal step-through (VMs, no-TTY)"
+	@echo "  make deps               Install the optional deps (Textual — the workbench)"
+	@echo "  make dss-*              Thin wrappers over ./facty (kept for muscle memory)"
 	@echo ""
 	@echo "═══ Pack-factory VM session ═══"
 	@echo "  make vm-up              Boot the SDLC VM session (from your terminal)"
@@ -76,32 +80,54 @@ info:
 	@echo "session:   $$(./scripts/vm-session.sh status | head -1)"
 	@echo "template:  $$(ls ~/code/gondolin-pi/snapshots/pi-sandbox.qcow2 >/dev/null 2>&1 && echo ok || echo missing)"
 
-# ── redyarn engine (the product) ─────────────────────────────────────────────
+# ── Facty engine (the product) ─────────────────────────────────────────────
 # The deterministic symbolic half: forward/backward chaining + constraints
 # over canonical case artifacts. The LLM senses and proposes; the engine
 # decides. See docs/adr/0003-detective-dss-neurosymbolic-core.md.
 
-.PHONY: dss-demo dss-demo-2 dss-selftest dss-live dss-test dss-sense
+.PHONY: dss-demo dss-demo-2 dss-demo-fraud dss-demo-fraud-2 dss-demo-rca dss-demo-rca-2 dss-selftest dss-live dss-test dss-sense deps
 
 OP ?= facts
 
+# The dss-* targets are thin wrappers over the `facty` CLI (the primary
+# interface — see `./facty --help`). Kept for muscle memory.
+
 dss-live:
-	python3 engine/cli.py --case engine/cases/silver-blaze
+	./facty walkthrough attribution-silver-blaze
 
 dss-demo:
-	python3 engine/engine.py run --case engine/cases/silver-blaze
+	./facty run attribution-silver-blaze
 
 dss-demo-2:
-	python3 engine/engine.py run --case engine/cases/silver-blaze --add-facts engine/cases/silver-blaze/facts-ledger.json
+	./facty run attribution-silver-blaze --add-facts engine/cases/attribution-silver-blaze/facts-ledger.json
+
+dss-demo-fraud:
+	./facty run adjudication-phantom-invoice
+
+dss-demo-fraud-2:
+	./facty run adjudication-phantom-invoice --add-facts engine/cases/adjudication-phantom-invoice/facts-trail.json
+
+dss-demo-rca:
+	./facty run causation-three-am-outage
+
+dss-demo-rca-2:
+	./facty run causation-three-am-outage --add-facts engine/cases/causation-three-am-outage/facts-postmortem.json
 
 dss-selftest:
-	python3 engine/engine.py selftest
+	./facty selftest
 
-dss-test: dss-selftest
-	python3 engine/test_retry.py
+dss-test:
+	./facty test
 
 dss-sense:
-	python3 engine/cli.py --case engine/cases/silver-blaze --sense-only $(OP)
+	./facty sense attribution-silver-blaze --op $(OP)
+
+# The optional DX layer: the Textual workbench (engine/tui.py). The engine
+# core + CLI control plane are dependency-free; this venv is only needed
+# for `./facty` (the TUI). Python comes from uv (managed, modern).
+deps:
+	uv venv
+	uv pip install -r requirements.txt
 
 # ── Agentic Runtime (SDLC) ──────────────────────────────────────────────────
 # Asset-oriented SDLC: OST → PRD → BDD → Implementation → ADRs

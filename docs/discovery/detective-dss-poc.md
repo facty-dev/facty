@@ -1,7 +1,7 @@
 # PoC plan — the detective DSS, one exemplar happy path
 
 **Status:** in progress — engine spike implemented 2026-10-16, selftest green · **Date:** 2026-10-15
-**Product:** redyarn · **Vocabulary:** case decision support (opportunity / assumptions / hypotheses / acceptance)
+**Product:** Facty · **Vocabulary:** case decision support (opportunity / assumptions / hypotheses / acceptance)
 **Architecture:** [ADR-0003](../adr/0003-detective-dss-neurosymbolic-core.md)
 
 ## Opportunity
@@ -74,7 +74,7 @@ that would settle the top two.
 
 - **In:** JSON schemas (`engine/schemas/`), the engine spike
   (`engine/engine.py`: forward chain, backward chain, constraint layer), the
-  exemplar (`engine/cases/silver-blaze/`), codegen projections
+  exemplar (`engine/cases/attribution-silver-blaze/`), codegen projections
   (`engine/emit.py`: TS + Datalog), the trace.
 - **Out (later):** Postgres persistence (JSONB), VM isolation testing
   (security requirement for sensitive deployments), workbench UI, pack

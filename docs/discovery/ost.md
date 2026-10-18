@@ -3,10 +3,10 @@
 # Continuous Discovery — Design Thinking
 ---
 
-# Opportunity Solution Tree — redyarn
+# Opportunity Solution Tree — Facty
 
 **Date:** 2026-10-15
-**Facilitator:** decision agent (redyarn SDLC discovery run, zai-glm-5-3)
+**Facilitator:** decision agent (facty SDLC discovery run, zai-glm-5-3)
 **Status:** approved <!-- draft | in-review | approved -->
 **Version:** 0.1
 

@@ -1,0 +1,157 @@
+[
+  {
+    "id": "R0",
+    "version": "1",
+    "pack": "adjudication-phantom-invoice",
+    "when": [
+      { "subject": "Northwind Facility Services Ltd", "predicate": "deniesInvoice", "value": "INV-2261" },
+      { "subject": "payment P-8891", "predicate": "status", "value": "paid" }
+    ],
+    "then": [
+      { "op": "raise", "hypotheses": ["H1", "H2", "H3", "H4"] }
+    ]
+  },
+  {
+    "id": "R1",
+    "version": "1",
+    "pack": "adjudication-phantom-invoice",
+    "when": [
+      { "subject": "INV-2261", "predicate": "purchaseOrderOnFile", "value": false },
+      { "subject": "policy", "predicate": "threeWayMatchRequired", "value": true }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d1", "type": "derived", "subject": "INV-2261", "predicate": "bypassedThreeWayMatch", "value": true, "confidence": 0.9, "source": "rule:R1" } }
+    ]
+  },
+  {
+    "id": "R2",
+    "version": "1",
+    "pack": "adjudication-phantom-invoice",
+    "when": [
+      { "subject": "Northwind Facilities Ltd", "predicate": "callbackVerified", "value": false },
+      { "subject": "policy", "predicate": "callbackVerificationRequired", "value": true }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d2", "type": "derived", "subject": "Northwind Facilities Ltd", "predicate": "failedCallbackVerification", "value": true, "confidence": 0.9, "source": "rule:R2" } }
+    ]
+  },
+  {
+    "id": "R3",
+    "version": "1",
+    "pack": "adjudication-phantom-invoice",
+    "when": [
+      { "subject": "INV-2261", "predicate": "enteredBy", "value": { "var": "u" } },
+      { "subject": "INV-2261", "predicate": "approvedBy", "value": { "var": "u" } },
+      { "subject": "policy", "predicate": "segregationOfDutiesRequired", "value": true }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d3", "type": "derived", "subject": "payment P-8891", "predicate": "violatedSegregationOfDuties", "value": true, "confidence": 0.9, "source": "rule:R3" } }
+    ]
+  },
+  {
+    "id": "R4",
+    "version": "1",
+    "pack": "adjudication-phantom-invoice",
+    "when": [
+      { "subject": "INV-2261", "predicate": "senderDomainIsLookalike", "value": true }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d4", "type": "derived", "subject": "INV-2261", "predicate": "impersonatesVendor", "value": true, "confidence": 0.85, "source": "rule:R4" } }
+    ]
+  },
+  {
+    "id": "R5",
+    "version": "1",
+    "pack": "adjudication-phantom-invoice",
+    "when": [
+      { "subject": "Northwind Facilities Ltd", "predicate": "createdBy", "value": "m.hart" },
+      { "subject": "payment P-8891", "predicate": "violatedSegregationOfDuties", "value": true }
+    ],
+    "then": [
+      { "op": "open", "question": { "id": "q1", "text": "Who created the vendor record, and from where? Pull the vendor-master audit log and the AP clerk's session records.", "slot": "vendor-provenance", "mandatory": true, "priority": 1, "discriminates": ["H1", "H2"] } }
+    ]
+  },
+  {
+    "id": "R6",
+    "version": "1",
+    "pack": "adjudication-phantom-invoice",
+    "when": [
+      { "subject": "INV-2261", "predicate": "senderDomainIsLookalike", "value": true },
+      { "subject": "INV-2261", "predicate": "senderEmail", "value": "billing@northwind-facilities.com" }
+    ],
+    "then": [
+      { "op": "open", "question": { "id": "q2", "text": "Do the invoice email's headers authenticate? Check SPF/DKIM and compare the originating IP with the vendor-master audit trail.", "slot": "email-authentication", "mandatory": true, "priority": 2, "discriminates": ["H1", "H3"] } }
+    ]
+  },
+  {
+    "id": "R7",
+    "version": "1",
+    "pack": "adjudication-phantom-invoice",
+    "when": [
+      { "subject": "payment P-8891", "predicate": "status", "value": "paid" },
+      { "subject": "payment P-8891", "predicate": "accountPreviouslyUsed", "value": false }
+    ],
+    "then": [
+      { "op": "open", "question": { "id": "q3", "text": "Where did the money go? Pull the receiving account's opening date, holder, and transaction history.", "slot": "payment-trail", "mandatory": true, "priority": 2, "discriminates": ["H1", "H2", "H4"] } }
+    ]
+  },
+  {
+    "id": "R8",
+    "version": "1",
+    "pack": "adjudication-phantom-invoice",
+    "when": [
+      { "subject": "INV-2261", "predicate": "purchaseOrderOnFile", "value": false }
+    ],
+    "then": [
+      { "op": "open", "question": { "id": "q4", "text": "Was there a purchase order, contract, or receiving record behind INV-2261?", "slot": "po-trace", "mandatory": false, "priority": 3, "discriminates": ["H3", "H4"] } }
+    ]
+  },
+  {
+    "id": "R9",
+    "version": "1",
+    "pack": "adjudication-phantom-invoice",
+    "when": [
+      { "subject": "INV-2261", "predicate": "emailOriginIP", "value": { "var": "ip" } },
+      { "subject": "Northwind Facilities Ltd", "predicate": "createdFromIP", "value": { "var": "ip" } }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d5", "type": "derived", "subject": "INV-2261", "predicate": "linkedToVendorRecordCreation", "value": true, "confidence": 0.95, "source": "rule:R9" } }
+    ]
+  },
+  {
+    "id": "R10",
+    "version": "1",
+    "pack": "adjudication-phantom-invoice",
+    "when": [
+      { "subject": "INV-2261", "predicate": "spfResult", "value": "fail" },
+      { "subject": "INV-2261", "predicate": "dkimResult", "value": "fail" }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d6", "type": "derived", "subject": "INV-2261", "predicate": "emailAuthenticationFailed", "value": true, "confidence": 0.95, "source": "rule:R10" } }
+    ]
+  },
+  {
+    "id": "R11",
+    "version": "1",
+    "pack": "adjudication-phantom-invoice",
+    "when": [
+      { "subject": "account DE44 5001 0517 5402 1337 00", "predicate": "openedOn", "value": "2026-10-08" },
+      { "subject": "Northwind Facilities Ltd", "predicate": "createdOn", "value": "2026-10-10T02:13" }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d7", "type": "derived", "subject": "account DE44 5001 0517 5402 1337 00", "predicate": "predatesVendorRecord", "value": true, "confidence": 0.9, "source": "rule:R11" } }
+    ]
+  },
+  {
+    "id": "R12",
+    "version": "1",
+    "pack": "adjudication-phantom-invoice",
+    "when": [
+      { "subject": "Northwind Facilities Ltd", "predicate": "creationSessionUser", "value": "svc-ap-batch" },
+      { "subject": "m.hart", "predicate": "activeSessionAtVendorCreation", "value": false }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d8", "type": "derived", "subject": "m.hart", "predicate": "didNotCreateVendorRecord", "value": true, "confidence": 0.9, "source": "rule:R12" } }
+    ]
+  }
+]

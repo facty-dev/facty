@@ -2,7 +2,7 @@
   {
     "id": "R0",
     "version": "1",
-    "pack": "silver-blaze",
+    "pack": "attribution-silver-blaze",
     "when": [
       { "subject": "Silver Blaze", "predicate": "missing", "value": true },
       { "subject": "John Straker", "predicate": "dead", "value": true }
@@ -14,7 +14,7 @@
   {
     "id": "R1",
     "version": "1",
-    "pack": "silver-blaze",
+    "pack": "attribution-silver-blaze",
     "when": [
       { "subject": "Silver Blaze", "predicate": "hoofprintsGait", "value": "walking" },
       { "subject": "Silver Blaze", "predicate": "foundRiderless", "value": true }
@@ -26,7 +26,7 @@
   {
     "id": "R2",
     "version": "1",
-    "pack": "silver-blaze",
+    "pack": "attribution-silver-blaze",
     "when": [
       { "subject": "kennel-dog", "predicate": "barksAt", "value": "stranger" },
       { "subject": "kennel-dog", "predicate": "barkedAtNightVisitor", "value": false }
@@ -38,7 +38,7 @@
   {
     "id": "R3",
     "version": "1",
-    "pack": "silver-blaze",
+    "pack": "attribution-silver-blaze",
     "when": [
       { "subject": "night-visitor", "predicate": "role", "value": "acquaintance" },
       { "subject": "John Straker", "predicate": "dead", "value": true },
@@ -51,7 +51,7 @@
   {
     "id": "R4",
     "version": "1",
-    "pack": "silver-blaze",
+    "pack": "attribution-silver-blaze",
     "when": [
       { "subject": "John Straker", "predicate": "paidToSabotage", "value": "Silas Brown" }
     ],
@@ -62,7 +62,7 @@
   {
     "id": "R5",
     "version": "1",
-    "pack": "silver-blaze",
+    "pack": "attribution-silver-blaze",
     "when": [
       { "subject": "John Straker", "predicate": "metOnMoor", "value": "Ned Hunter" },
       { "subject": "Ned Hunter", "predicate": "handledTheHorse", "value": true },
@@ -75,7 +75,7 @@
   {
     "id": "R6",
     "version": "1",
-    "pack": "silver-blaze",
+    "pack": "attribution-silver-blaze",
     "when": [
       { "subject": "John Straker", "predicate": "debts", "value": true },
       { "subject": "John Straker", "predicate": "secondEstablishment", "value": true }
@@ -87,7 +87,7 @@
   {
     "id": "R7",
     "version": "1",
-    "pack": "silver-blaze",
+    "pack": "attribution-silver-blaze",
     "when": [
       { "subject": "kennel-log", "predicate": "barkingEntry", "value": "absent" }
     ],
@@ -98,7 +98,7 @@
   {
     "id": "R8",
     "version": "1",
-    "pack": "silver-blaze",
+    "pack": "attribution-silver-blaze",
     "when": [
       { "subject": "Silver Blaze", "predicate": "scratched", "value": true },
       { "subject": "Silas Brown", "predicate": "rivalOf", "value": "Colonel Ross" }

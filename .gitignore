@@ -19,8 +19,14 @@ Thumbs.db
 *.swp
 *~
 
-# Agent runtime state (machine-local)
-.agentic/tmp/
-.agentic/vm-session.json
-.agentic/vm-session.log
+# Agent runtime state — local dev artifact, not version controlled
+# (audit trail, message queues, session state, the LLM response cache)
+.agentic/
 .gondolin-pi/
+
+# Python (uv) — the optional DX layer venv (make deps)
+.venv/
+
+# Python bytecode (engine runs create these)
+__pycache__/
+*.pyc

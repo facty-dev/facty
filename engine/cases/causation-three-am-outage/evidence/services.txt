@@ -1,0 +1,9 @@
+KESTREL — SERVICE ROSTER (excerpt)
+
+checkout         e-commerce checkout; synchronous calls to Payline for
+                 every payment (timeout 25s); owned by payments team
+payline-gateway  external payment provider (Payline), eu-central
+app tier         healthy throughout the night
+CDN / WAF        front door; no anomalies reported
+monitoring       error-rate alerts on checkout 5xx; NO synthetic health
+                 check on Payline (provider status not tracked)

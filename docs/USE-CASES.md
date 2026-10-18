@@ -1,6 +1,6 @@
-# Use cases — redyarn multi-tenant isolation
+# Use cases — Facty multi-tenant isolation
 
-Real-world scenarios for isolating client projects with redyarn on
+Real-world scenarios for isolating client projects with Facty on
 gondolin micro-VMs. Each client runs in its own VM session: its project
 mounted, its credentials injected host-side, its egress allow-listed.
 Nothing else exists inside the session.

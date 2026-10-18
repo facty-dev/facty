@@ -1,0 +1,17 @@
+AP INBOX — thread "Invoice INV-2261 — facilities maintenance"
+
+2026-10-09 11:02  billing@northwind-facilities.com
+  "Please find attached invoice INV-2261 for October facilities
+   maintenance, EUR 38,400. Note: we have moved to a new bank account —
+   please remit to DE44 5001 0517 5402 1337 00. New account details
+   attached."
+
+2026-10-10 09:38  m.hart → billing@northwind-facilities.com
+  "Is this the usual account? Our records show a different one."
+
+2026-10-10 09:44  billing@northwind-facilities.com
+  "Yes — new account, please use it for this and future payments.
+   Apologies for the short notice."
+
+[Signature block on all three messages:]
+  Northwind Facilities Ltd · billing@northwind-facilities.com

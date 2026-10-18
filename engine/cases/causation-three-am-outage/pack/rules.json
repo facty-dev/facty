@@ -1,0 +1,119 @@
+[
+  {
+    "id": "R0",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      { "subject": "incident INC-551", "predicate": "checkoutDegraded", "value": true }
+    ],
+    "then": [
+      { "op": "raise", "hypotheses": ["H1", "H2", "H3", "H4"] }
+    ]
+  },
+  {
+    "id": "R1",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      { "subject": "incident INC-551", "predicate": "errorSignature", "value": "HTTP 502 — upstream payline-gateway timeouts" },
+      { "subject": "checkout", "predicate": "dependsOn", "value": "Payline" }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d1", "type": "derived", "subject": "incident INC-551", "predicate": "errorSource", "value": "Payline", "confidence": 0.9, "source": "rule:R1" } }
+    ]
+  },
+  {
+    "id": "R2",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      { "subject": "deploy d-2214", "predicate": "touchedService", "value": "checkout" },
+      { "subject": "deploy-log", "predicate": "deploysInIncidentWindow", "value": 0 }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d2", "type": "derived", "subject": "deploy d-2214", "predicate": "onlyDeployCandidate", "value": true, "confidence": 0.85, "source": "rule:R2" } }
+    ]
+  },
+  {
+    "id": "R3",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      { "subject": "incident INC-551", "predicate": "errorSignature", "value": "HTTP 502 — upstream payline-gateway timeouts" },
+      { "subject": "incident INC-551", "predicate": "checkoutDegraded", "value": true }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d3", "type": "derived", "subject": "incident INC-551", "predicate": "symptomMatchesUpstreamOutage", "value": true, "confidence": 0.85, "source": "rule:R3" } }
+    ]
+  },
+  {
+    "id": "R4",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      { "subject": "deploy d-2214", "predicate": "touchedService", "value": "checkout" }
+    ],
+    "then": [
+      { "op": "open", "question": { "id": "q1", "text": "What did deploy d-2214 change in checkout, and can it produce these errors? Pull the diff and the soak results.", "slot": "deploy-diff", "mandatory": true, "priority": 1, "discriminates": ["H1"] } }
+    ]
+  },
+  {
+    "id": "R5",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      { "subject": "incident INC-551", "predicate": "errorSource", "value": "Payline" }
+    ],
+    "then": [
+      { "op": "open", "question": { "id": "q2", "text": "Did Payline have an incident in the 02:47–03:12 window? Pull their status history and incident record.", "slot": "provider-status", "mandatory": true, "priority": 1, "discriminates": ["H3"] } }
+    ]
+  },
+  {
+    "id": "R6",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      { "subject": "incident INC-551", "predicate": "checkoutDegraded", "value": true }
+    ],
+    "then": [
+      { "op": "open", "question": { "id": "q3", "text": "When does the checkout edge certificate expire, and were there TLS handshake failures in the window?", "slot": "cert-check", "mandatory": false, "priority": 3, "discriminates": ["H2"] } }
+    ]
+  },
+  {
+    "id": "R7",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      { "subject": "deploy d-2214", "predicate": "changeTouchesErrorPath", "value": false },
+      { "subject": "deploy d-2214", "predicate": "soakCleanBeforeIncident", "value": true }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d4", "type": "derived", "subject": "deploy d-2214", "predicate": "cannotExplainIncident", "value": true, "confidence": 0.9, "source": "rule:R7" } }
+    ]
+  },
+  {
+    "id": "R8",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      { "subject": "Payline", "predicate": "incidentMatchesOurWindow", "value": true },
+      { "subject": "incident INC-551", "predicate": "appTierErrorRate", "value": "normal" },
+      { "subject": "incident INC-551", "predicate": "errorSource", "value": "Payline" }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d5", "type": "derived", "subject": "incident INC-551", "predicate": "upstreamFailureConfirmed", "value": true, "confidence": 0.95, "source": "rule:R8" } }
+    ]
+  },
+  {
+    "id": "R9",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      { "subject": "monitoring", "predicate": "syntheticCheckOnPayline", "value": false },
+      { "subject": "incident INC-551", "predicate": "pagerFiredAt", "value": "2026-10-12T02:49" }
+    ],
+    "then": [
+      { "op": "derive", "fact": { "id": "d6", "type": "derived", "subject": "incident INC-551", "predicate": "detectionGap", "value": "no upstream health check", "confidence": 0.9, "source": "rule:R9" } }
+    ]
+  }
+]

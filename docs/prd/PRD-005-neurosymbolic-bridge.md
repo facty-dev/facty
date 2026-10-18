@@ -25,6 +25,11 @@ The **neurosymbolic bridge** — the layer where LLM agents (neural) interact wi
 > human soundness critics as the source of framework trust (LLM-Modulo), and
 > auditable rationale as a first-class requirement. The audit trail, asset
 > graph, and human review gates of this SDLC are that architecture realized.
+>
+> **Philosophy:** determinism is the baseline (engine owns the verdict,
+> never the LLM); liability flows to humans, not machines; the symbolic
+> layer is the programmatic soundness critic. See
+> [docs/PHILOSOPHY.md](../PHILOSOPHY.md).
 
 ### Why
 - **Grounding:** LLMs hallucinate less with structured context

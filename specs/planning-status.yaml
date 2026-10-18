@@ -1,0 +1,24 @@
+context_capsule:
+  written_at: null
+  written_by: null
+  feature_name: null
+workflows:
+  survey-context:
+    required: true
+    status: done
+  scope-work:
+    required: true
+    status: pending
+  research-first:
+    required: false
+    status: optional
+    note: "Skip if no external dependencies"
+  elaborate-spec:
+    required: false
+    status: optional
+  plan-release:
+    required: true
+    status: pending
+  slice-tasks:
+    required: true
+    status: pending

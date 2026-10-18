@@ -1,0 +1,61 @@
+[
+  {
+    "id": "C1",
+    "type": "eliminate",
+    "hypothesis": "H2",
+    "when": [
+      { "subject": "cert checkout.kestrel.example", "predicate": "validThroughIncidentWindow", "value": true },
+      { "subject": "incident INC-551", "predicate": "tlsHandshakeErrors", "value": 0 }
+    ],
+    "reason": "the certificate was valid through the window and no TLS handshake failed — the edge was not the problem"
+  },
+  {
+    "id": "C2",
+    "type": "eliminate",
+    "hypothesis": "H4",
+    "when": [
+      { "subject": "incident INC-551", "predicate": "trafficDuringWindow", "value": "flat" },
+      { "subject": "incident INC-551", "predicate": "wafBlockedRequests", "value": 0 }
+    ],
+    "reason": "an attack requires traffic; RPS was flat and the WAF blocked nothing — there was no attack"
+  },
+  {
+    "id": "C3",
+    "type": "support",
+    "hypothesis": "H1",
+    "field": "mechanism",
+    "value": "deploy",
+    "when": [
+      { "subject": "deploy d-2214", "predicate": "onlyDeployCandidate", "value": true }
+    ]
+  },
+  {
+    "id": "C4",
+    "type": "support",
+    "hypothesis": "H3",
+    "field": "mechanism",
+    "value": "upstream",
+    "when": [
+      { "subject": "incident INC-551", "predicate": "symptomMatchesUpstreamOutage", "value": true }
+    ]
+  },
+  {
+    "id": "C5",
+    "type": "eliminate",
+    "hypothesis": "H1",
+    "when": [
+      { "subject": "deploy d-2214", "predicate": "cannotExplainIncident", "value": true }
+    ],
+    "reason": "the only candidate deploy changed one backoff constant, touched no error path, and soaked clean for 8 hours — it cannot produce 502s from an upstream gateway"
+  },
+  {
+    "id": "C6",
+    "type": "support",
+    "hypothesis": "H3",
+    "field": "mechanism",
+    "value": "upstream",
+    "when": [
+      { "subject": "incident INC-551", "predicate": "upstreamFailureConfirmed", "value": true }
+    ]
+  }
+]

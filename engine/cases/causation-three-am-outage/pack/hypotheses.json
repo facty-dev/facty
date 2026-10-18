@@ -1,0 +1,69 @@
+[
+  {
+    "id": "H1",
+    "statement": "Deploy regression — d-2214 (18:40, touched checkout) shipped a latent defect that surfaced at 02:47.",
+    "status": "open",
+    "prior": 0.35,
+    "mechanism": "deploy",
+    "claims": [
+      { "subject": "deploy d-2214", "predicate": "touchedService", "value": "checkout" },
+      { "subject": "incident INC-551", "predicate": "startedAfterLastDeploy", "value": true },
+      { "subject": "deploy d-2214", "predicate": "changeTouchesErrorPath", "value": true }
+    ],
+    "evidenceFor": ["f07", "f08"],
+    "evidenceAgainst": [],
+    "discriminatingTests": [
+      "Pull the d-2214 diff and soak results (q1)"
+    ]
+  },
+  {
+    "id": "H2",
+    "statement": "Expired certificate — the checkout edge certificate expired during the window; TLS handshakes failed.",
+    "status": "open",
+    "prior": 0.2,
+    "mechanism": "cert",
+    "claims": [
+      { "subject": "cert checkout.kestrel.example", "predicate": "expiredDuringWindow", "value": true },
+      { "subject": "incident INC-551", "predicate": "tlsHandshakeFailures", "value": "observed" }
+    ],
+    "evidenceFor": [],
+    "evidenceAgainst": ["f11", "f12"],
+    "discriminatingTests": [
+      "Check cert telemetry (q3)"
+    ]
+  },
+  {
+    "id": "H3",
+    "statement": "Upstream provider outage — Payline degraded 02:47–03:12; checkout calls to it timed out while our stack stayed healthy.",
+    "status": "open",
+    "prior": 0.3,
+    "mechanism": "upstream",
+    "claims": [
+      { "subject": "incident INC-551", "predicate": "errorSource", "value": "Payline" },
+      { "subject": "incident INC-551", "predicate": "appTierErrorRate", "value": "normal" },
+      { "subject": "Payline", "predicate": "hadIncidentInWindow", "value": true },
+      { "subject": "Payline", "predicate": "incidentMatchesOurWindow", "value": true }
+    ],
+    "evidenceFor": ["f04", "f05"],
+    "evidenceAgainst": [],
+    "discriminatingTests": [
+      "Pull the Payline status history (q2)"
+    ]
+  },
+  {
+    "id": "H4",
+    "statement": "Security incident — attack traffic saturated the checkout tier 02:47–03:12.",
+    "status": "open",
+    "prior": 0.15,
+    "mechanism": "attack",
+    "claims": [
+      { "subject": "incident INC-551", "predicate": "trafficDuringWindow", "value": "spike" },
+      { "subject": "incident INC-551", "predicate": "wafAttackDetected", "value": true }
+    ],
+    "evidenceFor": [],
+    "evidenceAgainst": ["f06", "f13"],
+    "discriminatingTests": [
+      "Pull CDN/WAF request logs"
+    ]
+  }
+]

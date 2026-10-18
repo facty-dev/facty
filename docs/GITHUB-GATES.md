@@ -1,6 +1,6 @@
 # GitHub Actions Gating Strategy
 
-How redyarn's agentic SDLC maps to GitHub Actions workflows with human review gates.
+How Facty's agentic SDLC maps to GitHub Actions workflows with human review gates.
 
 ---
 

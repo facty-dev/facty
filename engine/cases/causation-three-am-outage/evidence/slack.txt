@@ -1,0 +1,10 @@
+#payments-oncall — 2026-10-12, incident INC-551
+
+02:49  pagerbot: INC-551 fired — checkout 5xx 41%
+02:52  a.osei: app logs clean — errors are 502s from payline calls
+02:55  a.osei: last deploy was d-2214 at 18:40, soaked clean for 8h
+02:58  a.osei: cert valid until 2026-11-15, no TLS errors
+03:01  a.osei: traffic flat, WAF blocked nothing all night — not an attack
+03:05  a.osei: nothing to restart — errors track payline timeouts exactly
+03:12  a.osei: errors stopped on their own — looks upstream
+03:20  a.osei: posting status update, opening postmortem INC-551

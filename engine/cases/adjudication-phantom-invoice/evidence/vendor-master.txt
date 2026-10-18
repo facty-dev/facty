@@ -1,0 +1,16 @@
+VENDOR MASTER — excerpt pulled 2026-10-14
+
+RECORD A — "Northwind Facilities Ltd" (the payee on INV-2261)
+  Vendor ID:      V-8842
+  Created:        2026-10-10 02:13
+  Created by:     m.hart
+  Callback verification: [ blank — not completed ]
+  Purchase order on file: [ none ]
+  Bank details:   DE44 5001 0517 5402 1337 00
+
+RECORD B — "Northwind Facility Services Ltd" (the real vendor)
+  Vendor ID:      V-1103
+  Created:        2024-03-12
+  Callback verification: completed 2024-03-12 (phone, on file)
+  Bank details:   DE89 3704 0044 0532 0130 00 — unchanged since 2024-03-12
+  No bank-detail change request has ever been filed for this vendor.

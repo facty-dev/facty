@@ -515,7 +515,7 @@ When an agent materializes an asset:
 ## File Layout
 
 ```
-redyarn/
+facty/
 ├── assets/                     # Asset-oriented project state
 │   ├── graph.json              # The asset DAG (source of truth)
 │   ├── schemas/                # JSON Schemas for each asset type
@@ -559,7 +559,7 @@ redyarn/
 
 ## Summary
 
-| Concept | Dagster Equivalent | Redyarn Implementation |
+| Concept | Dagster Equivalent | Facty Implementation |
 |---------|-------------------|---------------------------|
 | Asset | `@asset` decorated function | Materialized file + metadata + hash |
 | Asset graph | Dagster's asset graph | `assets/graph.json` |

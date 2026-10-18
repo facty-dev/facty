@@ -38,7 +38,7 @@ decision, 2026-10-15).
 ## Decision
 
 **Detective DSS** — a domain-agnostic abductive decision-support workbench.
-Product name: **redyarn** (`redyarn.dev`), renamed from drawbridge 2026-10-15.
+Product name: **Facty** (`facty.dev`).
 Beachhead pack: the *detective pack* (fraud / incident RCA / security triage
 share one abductive skeleton). Compliance + contracts = next ring. SDLC
 management = a **future vertical application** of this framework, not its

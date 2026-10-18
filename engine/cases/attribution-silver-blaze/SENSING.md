@@ -1,6 +1,6 @@
 # Sensing record — Silver Blaze (the probabilistic half)
 
-**Model:** mistral-large-4 (redyarn dev session, Mistral subscription)
+**Model:** mistral-large-4 (facty dev session, Mistral subscription)
 **Date:** 2026-10-16
 **Role:** the LLM senses and proposes; the engine (`engine/engine.py`)
 verifies, chains, prunes, and decides. No LLM call sits in the verdict

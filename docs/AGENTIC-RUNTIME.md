@@ -3,7 +3,7 @@
 > **See also:** [ASSET-MODEL.md](./ASSET-MODEL.md) for the Dagster-style asset-oriented architecture, rules engine, and neurosymbolic composition that underpins this runtime.
 
 
-Redyarn evolves from a multi-tenant agent isolation layer into a full **agentic runtime engine** that drives a structured SDLC (Software Development Life Cycle) inside CI/CD pipelines.
+Facty evolves from a multi-tenant agent isolation layer into a full **agentic runtime engine** that drives a structured SDLC (Software Development Life Cycle) inside CI/CD pipelines.
 
 ## Vision
 
@@ -306,9 +306,9 @@ jobs:
 
 ---
 
-## Redyarn Integration
+## Facty Integration
 
-### Local Development (redyarn)
+### Local Development (Facty)
 
 ```bash
 # Set up decision and coding agents

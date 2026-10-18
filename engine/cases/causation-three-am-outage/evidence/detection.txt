@@ -1,0 +1,7 @@
+DETECTION REVIEW — INC-551 (postmortem input)
+
+- Pager fired 02:49 on checkout 5xx rate (customer impact signal).
+- First customer report 02:51.
+- Monitoring has NO synthetic health check on Payline — provider
+  degradation is invisible until customers feel it.
+- Status page updated manually at 03:15 (no automation).

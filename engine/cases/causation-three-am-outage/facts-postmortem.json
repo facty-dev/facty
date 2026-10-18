@@ -1,0 +1,10 @@
+[
+  { "id": "f19", "type": "evidence", "subject": "Payline", "predicate": "hadIncidentInWindow", "value": true, "confidence": 0.95, "source": "evidence/provider-incident.txt:4-5", "observedAt": "2026-10-17" },
+  { "id": "f20", "type": "evidence", "subject": "Payline", "predicate": "incidentWindowStart", "value": "2026-10-12T02:47:12", "confidence": 0.95, "source": "evidence/provider-incident.txt:5", "observedAt": "2026-10-17" },
+  { "id": "f21", "type": "evidence", "subject": "Payline", "predicate": "incidentWindowEnd", "value": "2026-10-12T03:11:58", "confidence": 0.95, "source": "evidence/provider-incident.txt:5", "observedAt": "2026-10-17" },
+  { "id": "f22", "type": "evidence", "subject": "Payline", "predicate": "incidentMatchesOurWindow", "value": true, "confidence": 0.95, "source": "evidence/provider-incident.txt:5-6", "observedAt": "2026-10-17" },
+  { "id": "f23", "type": "evidence", "subject": "Payline", "predicate": "incidentRootCause", "value": "database failover automation error", "confidence": 0.95, "source": "evidence/provider-incident.txt:7-8", "observedAt": "2026-10-17" },
+  { "id": "f24", "type": "evidence", "subject": "deploy d-2214", "predicate": "changeTouchesErrorPath", "value": false, "confidence": 0.95, "source": "evidence/deploy-diff.txt:4-6", "observedAt": "2026-10-17" },
+  { "id": "f25", "type": "evidence", "subject": "monitoring", "predicate": "syntheticCheckOnPayline", "value": false, "confidence": 0.9, "source": "evidence/detection.txt:5-6", "observedAt": "2026-10-17" },
+  { "id": "f26", "type": "evidence", "subject": "status-page", "predicate": "updatedManuallyAt", "value": "2026-10-12T03:15", "confidence": 0.9, "source": "evidence/detection.txt:7", "observedAt": "2026-10-17" }
+]

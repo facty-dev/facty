@@ -1,4 +1,4 @@
-# Architecture — redyarn on Gondolin micro-VMs
+# Architecture — Facty on Gondolin micro-VMs
 
 > Key operational decision: [ADR-0001 — session execution under host-side
 > sandboxing](./adr/0001-session-execution-under-sandboxing.md).
@@ -26,7 +26,7 @@
 │            injection ──►│  rootfs: Alpine + pi + ddgr + 88     │  │
 │            --host-secret│  skills (~/code/gondolin-pi template) │  │
 │                         │                                      │  │
-│                         │  /workspace  = redyarn repo (rw)  │  │
+│                         │  /workspace  = Facty repo (rw)  │  │
 │                         │  guest env:  MISTRAL_API_KEY =        │  │
 │                         │      <random-placeholder>             │  │
 │                         │  egress: api.mistral.ai,              │  │

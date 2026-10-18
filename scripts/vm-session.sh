@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# vm-session.sh — Manage the long-lived redyarn SDLC VM session.
+# vm-session.sh — Manage the long-lived Facty SDLC VM session.
 #
 # Secrets model (gondolin): the session is created OUTSIDE the agent sandbox
 # (`make vm-up` from your own terminal). The API key is injected host-side at
@@ -40,7 +40,7 @@ ok()   { echo -e "${GREEN}✓${NC} $*"; }
 warn() { echo -e "${YELLOW}⚠${NC} $*"; }
 err()  { echo -e "${RED}✗${NC} $*" >&2; }
 
-SESSION_TAG="redyarn-sdlc-vm"
+SESSION_TAG="facty-sdlc-vm"
 SESSION_META="$PROJECT_DIR/.agentic/vm-session.json"
 SESSIONS_DIR="${GONDOLIN_SESSIONS_DIR:-$HOME/.cache/gondolin/sessions}"
 SNAP="${PI_SNAPSHOT:-/Users/chart/code/gondolin-pi/snapshots/pi-sandbox.qcow2}"

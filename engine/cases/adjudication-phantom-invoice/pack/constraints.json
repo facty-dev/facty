@@ -1,0 +1,82 @@
+[
+  {
+    "id": "C1",
+    "type": "eliminate",
+    "hypothesis": "H3",
+    "when": [
+      { "subject": "Northwind Facility Services Ltd", "predicate": "deniesInvoice", "value": "INV-2261" },
+      { "subject": "Northwind Facility Services Ltd", "predicate": "bankDetailChangeRequestOnFile", "value": false }
+    ],
+    "reason": "payment diversion needs a genuine invoice and a changed account; the real vendor sent no invoice and no change request exists — there was nothing to divert"
+  },
+  {
+    "id": "C2",
+    "type": "eliminate",
+    "hypothesis": "H4",
+    "when": [
+      { "subject": "INV-2261", "predicate": "bypassedThreeWayMatch", "value": true },
+      { "subject": "Northwind Facilities Ltd", "predicate": "failedCallbackVerification", "value": true }
+    ],
+    "reason": "an honest clerical error still passes the mandatory controls; this payment failed both the PO match and the callback — a bypass, not a mistake"
+  },
+  {
+    "id": "C3",
+    "type": "support",
+    "hypothesis": "H1",
+    "field": "mechanism",
+    "value": "impersonation",
+    "when": [
+      { "subject": "INV-2261", "predicate": "impersonatesVendor", "value": true }
+    ]
+  },
+  {
+    "id": "C4",
+    "type": "support",
+    "hypothesis": "H2",
+    "field": "mechanism",
+    "value": "insider",
+    "when": [
+      { "subject": "payment P-8891", "predicate": "violatedSegregationOfDuties", "value": true },
+      { "subject": "Northwind Facilities Ltd", "predicate": "createdBy", "value": "m.hart" }
+    ]
+  },
+  {
+    "id": "C5",
+    "type": "support",
+    "hypothesis": "H1",
+    "field": "mechanism",
+    "value": "impersonation",
+    "when": [
+      { "subject": "INV-2261", "predicate": "newAccountReplyFromSameLookalikeDomain", "value": true }
+    ]
+  },
+  {
+    "id": "C6",
+    "type": "eliminate",
+    "hypothesis": "H2",
+    "when": [
+      { "subject": "m.hart", "predicate": "didNotCreateVendorRecord", "value": true }
+    ],
+    "reason": "the inside job requires the clerk to have created the vendor record; the audit trail shows a foreign service-account session (svc-ap-batch from Lagos) and no clerk session in the window — the created-by field was spoofed"
+  },
+  {
+    "id": "C7",
+    "type": "support",
+    "hypothesis": "H1",
+    "field": "mechanism",
+    "value": "impersonation",
+    "when": [
+      { "subject": "INV-2261", "predicate": "linkedToVendorRecordCreation", "value": true }
+    ]
+  },
+  {
+    "id": "C8",
+    "type": "support",
+    "hypothesis": "H1",
+    "field": "mechanism",
+    "value": "impersonation",
+    "when": [
+      { "subject": "INV-2261", "predicate": "emailAuthenticationFailed", "value": true }
+    ]
+  }
+]

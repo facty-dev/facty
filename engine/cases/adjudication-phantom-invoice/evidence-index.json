@@ -1,0 +1,9 @@
+[
+  { "file": "ap-register.txt", "evidenceClass": "financial-record", "summary": "AP register excerpt: P-8891 paid EUR 38,400 to 'Northwind Facilities Ltd' at a never-before-used account; the real vendor's standing payments go to a different account.", "confidence": 0.95 },
+  { "file": "vendor-master.txt", "evidenceClass": "log", "summary": "Vendor master excerpt: the payee record created 2026-10-10 02:13 by m.hart with callback verification blank and no PO; the real vendor's record unchanged since 2024.", "confidence": 0.95 },
+  { "file": "email-thread.txt", "evidenceClass": "correspondence", "summary": "The invoice thread: the 'new bank account' request and the confirmation reply, both from billing@northwind-facilities.com.", "confidence": 0.9 },
+  { "file": "approval-log.txt", "evidenceClass": "log", "summary": "Workflow log: INV-2261 entered and approved by the same user, m.hart.", "confidence": 0.95 },
+  { "file": "complaint.txt", "evidenceClass": "correspondence", "summary": "The real vendor's complaint: never sent INV-2261, bank details unchanged since 2024.", "confidence": 0.98 },
+  { "file": "hart-note.txt", "evidenceClass": "note", "summary": "Mara Hart's note: she flagged the payment herself; her machine was off at the record's creation time.", "confidence": 0.9 },
+  { "file": "policy.txt", "evidenceClass": "note", "summary": "AP controls: three-way match, mandatory callback verification, segregation of duties.", "confidence": 0.98 }
+]

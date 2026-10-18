@@ -1,13 +1,12 @@
-# redyarn — a detective toolkit for messy evidence
+# Facty — a detective toolkit for messy evidence
 
-*Follow the red yarn, not the red herring.*
+*Evidence in, verdict out.*
 
 **ELI5:** Someone has a mystery and a pile of messy evidence — logs, tickets,
-chat messages, receipts. Redyarn turns the evidence into clean facts,
+chat messages, receipts. **Facty** turns the evidence into clean facts,
 thinks about *who or what could explain the facts*, throws out the
 explanations that don't survive the checks, and tells you the most likely
-answer — showing its work the whole way, like a detective pinning clues to
-a board.
+answer — showing its work the whole way, like a detective pinning clues to a board.
 
 Two halves do the thinking, and they never swap jobs:
 
@@ -66,28 +65,58 @@ Fraud, outages, security findings, contracts — each is a **pack**: an
 ontology + rules + constraints. Same engine, different costume. (Sherlock was
 a detective, not a doctor — the method is the product.)
 
+## Why determinism matters
+
+**Determinism is the baseline, not a mode.** The engine always owns the
+verdict; the LLM is a tool, never the decision-maker. Liability flows to
+humans, not machines.
+
+The 2024 *Moffatt v. Air Canada* case is the canonical example: a chatbot
+invented a refund policy, the airline was held liable, and the tribunal
+rejected the "the AI is a separate entity" defense. Facty's architecture
+makes that failure mode **structurally impossible** — hypotheses come from
+the pack, constraints eliminate contradictions, and every verdict is
+replayable with a full reasoning trace.
+
+See [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) for the full stance:
+determinism as product, LLM liability, the reverse-centaur warning, and
+the human role as knowledge engineer and soundness critic.
+
 ## Status: PoC — working end-to-end
 
-One exemplar happy path, end to end, from JSON files and schemas — no
-database yet. The exemplar is a classic: **Silver Blaze** — the horse that
-vanished and the dog that didn't bark. See
-[the PoC plan](docs/discovery/detective-dss-poc.md).
+Three typed demo cases, end to end, from JSON files and schemas — no
+database yet. Each proves the abductive skeleton on a different kind of
+judgement (see [docs/INVESTIGATION-TYPES.md](docs/INVESTIGATION-TYPES.md)):
+
+- **attribution** — `attribution-silver-blaze`: the horse that vanished
+  and the dog that didn't bark (the classic).
+- **adjudication** — `adjudication-phantom-invoice`: a €38,400 invoice
+  to a vendor that doesn't exist.
+- **causation** — `causation-three-am-outage`: checkout degrades at
+  3 a.m. — our deploy, our cert, an attack, or the provider?
+
+The primary interface is the `facty` CLI: bare `./facty` opens the
+Textual workbench; the subcommands are the scriptable control plane.
 
 ```bash
-make dss-live        # interactive walkthrough — step through, streamed LLM sensing
-make dss-demo        # phase 1 — the case as first heard (batch)
-make dss-demo-2      # phase 2 — the ledger test applied (batch)
-make dss-selftest    # acceptance test — the happy path, asserted
-make dss-test        # all tests: selftest + the sensing retry loop
+./facty                  # the workbench (Textual TUI — the primary interface)
+./facty cases            # the demo cases (type · pack · phase-2 drop)
+./facty run <case>       # run a case (--add-facts <drop> = phase 2 · --json)
+./facty selftest         # acceptance test — every case, asserted
+./facty test             # all tests: selftest + retry loop + the TUI (headless)
+./facty walkthrough <case>   # terminal step-through (VMs, no-TTY)
+make deps                # install the optional deps (Textual — the workbench)
 ```
 
 ## Where things live
 
 | You want… | Go to |
 |---|---|
+| The philosophy (why determinism, liability, human role) | [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) |
 | The product direction & market reasoning | [docs/discovery/verticals.md](docs/discovery/verticals.md) |
 | The architecture decision | [ADR-0003](docs/adr/0003-detective-dss-neurosymbolic-core.md) |
 | The PoC plan (case vocabulary) | [docs/discovery/detective-dss-poc.md](docs/discovery/detective-dss-poc.md) |
+| The investigation types Facty supports | [docs/INVESTIGATION-TYPES.md](docs/INVESTIGATION-TYPES.md) |
 | The method's history | [docs/vision.md](docs/vision.md) |
 | The agent pipeline (how we build packs) | [docs/AGENTIC-RUNTIME.md](docs/AGENTIC-RUNTIME.md), [Makefile](Makefile) |
 
@@ -102,6 +131,5 @@ make dss-test        # all tests: selftest + the sensing retry loop
   factory* — and SDLC management itself is a candidate pack, not the
   foundation.
 - **Lineage:** the neurosymbolic method comes from
-  [docs/vision.md](docs/vision.md) (Reyearn, 2020–2024, Apache-2.0, full
-  history imported from
-  [chartpath/clientsort-docs-archive](https://github.com/chartpath/clientsort-docs-archive)).
+  [docs/vision.md](docs/vision.md) (the method's philosophical
+  foundations).
