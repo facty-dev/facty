@@ -112,7 +112,9 @@ def main():
             real_exports = dotenv.exports
 
             def file_status(environ=None):
-                return real_status(environ={"UPRELIC_API_KEY": "x"})
+                # fixed — independent of the machine's real dotenv files
+                return [("UPRELIC_API_KEY", "environment"),
+                        ("MISTRAL_API_KEY", None)]
 
             dotenv.status = file_status
             dotenv.exports = lambda environ=None: "export UPRELIC_API_KEY=x"
@@ -141,6 +143,41 @@ def main():
                     os.environ[k] = v
                 else:
                     os.environ.pop(k, None)
+
+        # ── the guardrail: known keys in the project .env ────────────
+        real_project = dotenv.PROJECT_FILE
+        try:
+            dotenv.PROJECT_FILE = tmp / "guard.env"
+            dotenv.PROJECT_FILE.write_text("UPRELIC_API_KEY=upr_x\n"
+                                           "OTHER=not-a-known-key\n")
+            ws = dotenv.warnings()
+            check("warnings: a known key in the project .env is flagged",
+                  len(ws) == 1 and "UPRELIC_API_KEY" in ws[0]
+                  and "mounted into the VMs" in ws[0], str(ws))
+            dotenv.PROJECT_FILE.write_text("OTHER=not-a-known-key\n")
+            check("warnings: non-secret keys in the project .env are fine",
+                  dotenv.warnings() == [])
+            dotenv.PROJECT_FILE.unlink()
+            check("warnings: no project .env → no warnings",
+                  dotenv.warnings() == [])
+        finally:
+            dotenv.PROJECT_FILE = real_project
+
+        # ── the CLI: the guardrail is printed ─────────────────────────
+        real_warnings = dotenv.warnings
+        dotenv.warnings = lambda: ["UPRELIC_API_KEY is set in ./.env — move it"]
+        try:
+            import io
+            from contextlib import redirect_stdout
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                rc = cli.cmd_env(type("A", (), {"exports": False})())
+            out = buf.getvalue()
+            check("facty env: prints the guardrail warning",
+                  rc == 0 and "WARNING" in out
+                  and "UPRELIC_API_KEY is set in ./.env" in out, out)
+        finally:
+            dotenv.warnings = real_warnings
 
         # ── the gitignore guard ───────────────────────────────────────
         gitignore = (ENGINE_DIR.parent / ".gitignore").read_text()

@@ -1700,6 +1700,8 @@ def cmd_env(args):
     print("facty env — the secrets status (values are never printed)")
     for key, origin in dotenv.status():
         print(f"  {key:18s} {origin or '(unset)'}")
+    for w in dotenv.warnings():
+        print(f"  ! WARNING: {w}")
     print("  real keys live in ~/.facty/.env (machine-local, never committed);")
     print("  the project .env is mounted into the VMs — keep real keys out of it")
     return 0
@@ -1723,6 +1725,8 @@ def cmd_doctor(args):
         print(f"  {var.lower()}:  {os.environ.get(var) or '(unset)'}")
     for key, origin in dotenv.status():
         print(f"  {key.lower()}:  {origin or '(unset)'}")
+    for w in dotenv.warnings():
+        print(f"  ! WARNING: {w}")
     gondolin_dir = ENGINE_DIR.parent / "gondolin"
     snap = gondolin_dir / "snapshots" / "pi-sandbox.qcow2"
     if (gondolin_dir / "gondolin-pi.sh").exists():

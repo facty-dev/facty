@@ -95,6 +95,19 @@ def status(environ=None):
     return out
 
 
+def warnings():
+    """Guardrail warnings: known keys found in the PROJECT .env. The
+    project is mounted into the gondolin VMs (/workspace), so a real key
+    there is readable by the guest — the VM's host-secret mechanism
+    injects only a placeholder. Real keys belong in ~/.facty/.env."""
+    if not PROJECT_FILE.exists():
+        return []
+    in_project = parse(PROJECT_FILE.read_text())
+    return [f"{key} is set in ./.env — the project is mounted into the "
+            f"VMs; move it to {MACHINE_FILE} (real keys are machine-local)"
+            for key in KNOWN_KEYS if key in in_project]
+
+
 def exports(environ=None):
     """`export KEY='value'` lines for the known keys that are set — for
     `eval "$(./facty env --exports)"` (hoisting into the launching shell
