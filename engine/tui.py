@@ -96,6 +96,9 @@ KEYS
   enter  read an evidence file · ?  this help · esc  back
   ctrl+p  command palette
 
+  on a narrow window the action buttons can hide behind the ranking
+  panel — the keys above (and the palette) always work
+
   ☑ run without the LLM — never calls the LLM: steps with a cached
     response replay it; the rest use the recorded sensing. The cache
     line under the checkbox shows how many steps are cached (N/M).
@@ -508,6 +511,10 @@ class CaseScreen(Screen):
     @on(Button.Pressed, "#auth")
     def auth_button(self):
         self.do_auth()
+
+    @on(Button.Pressed, "#explain")
+    def explain_button(self):
+        self.action_explain()
 
     @on(ListView.Selected, "#evidence")
     def show_evidence(self, event):

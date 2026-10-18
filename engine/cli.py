@@ -450,10 +450,6 @@ def sense_label(ui, case, files, on_response=None, mode=None):
         if errs:
             raise ValueError(f"{source} entry failed schema validation: "
                              + "; ".join(errs[:3]))
-        errs = judge(facts)
-        if errs:
-            ui.log(tag, f"WARNING: judge flagged the {source} facts — "
-                        + "; ".join(errs[:3]))
         return facts
 
     facts, source = None, None
@@ -516,6 +512,9 @@ def sense_label(ui, case, files, on_response=None, mode=None):
                     f"{gated} below the {cfg['threshold']} gate → unclassified "
                     "(the LLM fallback set); "
                     f"{n_aggs} aggregate facts")
+    errs = judge(facts)
+    if errs:
+        ui.log(tag, f"WARNING: judge flagged the result — {'; '.join(errs[:3])}")
     ui.log(tag, f"judge layer accepted ✓ ({sensing.describe(facts, 'facts')})")
     return facts
 

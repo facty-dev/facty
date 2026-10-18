@@ -169,7 +169,9 @@ async def run_board():
     os.environ["FACTY_CACHE_DIR"] = tempfile.mkdtemp(prefix="facty-tui-cache-")
     app = tui.FactyApp(CASE)
     sleeper = None
-    async with app.run_test(size=(120, 40)) as pilot:
+    # 180 wide: the action-buttons row needs ~75 columns — at 120 the
+    # Explain button overflows behind the ranking panel (unclickable)
+    async with app.run_test(size=(180, 40)) as pilot:
         await pilot.pause()  # let the default screen settle
         screen = app.screen
         check("the board mounts straight on the case (no picker)",
@@ -415,6 +417,16 @@ async def run_board():
               EXPLAIN_CALLS[-1]["mode"] == "cache", str(EXPLAIN_CALLS[-1]))
         offline.value = False
 
+        # the button does the same as the key — a click, not just the binding
+        n_before = len(EXPLAIN_CALLS)
+        await pilot.click("#explain")
+        ok4 = await wait_for(pilot, lambda: len(EXPLAIN_CALLS) > n_before)
+        check("clicking the Explain button asks the LLM for commentary", ok4)
+        if ok4:
+            check("the button's commentary targets the verdict",
+                  EXPLAIN_CALLS[-1]["target"] == "verdict"
+                  and EXPLAIN_CALLS[-1]["has_result"], str(EXPLAIN_CALLS[-1]))
+
         # the help screen explains the flow and the run-log vocabulary
         await pilot.press("?")
         await pilot.pause()
@@ -426,6 +438,8 @@ async def run_board():
                    "constraint solver · deduction", "bwd chain · deduction")))
         check("the help explains the two steps in plain language",
               "RUN THE CASE" in content and "RUN THE RECOMMENDED TEST" in content)
+        check("the help notes the keys for a narrow window (buttons can hide)",
+              "narrow window" in content)
         await pilot.press("escape")
         await pilot.pause()
         check("escape closes the help screen", isinstance(app.screen, tui.CaseScreen))
@@ -453,13 +467,14 @@ async def run_board():
 async def run_sensor_board():
     """The label sensor in the workbench: the classifier stage renders with
     its own badge + explanation, and its facts drive the verdict."""
-    from textual.widgets import Label
+    from textual.widgets import Button, Label
 
     cli.sense_one = stub_sense_one
     cli.explain = stub_explain
     os.environ["FACTY_CACHE_DIR"] = tempfile.mkdtemp(prefix="facty-tui-cache-")
     app = tui.FactyApp(TRIAGE_CASE)
-    async with app.run_test(size=(120, 40)) as pilot:
+    # 180 wide — see run_board: the buttons row must fit on screen
+    async with app.run_test(size=(180, 40)) as pilot:
         await pilot.pause()
         screen = app.screen
         check("the sensor case mounts straight on the case",
@@ -486,6 +501,21 @@ async def run_sensor_board():
             check("the classifier facts drive the verdict (H1 — targeted attack)",
                   v is not None and v["id"] == "H1",
                   str(v and v["id"]))
+            # the manual-test path: the Explain BUTTON (not the key) on the
+            # sensor case — the click must ask the LLM for commentary
+            check("the Explain button is enabled once the sensor case has a result",
+                  not app.query_one("#explain", Button).disabled)
+            n_before = len(EXPLAIN_CALLS)
+            await pilot.click("#explain")
+            ok_e = await wait_for(pilot, lambda: len(EXPLAIN_CALLS) > n_before)
+            check("clicking Explain on the sensor case asks for commentary", ok_e)
+            if ok_e:
+                call = EXPLAIN_CALLS[-1]
+                check("the sensor case's commentary has the result + entities",
+                      call["target"] == "verdict" and call["has_result"]
+                      and call["has_entities"], str(call))
+                check("the sensor case's commentary line lands in the run log",
+                      any("llm · commentary" in t for t in log_texts(app)))
 
     # the picker marks sensor cases
     app2 = tui.FactyApp()

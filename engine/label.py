@@ -296,9 +296,11 @@ def _prep_rows(case, cfg, stream=None, runner=None):
 def load_classifier(model=None, precision="fp32"):
     """Load the zero-shot NLI model (lazy import — the optional sensor deps).
     Returns (session, tokenizer, input_names, entailment_index,
-    contradiction_index). Raises RuntimeError with the install hint when
-    the deps are missing: a missing dep cannot be corrected by a retry, so
-    callers fail fast."""
+    contradiction_index). The contradiction index is None for binary
+    entailment / not-entailment models (the zeroshot-v2.0 recipe) — margin
+    scoring degrades to entail-only for those. Raises RuntimeError with
+    the install hint when the deps are missing: a missing dep cannot be
+    corrected by a retry, so callers fail fast."""
     model = model or DEFAULT_MODEL
     try:
         import onnxruntime as ort
@@ -321,8 +323,8 @@ def load_classifier(model=None, precision="fp32"):
             ent = i
         elif "contrad" in low and con is None:
             con = i
-    if ent is None or con is None:
-        raise LabelError(f"{model}: no entailment/contradiction labels in config")
+    if ent is None:
+        raise LabelError(f"{model}: no entailment label in config")
     tok = AutoTokenizer.from_pretrained(model)
     if tok.pad_token is None:
         for cand in ("eos_token", "unk_token", "sep_token", "cls_token"):
@@ -360,8 +362,11 @@ def score_rows(classifier, rows, labels, template, scoring="margin"):
                   truncation=True, max_length=ROW_MAXLEN, return_tensors="np")
         feeds = {n: enc[n].astype(np.int64) for n in input_names if n in enc}
         for row in sess.run(None, feeds)[0]:
-            e, c = float(row[ent]), float(row[con])
-            scores.append(e if scoring == "entail" else e - c)
+            e = float(row[ent])
+            if scoring == "margin" and con is not None:
+                scores.append(e - float(row[con]))
+            else:
+                scores.append(e)
     return [softmax(scores[i * len(labels):(i + 1) * len(labels)])
             for i in range(len(rows))]
 
