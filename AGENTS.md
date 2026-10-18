@@ -97,11 +97,14 @@ Schemas: `engine/schemas/*.schema.json`. Codegen: `engine/emit.py` →
 ./facty selftest             # acceptance test — every case, asserted
 ./facty test                 # all tests: selftest + retry loop + the TUI (headless)
 ./facty sense <case> --op facts   # one sensing op, standalone (LLM, streamed)
+./facty sense <case> --op label    # the label sensor (small classifier, CPU-only)
+./facty sense <case> --op parser   # generate the case's extract parser (prep=parser)
 ./facty walkthrough <case>   # terminal step-through (VMs, no-TTY)
 ./facty tui <case>           # the Textual workbench (needs `make deps`)
 ./facty emit                 # codegen projections (TS types + Datalog per case)
 ./facty completion bash      # shell completion
 make deps                    # install the optional deps (Textual — the workbench)
+make deps-sensors            # optional sensor deps (onnxruntime — host/CI only)
 
 # Make wrappers (kept for muscle memory)
 make dss-demo               # run the attribution case (phase 1)
@@ -154,6 +157,11 @@ Phase vocabularies differ by surface: the decision agent uses
   guarantees there) — optional DX layers (the Textual workbench,
   `./facty`) import lazily and degrade gracefully. Root
   `requirements.txt` holds the optional deps (`make deps`, uv-managed).
+  The optional sensors (`engine/label.py`) import lazily and degrade
+  gracefully, like the Textual workbench; their deps live in
+  `requirements-sensors.txt` (`make deps-sensors`) — heavy-ish and
+  host/CI-only, never the gondolin VM snapshot. Sensor-sourced evidence
+  (the `classify.json` file) is excluded from the LLM's phase-1 files.
 - `engine/engine.py` is library + CLI (`run`, `selftest`); the selftest
   asserts the acceptance criteria and the deterministic replay. The
   primary interface is the `facty` CLI (`./facty`, `engine/cli.py`).
@@ -169,6 +177,15 @@ Phase vocabularies differ by surface: the decision agent uses
   the agent settles. Env knobs: `FACTY_PROVIDER`, `FACTY_MODEL`,
   `FACTY_THINKING`. No VM is involved per call — pi is a subprocess;
   the gondolin VM is the long-lived SDLC-agent session.
+- **Session scoping: one pi session per run** (a case phase instance) —
+  `sensing.session_scope()` wraps a run (the workbench's `do_run`, the
+  walkthrough), so its LLM calls share one process and one conversation
+  prefix: the provider's prompt cache hits across them (measured 19–77%
+  of input served from cache). A new run — another case or phase —
+  starts a fresh session: nothing crosses case/phase boundaries, and
+  the conversation holds only the senses' own Q&A (never the engine's
+  conclusions) — the cache benefits without the bias. The run log
+  prints the cache summary at the end of the sensing.
 - The senses are guided by the pack's **term vocabulary** (the
   predicates + subjects the rules reference, embedded in the facts
   task), and the recommended test's evidence is sensed with the

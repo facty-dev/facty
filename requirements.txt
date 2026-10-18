@@ -14,4 +14,8 @@
 # Note: the latest Textual requires a modern Python (check its
 # requires-python on install). The venv from `make deps` uses uv's
 # managed Python, not the host's system python3.
+#
+# The optional sensors (engine/label.py) live in requirements-sensors.txt
+# (`make deps-sensors`) — onnxruntime is heavy-ish and host/CI-only, never
+# in the gondolin VM snapshot.
 textual

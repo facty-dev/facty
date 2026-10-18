@@ -26,9 +26,11 @@ ENGINE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(ENGINE_DIR))
 import engine  # noqa: E402
 import cli     # noqa: E402
+import label   # noqa: E402
 import procs   # noqa: E402
 
 CASE = ENGINE_DIR / "cases" / "adjudication-phantom-invoice"
+TRIAGE_CASE = ENGINE_DIR / "cases" / "triage-alert-flood"
 
 try:
     import tui  # noqa: E402  (imports textual; ImportError → skip)
@@ -48,6 +50,17 @@ def check(name, ok, detail=""):
 
 STUB_MODES = []
 
+_REAL_SENSE_ONE = cli.sense_one  # captured before run_board stubs it
+
+
+def _label_passthrough(ui, case, op, stream=None, on_response=None, mode=None,
+                       **kw):
+    """The label op is not an LLM call — let the real sensor run. Without
+    the sensor deps it falls back to the recorded facts (logged), which is
+    exactly what the test exercises."""
+    return _REAL_SENSE_ONE(ui, case, op, stream=stream,
+                           on_response=on_response, mode=mode, **kw)
+
 
 def _recorded(case, op):
     case = Path(case)
@@ -57,7 +70,19 @@ def _recorded(case, op):
     if op == "entities":
         return engine.load_validated(case / "entities.json", "entities.schema.json")
     if op == "facts":
-        return engine.load_validated(case / "facts.json", "facts.schema.json")
+        facts = engine.load_validated(case / "facts.json", "facts.schema.json")
+        sensor_srcs = cli.sensor_source_names(case)
+        if sensor_srcs:
+            # the LLM facts exclude the sensor's pile (the label stage
+            # contributes the classifier facts, like a live run)
+            facts = [f for f in facts
+                     if Path(str(f.get("source", "")).split(":")[0]).name
+                     not in sensor_srcs]
+        return facts
+    if op == "label":
+        return cli._recorded_label_facts(case, label.load_config(case))
+    if op == "parser":
+        return None
     return engine.load_array(cli.drop_file(case), "fact.schema.json")
 
 
@@ -65,6 +90,9 @@ def slow_stub_sense_one(ui, case, op, evidence_index=None, entities=None,
                         stream=None, on_response=None, mode=None, **_kw):
     """A stub that STREAMS the recorded response slowly (line by line,
     with delays) — to exercise the mid-stream expand."""
+    if op == "label":
+        return _label_passthrough(ui, case, op, stream=stream,
+                                  on_response=on_response, mode=mode, **_kw)
     import json as _json
     import time as _time
     result = _recorded(case, op)
@@ -83,6 +111,9 @@ def stub_sense_one(ui, case, op, evidence_index=None, entities=None, stream=None
     """The LLM boundary, stubbed to the recorded sensing (fast and
     deterministic). FACTY_TUI_LIVE=1 runs the real LLM instead. Records
     the requested mode so the offline-checkbox plumbing is testable."""
+    if op == "label":
+        return _label_passthrough(ui, case, op, stream=stream,
+                                  on_response=on_response, mode=mode, **_kw)
     import json as _json
     STUB_MODES.append(mode)
     result = _recorded(case, op)
@@ -419,12 +450,61 @@ async def run_board():
           r.returncode != 0, r.stdout.decode().strip())
 
 
+async def run_sensor_board():
+    """The label sensor in the workbench: the classifier stage renders with
+    its own badge + explanation, and its facts drive the verdict."""
+    from textual.widgets import Label
+
+    cli.sense_one = stub_sense_one
+    cli.explain = stub_explain
+    os.environ["FACTY_CACHE_DIR"] = tempfile.mkdtemp(prefix="facty-tui-cache-")
+    app = tui.FactyApp(TRIAGE_CASE)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        check("the sensor case mounts straight on the case",
+              isinstance(screen, tui.CaseScreen))
+        await pilot.press("r")
+        ok = await wait_for(pilot, lambda: screen.result is not None
+                            and screen.result["phase"] == "on the initial evidence")
+        check("key r runs the sensor case (the full e2e incl. the classifier)", ok)
+        if ok:
+            texts = log_texts(app)
+            check("the run log shows the classifier · induction stage "
+                  "(its own badge, not the LLM's)",
+                  any("classifier · induction" in t for t in texts))
+            check("the run log explains the classifier call "
+                  "(a small local model, the threshold)",
+                  any("scoring the pile" in t and "threshold" in t
+                      for t in texts),
+                  str([t for t in texts if "scoring the pile" in t][:1]))
+            check("the run log summarizes the labeling outcome "
+                  "(labels + the gated fallback set)",
+                  any("below the" in t and "gate" in t for t in texts),
+                  str([t for t in texts if "gate" in t][:1]))
+            v = screen.result["verdict"]
+            check("the classifier facts drive the verdict (H1 — targeted attack)",
+                  v is not None and v["id"] == "H1",
+                  str(v and v["id"]))
+
+    # the picker marks sensor cases
+    app2 = tui.FactyApp()
+    async with app2.run_test(size=(120, 40)) as pilot2:
+        await pilot2.pause()
+        labels = [str(li.query_one(Label).render())
+                  for li in app2.query("#picker ListItem")]
+        check("the case picker marks the sensor case (classifier)",
+              any("triage-alert-flood" in l and "classifier" in l for l in labels),
+              str(labels))
+
+
 def main():
     if not HAVE_TUI:
         print("SKIP  textual is not installed — the workbench test needs it (`make deps`)")
         print("      (the engine core + CLI control plane are dependency-free)")
         return 0
     asyncio.run(run_board())
+    asyncio.run(run_sensor_board())
     # the doctor self-check runs and reports the loaded workbench
     r = subprocess.run([sys.executable, str(ENGINE_DIR / "cli.py"), "doctor"],
                        capture_output=True, text=True)

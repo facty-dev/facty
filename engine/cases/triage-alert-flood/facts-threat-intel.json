@@ -1,0 +1,5 @@
+[
+  { "id": "f101", "type": "evidence", "subject": "alerts", "predicate": "topSourceIsKnownBad", "value": true, "confidence": 0.95, "source": "evidence/threat-intel.txt:3", "observedAt": "2026-10-12" },
+  { "id": "f102", "type": "evidence", "subject": "185.220.44.7", "predicate": "inKnownBadRange", "value": "185.220.44.0/24", "confidence": 0.95, "source": "evidence/threat-intel.txt:3", "observedAt": "2026-10-12" },
+  { "id": "f103", "type": "case", "subject": "threat-intel", "predicate": "confirmsAttackSources", "value": true, "confidence": 0.9, "source": "evidence/threat-intel.txt:9", "observedAt": "2026-10-12" }
+]

@@ -1,0 +1,8 @@
+[
+  { "id": "e-oncall", "name": "A. Osei", "kind": "person", "role": "the on-call security engineer who worked the flood queue and flagged the attack cluster", "mentions": ["evidence/narrative.txt"], "confidence": 0.95 },
+  { "id": "e-siem", "name": "the SIEM", "kind": "object", "role": "the alerting system that produced the 200-row export and paged on the flood", "mentions": ["evidence/narrative.txt", "evidence/alerts.csv"], "confidence": 0.9 },
+  { "id": "e-inc552", "name": "INC-552", "kind": "object", "role": "the pager ticket for the alert flood", "mentions": ["evidence/narrative.txt"], "confidence": 0.95 },
+  { "id": "e-top-source", "name": "185.220.44.7", "kind": "object", "role": "the dominant alert source in the export — the top attack-classified source", "mentions": ["evidence/alerts.csv"], "confidence": 0.9 },
+  { "id": "e-incident-response", "name": "incident response", "kind": "organization", "role": "the P1 routing target for a targeted attack", "mentions": ["evidence/routing-policy.txt"], "confidence": 0.9 },
+  { "id": "e-detection-eng", "name": "detection engineering", "kind": "organization", "role": "the P2 routing target for a false-positive flood", "mentions": ["evidence/routing-policy.txt"], "confidence": 0.9 }
+]

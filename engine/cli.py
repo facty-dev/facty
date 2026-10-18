@@ -32,6 +32,7 @@ sys.path.insert(0, str(ENGINE_DIR))
 import engine          # noqa: E402
 import emit as emit_mod  # noqa: E402
 import sensing         # noqa: E402
+import label           # noqa: E402  (the label sensor — small classifier)
 import procs           # noqa: E402  (subprocess registry — no dangling processes)
 
 CASES_DIR = ENGINE_DIR / "cases"
@@ -62,6 +63,7 @@ TAGS = {
     "test": "\033[33m",         # yellow
     # the run-log vocabulary: tool · inference type
     "llm · induction": "\033[96m",               # bright cyan
+    "classifier · induction": "\033[36m",        # cyan
     "fwd chain · deduction": "\033[34m",         # blue
     "constraint solver · deduction": "\033[33m", # yellow
     "bwd chain · deduction": "\033[35m",         # magenta
@@ -84,6 +86,8 @@ examples:
   ./facty test                       all tests (selftest + retry loop + the TUI, headless)
   ./facty walkthrough silver-blaze --auto   terminal step-through (VMs, no-TTY)
   ./facty explain silver-blaze         LLM commentary on the verdict (out-of-band)
+  ./facty sense alert-flood --op label     the label sensor (small classifier, CPU-only)
+  ./facty sense alert-flood --op parser    generate the case's extract parser (LLM, judged)
   ./facty completion bash >> ~/.bash_completion
 """
 
@@ -154,11 +158,27 @@ def drop_source_names(case):
     return {Path(str(f.get("source", "")).split(":")[0]).name for f in facts}
 
 
+def sensor_source_names(case):
+    """The evidence files the label sensor senses (from classify.json).
+    Sensor-sourced evidence is sensed by the sensor; the LLM reads the rest."""
+    cfg_path = Path(case) / "classify.json"
+    if not cfg_path.exists():
+        return set()
+    try:
+        return {Path(json.loads(cfg_path.read_text())["file"]).name}
+    except (ValueError, KeyError):
+        return set()
+
+
 def phase1_evidence(case):
-    """Phase-1 evidence: every file except the phase-2 drop's sources."""
+    """Phase-1 evidence: every file except the phase-2 drop's sources and
+    the label sensor's source (sensor-sourced evidence is sensed by the
+    sensor — the LLM never sees the pile)."""
     ev = sorted((Path(case) / "evidence").iterdir())
     drop_srcs = drop_source_names(case)
-    return [f for f in ev if f.name not in drop_srcs]
+    sensor_srcs = sensor_source_names(case)
+    return [f for f in ev if f.name not in drop_srcs
+            and f.name not in sensor_srcs]
 
 
 def resolve_case(arg):
@@ -179,8 +199,9 @@ def resolve_case(arg):
 # ── UI (the terminal walkthrough) ─────────────────────────────────────
 
 class UI:
-    def __init__(self, auto=False):
+    def __init__(self, auto=False, quiet=False):
         self.auto = auto
+        self.quiet = quiet
         self.log_lines = []
 
     def _prefix(self, tag):
@@ -191,7 +212,8 @@ class UI:
         prefix = self._prefix(tag)
         for line in str(msg).splitlines() or [""]:
             text = f"{prefix} {line}"
-            print(text)
+            if not self.quiet:
+                print(text)
             self.log_lines.append(text)
 
     def step(self, tag, title):
@@ -396,6 +418,167 @@ def sense_extract(ui, tag, label, noun, schema_name, task, fallback, judge=None,
     return result
 
 
+def _recorded_label_facts(case, cfg):
+    """The recorded classifier facts: facts.json filtered to the sensor's
+    source file (the recorded sensing is the fallback)."""
+    path = Path(case) / "facts.json"
+    if not path.exists():
+        return None
+    prefix = cfg["file"] + ":"
+    facts = engine.load_validated(path, "facts.schema.json")
+    out = [f for f in facts if str(f.get("source", "")).startswith(prefix)]
+    return out or None
+
+
+def sense_label(ui, case, files, on_response=None, mode=None):
+    """The label sensor (small zero-shot classifier, CPU-only): evidence
+    rows → labeled facts + aggregates. The same contract as sense_extract:
+    live runs the model and caches the facts; FACTY_SENSE=cache replays the
+    cache (never calls the model); fallbacks: cache → the recorded facts
+    (the classifier facts already in facts.json, filtered by source)."""
+    mode = mode or os.environ.get("FACTY_SENSE", "live")
+    cfg = label.load_config(case)
+    lbl = f"label the {Path(cfg['file']).stem} pile"
+    cache_file = _cache_file(case.name, lbl, "facts.schema.json", files=files)
+    recorded = _recorded_label_facts(case, cfg)
+    tag = "classifier · induction"
+    judge = make_facts_judge(case)
+
+    def replay(entry, source):
+        facts = entry["facts"]
+        errs = label.validate_facts(facts)
+        if errs:
+            raise ValueError(f"{source} entry failed schema validation: "
+                             + "; ".join(errs[:3]))
+        errs = judge(facts)
+        if errs:
+            ui.log(tag, f"WARNING: judge flagged the {source} facts — "
+                        + "; ".join(errs[:3]))
+        return facts
+
+    facts, source = None, None
+    if mode == "cache":
+        if cache_file.exists():
+            facts = replay(json.loads(cache_file.read_text()), "cache")
+            source = "cache"
+            ui.log(tag, f"{lbl} — sensor cache hit, no model call "
+                        f"({cache_file.name})")
+        else:
+            ui.log(tag, f"{lbl} — no cached sensor output, using the recorded "
+                        "facts; run live to populate the cache")
+    else:
+        ui.log(tag, f"{lbl} — the label sensor (a small local classifier, "
+                    "no LLM tokens)")
+        ui.log(tag, f"scoring the pile with {label.short_model(cfg['model'])} "
+                    f"({cfg['precision']}, CPU-only), threshold "
+                    f"{cfg['threshold']}")
+        try:
+            facts, src_tag = label.run_sensor(case, cfg)
+            source = "live"
+            if src_tag != "classifier":
+                ui.log(tag, f"fallback path: {src_tag} (the classifier could "
+                            "not run — the raw text was classified as-is)")
+        except (RuntimeError, label.LabelError) as exc:
+            ui.log(tag, f"sensor call failed ({exc})")
+            if DEBUG:
+                raise SystemExit(2)
+    if facts is None:
+        if cache_file.exists():
+            facts = replay(json.loads(cache_file.read_text()), "cache")
+            source = "cache"
+            ui.log(tag, f"falling back to the sensor cache ({cache_file.name})")
+        elif recorded:
+            facts, source = recorded, "recorded"
+            ui.log(tag, "falling back to the recorded label facts "
+                        "(see SENSING.md)")
+    if facts is None:
+        raise SystemExit("facty: no label-sensor output — install the sensor "
+                         "deps (make deps-sensors), run live, or record the facts")
+    if source == "live":
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        cache_file.write_text(json.dumps({
+            "case": case.name, "op": lbl, "model": cfg["model"],
+            "precision": cfg["precision"], "facts": facts,
+            "cached_at": time.time()}, indent=2))
+        ui.log(tag, f"sensor output cached ({cache_file.name}) — "
+                    "FACTY_SENSE=cache replays it without the model")
+    if on_response is not None:
+        on_response(json.dumps(facts, indent=2), source or "recorded")
+    counts = {}
+    for f in facts:
+        if f["predicate"] == "classifiedAs":
+            counts[f["value"]] = counts.get(f["value"], 0) + 1
+    n_aggs = sum(1 for f in facts if f["id"].startswith("ag-"))
+    gated = counts.pop(label.UNCLASSIFIED, 0)
+    if counts:
+        breakdown = ", ".join(f"{v} {k}" for k, v in sorted(counts.items()))
+        ui.log(tag, f"{sum(counts.values())} rows labeled ({breakdown}); "
+                    f"{gated} below the {cfg['threshold']} gate → unclassified "
+                    "(the LLM fallback set); "
+                    f"{n_aggs} aggregate facts")
+    ui.log(tag, f"judge layer accepted ✓ ({sensing.describe(facts, 'facts')})")
+    return facts
+
+
+def _write_and_report(ui, case, raw):
+    obj = sensing.parse_and_validate(raw, label.PARSER_SCHEMA)
+    label.write_parser(case, obj)
+    errs = label.check_parser_contract(obj["extract_py"])
+    ui.log("llm · induction", "parser written (sensor/extract.py + "
+                              "extract_test.py) — contract "
+                              + ("holds ✓" if not errs
+                                 else "VIOLATIONS: " + "; ".join(errs[:3])))
+    return obj
+
+
+def sense_parser(ui, case, files, stream=None, on_response=None, mode=None):
+    """The parser-generation op: the LLM writes sensor/extract.py +
+    extract_test.py (judged by the code judge in a capped correction loop,
+    1 initial + 2 revisions), and the files are written for commit. Cached
+    like the sensing calls; the recorded parser (sensor/extract.py) is the
+    fallback."""
+    mode = mode or os.environ.get("FACTY_SENSE", "live")
+    cfg = label.load_config(case)
+    lbl = "generate the extract parser"
+    cache_file = _cache_file(case.name, lbl, files=files)
+    tag = "llm · induction"
+    recorded = (Path(case) / "sensor" / "extract.py").exists()
+    if mode == "cache":
+        if cache_file.exists():
+            raw = json.loads(cache_file.read_text())["response"]
+            ui.log(tag, f"{lbl} — response cache hit, no LLM call "
+                        f"({cache_file.name})")
+            return _write_and_report(ui, case, raw)
+        ui.log(tag, f"{lbl} — no cached response, using the recorded parser")
+        if recorded:
+            return None
+        raise SystemExit("facty: no parser — run live to generate it")
+    ui.log(tag, f"{lbl} — calling Mistral Large 4 (mistral-subscription), "
+                "streaming …")
+    try:
+        obj = label.generate_parser(case, cfg, stream=stream)
+        raw = json.dumps(obj, indent=2)
+    except Exception as exc:
+        ui.log(tag, f"parser generation failed ({exc})")
+        if DEBUG:
+            raise SystemExit(2)
+        if recorded:
+            ui.log(tag, "falling back to the recorded parser "
+                        "(sensor/extract.py)")
+            return None
+        raise SystemExit("facty: parser generation failed and no recorded "
+                         "parser exists")
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    cache_file.write_text(json.dumps({
+        "case": case.name, "op": lbl, "model": sensing.MODEL,
+        "response": raw, "cached_at": time.time()}, indent=2))
+    ui.log(tag, f"response cached ({cache_file.name}) — FACTY_SENSE=cache "
+                "replays it without the LLM")
+    if on_response is not None:
+        on_response(raw, "live")
+    return _write_and_report(ui, case, raw)
+
+
 def evidence_refs(files):
     """The evidence files, INLINED (a path header + the content) — the
     model reads them in one shot, in the assignment itself. (@refs are
@@ -528,6 +711,14 @@ def sensing_ops(case):
         drop_files = [f for f in evidence if f.name in drop_names]
         ops["drop"] = (f"extract the {drop.stem.replace('facts-', '')} facts",
                        "facts.schema.json", drop_files)
+    if (case / "classify.json").exists():
+        cfg = label.load_config(case)
+        pile = Path(cfg["file"]).stem
+        ops["label"] = (f"label the {pile} pile", "facts.schema.json",
+                        [case / cfg["file"]])
+        if cfg["prep"] == "parser":
+            ops["parser"] = ("generate the extract parser", None,
+                             [case / cfg["file"]])
     return ops
 
 
@@ -591,11 +782,12 @@ def cache_ready(case):
 
 def sense_one(ui, case, op, evidence_index=None, entities=None, stream=None,
               on_response=None, mode=None, runner=None, engine_context=None):
-    """Run a single sensing operation (classify | entities | facts | drop).
-    Live LLM when reachable (FACTY_SENSE=cache, or mode='cache', replays
-    the response cache instead), recorded sensing otherwise. The
-    phase-1 / phase-2 split is derived from the case: the drop's facts
-    name their source files; everything else is phase 1.
+    """Run a single sensing operation (classify | entities | facts | drop |
+    label | parser). Live LLM/classifier when reachable (FACTY_SENSE=cache,
+    or mode='cache', replays the response cache instead), recorded sensing
+    otherwise. The phase-1 / phase-2 split is derived from the case: the
+    drop's facts name their source files; everything else is phase 1.
+    The label/parser ops exist only for cases with a classify.json.
 
     The drop op senses the recommended test's evidence WITH the engine's
     phase-1 context (engine_context: the open questions + the hypothesis
@@ -639,6 +831,11 @@ def sense_one(ui, case, op, evidence_index=None, entities=None, stream=None,
                              recorded_facts, judge=judge, stream=stream,
                              on_response=on_response, cache_ns=case.name,
                              runner=runner, evidence_files=files, mode=mode)
+    if op == "label":
+        return sense_label(ui, case, files, on_response=on_response, mode=mode)
+    if op == "parser":
+        return sense_parser(ui, case, files, stream=stream,
+                            on_response=on_response, mode=mode)
     # drop — the recommended test's evidence, sensed with the earlier
     # context (the evidence index + entities, for consistent entity ids)
     # and the engine's phase-1 context (its open questions + the
@@ -965,96 +1162,109 @@ def walkthrough(case, auto=False):
                    f"{len(hypotheses)} hypotheses (all schema-validated ✓)")
     ui.log("case", f"recorded sensing: {len(recorded)} facts (see SENSING.md)")
 
-    # ── Step 2: the sensing motion (the LLM half, streamed) ────────
-    ui.step("llm · induction", "Classify the evidence pile — messy input → typed evidence")
-    evidence_index = sense_one(ui, case, "classify")
-    for item in evidence_index:
-        ui.log("llm · induction", f"  {item['file']} → {item['evidenceClass']} ({item['confidence']})")
+    # one pi session for this case run — the provider's prompt
+    # cache hits across the calls; a new run starts fresh
+    with sensing.session_scope() as sess:
+        # ── Step 2: the sensing motion (the LLM half, streamed) ────────
+        ui.step("llm · induction", "Classify the evidence pile — messy input → typed evidence")
+        evidence_index = sense_one(ui, case, "classify")
+        for item in evidence_index:
+            ui.log("llm · induction", f"  {item['file']} → {item['evidenceClass']} ({item['confidence']})")
 
-    ui.step("llm · induction", "Extract the entities — extraction is sensing, not reasoning")
-    entities = sense_one(ui, case, "entities")
-    ui.log("llm · induction", f"entities: {', '.join(e['name'] for e in entities)}")
+        ui.step("llm · induction", "Extract the entities — extraction is sensing, not reasoning")
+        entities = sense_one(ui, case, "entities")
+        ui.log("llm · induction", f"entities: {', '.join(e['name'] for e in entities)}")
 
-    ui.step("llm · induction", "Sense the evidence → facts (judge: schema + compute checks)")
-    facts = sense_one(ui, case, "facts", evidence_index, entities)
+        ui.step("llm · induction", "Sense the evidence → facts (judge: schema + compute checks)")
+        facts = sense_one(ui, case, "facts", evidence_index, entities)
+        if (case / "classify.json").exists():
+            ui.step("classifier · induction", "The label sensor — the evidence pile, "
+                                            "labeled (small classifier, CPU-only)")
+            label_facts = sense_one(ui, case, "label")
+            facts = facts + label_facts
+            ui.log("classifier · induction", f"the pile is labeled — "
+                    f"{len(label_facts)} facts enter the case")
 
-    # ── Step 3: forward chain ──────────────────────────────────────
-    ui.step("fwd chain · deduction", "Forward chain — watch the rules fire")
+        # ── Step 3: forward chain ──────────────────────────────────────
+        ui.step("fwd chain · deduction", "Forward chain — watch the rules fire")
 
-    def chain_emit(e):
-        if e["op"] == "derive":
-            ui.log("fwd chain · deduction", fmt_derive(e))
-        elif e["op"] == "raise":
-            ui.log("fwd chain · deduction", fmt_raise(e))
-        elif e["op"] == "open":
-            ui.log("fwd chain · deduction", fmt_open(e))
+        def chain_emit(e):
+            if e["op"] == "derive":
+                ui.log("fwd chain · deduction", fmt_derive(e))
+            elif e["op"] == "raise":
+                ui.log("fwd chain · deduction", fmt_raise(e))
+            elif e["op"] == "open":
+                ui.log("fwd chain · deduction", fmt_open(e))
 
-    derived, fired, questions, raised = engine.forward_chain(facts, rules, emit=chain_emit)
-    ui.log("fwd chain · deduction", f"fixpoint: {len(derived)} derived facts · "
-                                   f"{len(questions)} questions opened · {len(raised)} hypotheses raised")
+        derived, fired, questions, raised = engine.forward_chain(facts, rules, emit=chain_emit)
+        ui.log("fwd chain · deduction", f"fixpoint: {len(derived)} derived facts · "
+                                       f"{len(questions)} questions opened · {len(raised)} hypotheses raised")
 
-    # ── Step 4: the awareness loop ─────────────────────────────────
-    ui.step("fwd chain · deduction", "The awareness loop — what the engine still wants to know")
-    active = [h for h in hypotheses if h["id"] in raised] if raised else hypotheses
-    survivors0, _ = engine.apply_constraints(active, facts + derived, constraints)
-    verdict_tmp = engine.combine(survivors0, facts + derived, questions)
-    for q in engine.rank_questions(questions, [r["id"] for r in verdict_tmp["ranking"]]):
-        ui.log("fwd chain · deduction", f"{q['id']} [{q['slot']}] discriminates "
-                                       f"{', '.join(q.get('discriminates', []))}: {q['text']}")
-    if verdict_tmp["recommended_test"]:
-        rec = verdict_tmp["recommended_test"]
-        ui.log("fwd chain · deduction", f"recommended test: {rec['id']} — {rec['text']}")
+        # ── Step 4: the awareness loop ─────────────────────────────────
+        ui.step("fwd chain · deduction", "The awareness loop — what the engine still wants to know")
+        active = [h for h in hypotheses if h["id"] in raised] if raised else hypotheses
+        survivors0, _ = engine.apply_constraints(active, facts + derived, constraints)
+        verdict_tmp = engine.combine(survivors0, facts + derived, questions)
+        for q in engine.rank_questions(questions, [r["id"] for r in verdict_tmp["ranking"]]):
+            ui.log("fwd chain · deduction", f"{q['id']} [{q['slot']}] discriminates "
+                                           f"{', '.join(q.get('discriminates', []))}: {q['text']}")
+        if verdict_tmp["recommended_test"]:
+            rec = verdict_tmp["recommended_test"]
+            ui.log("fwd chain · deduction", f"recommended test: {rec['id']} — {rec['text']}")
 
-    # ── Step 5: constraints ────────────────────────────────────────
-    ui.step("constraint solver · deduction", "Constraint layer — prune and support")
-    survivors, pruned = engine.apply_constraints(
-        active, facts + derived, constraints,
-        emit=lambda e: ui.log("constraint solver · deduction",
-                              fmt_eliminate(e) if e["op"] == "eliminate"
-                              else fmt_support(e)))
-    ui.log("constraint solver · deduction", f"{len(pruned)} pruned · {len(survivors)} survive")
+        # ── Step 5: constraints ────────────────────────────────────────
+        ui.step("constraint solver · deduction", "Constraint layer — prune and support")
+        survivors, pruned = engine.apply_constraints(
+            active, facts + derived, constraints,
+            emit=lambda e: ui.log("constraint solver · deduction",
+                                  fmt_eliminate(e) if e["op"] == "eliminate"
+                                  else fmt_support(e)))
+        ui.log("constraint solver · deduction", f"{len(pruned)} pruned · {len(survivors)} survive")
 
-    # ── Step 6: backward chain + ranking ───────────────────────────
-    ui.step("bwd chain · deduction", "Backward chain — prove the claims, rank the survivors")
+        # ── Step 6: backward chain + ranking ───────────────────────────
+        ui.step("bwd chain · deduction", "Backward chain — prove the claims, rank the survivors")
 
-    def combine_emit(e):
-        if e["op"] == "claim":
-            ui.log("bwd chain · deduction", "  " + fmt_claim(e))
-        elif e["op"] == "proof":
-            ui.log("bwd chain · deduction", fmt_proof(e))
+        def combine_emit(e):
+            if e["op"] == "claim":
+                ui.log("bwd chain · deduction", "  " + fmt_claim(e))
+            elif e["op"] == "proof":
+                ui.log("bwd chain · deduction", fmt_proof(e))
 
-    verdict1 = engine.combine(survivors, facts + derived, questions, emit=combine_emit)
+        verdict1 = engine.combine(survivors, facts + derived, questions, emit=combine_emit)
 
-    # ── Step 7: verdict (initial evidence) ─────────────────────────
-    ui.step("verdict", "Verdict — on the initial evidence")
-    v1 = verdict1["ranking"][0] if verdict1["ranking"] else None
-    if v1:
-        ui.log("verdict", f"{v1['id']} — {v1['statement']}  (score {v1['score']:.4f})")
-        extras = [f"{k}: {v1[k]}" for k in ("killer", "horse_fate") if v1.get(k)]
-        prefix = " · ".join(extras)
-        ui.log("verdict", f"{prefix + ' · ' if prefix else ''}"
-                          f"confidence: {engine.confidence_note(v1, questions)}")
-    ui.log("verdict", "not final — the recommended test is still open")
+        # ── Step 7: verdict (initial evidence) ─────────────────────────
+        ui.step("verdict", "Verdict — on the initial evidence")
+        v1 = verdict1["ranking"][0] if verdict1["ranking"] else None
+        if v1:
+            ui.log("verdict", f"{v1['id']} — {v1['statement']}  (score {v1['score']:.4f})")
+            extras = [f"{k}: {v1[k]}" for k in ("killer", "horse_fate") if v1.get(k)]
+            prefix = " · ".join(extras)
+            ui.log("verdict", f"{prefix + ' · ' if prefix else ''}"
+                              f"confidence: {engine.confidence_note(v1, questions)}")
+        ui.log("verdict", "not final — the recommended test is still open")
 
-    # ── Step 8: trace (phase 1) ────────────────────────────────────
-    ui.step("trace", "The red yarn — phase 1 trace")
-    render_trace(ui, "phase 1", facts, derived, fired, pruned,
-                 verdict1["ranking"], v1)
+        # ── Step 8: trace (phase 1) ────────────────────────────────────
+        ui.step("trace", "The red yarn — phase 1 trace")
+        render_trace(ui, "phase 1", facts, derived, fired, pruned,
+                     verdict1["ranking"], v1)
 
-    if drop is None:
-        ui.log("verdict", "this case has no phase-2 drop — the case closes here")
-        print()
-        return 0
+        if drop is None:
+            ui.log("verdict", "this case has no phase-2 drop — the case closes here")
+            print()
+            return 0
 
-    # ── The recommended test runs ───────────────────────────────────
-    ui.step("test", f"Run the recommended test — sense the {drop_label} evidence "
-                    f"(the LLM half, streamed)")
-    drop_facts = sense_one(ui, case, "drop", evidence_index, entities,
-                           engine_context={"opened_questions": questions,
-                                           "ranking": verdict1["ranking"]})
-    facts2 = facts + drop_facts
-    ui.log("llm · induction", f"the recommended test is answered — the {drop_label} "
-                             f"evidence enters the case")
+        # ── The recommended test runs ───────────────────────────────────
+        ui.step("test", f"Run the recommended test — sense the {drop_label} evidence "
+                        f"(the LLM half, streamed)")
+        drop_facts = sense_one(ui, case, "drop", evidence_index, entities,
+                               engine_context={"opened_questions": questions,
+                                               "ranking": verdict1["ranking"]})
+        facts2 = facts + drop_facts
+        ui.log("llm · induction", f"the recommended test is answered — the {drop_label} "
+                                 f"evidence enters the case")
+        summary = sess.summary()
+        if summary:
+            ui.log("llm · induction", summary)
 
     ui.step("fwd chain · deduction", "Forward chain — the new facts")
     derived2, fired2, questions2, raised2 = engine.forward_chain(facts2, rules, emit=chain_emit)
@@ -1128,7 +1338,8 @@ def cmd_test(args):
     if rc:
         return rc
     for script in ("test_retry.py", "test_tui.py", "test_cache.py",
-                   "test_auth.py", "test_explain.py"):
+                   "test_auth.py", "test_explain.py", "test_label.py",
+                   "test_session.py"):
         r = subprocess.run([sys.executable, str(ENGINE_DIR / script)])
         if r.returncode:
             return r.returncode
@@ -1139,7 +1350,7 @@ def cmd_sense(args):
     global DEBUG
     DEBUG = args.debug or os.environ.get("FACTY_DEBUG") == "1"
     case = resolve_case(args.case)
-    ui = UI(auto=True)
+    ui = UI(auto=True, quiet=getattr(args, "json", False))
     result = sense_one(ui, case, args.op)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
@@ -1268,7 +1479,7 @@ _facty() {
         return 0
     fi
     if [ "$prev" = "--op" ]; then
-        COMPREPLY=($(compgen -W "classify entities facts drop" -- "$cur"))
+        COMPREPLY=($(compgen -W "classify entities facts drop label parser" -- "$cur"))
         return 0
     fi
     case "$prev" in
@@ -1321,7 +1532,7 @@ _facty() {
             ;;
         sense)
             if [[ "$prev" == "--op" ]]; then
-                _values 'op' classify entities facts drop
+                _values 'op' classify entities facts drop label parser
             fi
             ;;
         completion)
@@ -1335,7 +1546,7 @@ _facty "$@"
 # fish completion for facty — drop in ~/.config/fish/completions/facty.fish
 complete -c facty -f -a 'run cases selftest test sense walkthrough tui emit completion version'
 complete -c facty -f -n '__fish_seen_subcommand_from run walkthrough tui sense' -a '(ls engine/cases 2>/dev/null)' -d 'case'
-complete -c facty -f -n '__fish_seen_subcommand_from sense' -l op -a 'classify entities facts drop'
+complete -c facty -f -n '__fish_seen_subcommand_from sense' -l op -a 'classify entities facts drop label parser'
 complete -c facty -f -n '__fish_seen_subcommand_from run' -l add-facts -d 'phase-2 facts drop'
 complete -c facty -f -n '__fish_seen_subcommand_from run cases' -l json -d 'machine-readable output'
 complete -c facty -f -n '__fish_seen_subcommand_from walkthrough tui' -l auto -d 'no prompting'
@@ -1373,10 +1584,14 @@ def main(argv=None):
     p = sub.add_parser("test", help="all tests: selftest + sensing retry loop + the TUI (headless)")
     p.set_defaults(func=cmd_test)
 
-    p = sub.add_parser("sense", help="run one sensing op, standalone (the LLM half, streamed)")
+    p = sub.add_parser("sense", help="run one sensing op, standalone (the LLM half, streamed; "
+                                    "the classifier/parser sensors for classify.json cases)")
     p.add_argument("case", help="case name, unique slug, or path")
-    p.add_argument("--op", required=True, choices=["classify", "entities", "facts", "drop"],
+    p.add_argument("--op", required=True,
+                   choices=["classify", "entities", "facts", "drop", "label", "parser"],
                    help="the sensing operation")
+    p.add_argument("--json", action="store_true",
+                   help="machine-readable output only (logs suppressed)")
     p.add_argument("--debug", action="store_true",
                    help="debug mode: loud failures (no fallback), prompt path + pi command")
     p.set_defaults(func=cmd_sense)

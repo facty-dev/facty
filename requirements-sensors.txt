@@ -1,0 +1,18 @@
+# Facty — optional sensor dependencies (the label sensor, engine/label.py).
+#
+# NOT part of `make deps`: the gondolin VM snapshot has no pypi egress (by
+# design) — the sensors run on the host or CI (GitHub Actions), or baked
+# into the VM snapshot. The engine core + CLI control plane stay
+# dependency-free; the sensor imports lazily and fails with a clear hint
+# when these are missing.
+#
+#   make deps-sensors        # uv venv + install
+#
+# The label sensor (zero-shot NLI classification, CPU-only):
+#   onnxruntime      — inference (fp32 + int8 ONNX variants, measured
+#                      4.9–7.1s per 600 pairs on a 2–4 vCPU budget)
+#   transformers<5   — tokenizer only. PINNED: transformers 5.x mis-loads
+#                      the NLI checkpoints' classification heads (missing
+#                      keys → randomly initialized head → garbage labels)
+onnxruntime
+transformers<5

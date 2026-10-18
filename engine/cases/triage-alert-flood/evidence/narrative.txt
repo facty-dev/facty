@@ -1,0 +1,16 @@
+SOC NARRATIVE — the night of 2026-10-11/12, written up by the on-call
+
+02:00 — the SIEM alert feed starts climbing. By 03:30 the queue holds 200
+alerts, most of them from sources we have never seen before. The pager
+fires at 03:05 (INC-552, "alert flood — possible attack").
+
+The on-call (A. Osei, security engineering) worked the queue manually:
+most alerts look like the usual internet background radiation, but a
+cluster of them — same handful of external sources, in a tight window —
+reads like something coordinated. She flagged the cluster in the ticket
+and went back to the queue.
+
+The routing call is due by 06:00, before the morning handoff: is this
+flood a targeted attack (P1, incident response), background scanning
+noise (P3, suppress and tune), or a detector false-positive flood
+(P2, detection engineering)? The full export is in evidence/alerts.csv.

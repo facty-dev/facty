@@ -1,0 +1,6 @@
+[
+  { "file": "narrative.txt", "evidenceClass": "report", "summary": "SOC narrative of the 02:00–03:30 alert flood, the 03:05 page, and the 06:00 routing call.", "confidence": 0.95 },
+  { "file": "routing-policy.txt", "evidenceClass": "note", "summary": "The P1/P2/P3 routing policy the pack encodes: attack → incident response, false-positive flood → detection engineering, background noise → suppression.", "confidence": 0.95 },
+  { "file": "alerts.csv", "evidenceClass": "log", "summary": "200-row SIEM alert export (sensor-sourced: typed by classify.json, not the LLM classify op).", "confidence": 0.99 },
+  { "file": "threat-intel.txt", "evidenceClass": "report", "summary": "Phase-2 threat intel: the top alert sources sit in a known bulletproof-hosting range.", "confidence": 0.95 }
+]

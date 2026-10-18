@@ -20,9 +20,18 @@
 # the engine process never sees it — the same isolation posture as the VM
 # host-secret mechanism. A direct Mistral client is deliberately not used.
 # RPC mode streams the response as text_delta events (real live output,
-# unlike `pi -p`, which prints the whole response at the end), and the
-# runner shuts pi down the moment the agent settles — no lingering
-# process, and `--no-session` means no session files pile up per call.
+# unlike `pi -p`, which prints the whole response at the end), and pi is
+# shut down the moment the agent settles — no lingering process, and
+# `--no-session` means no session files pile up.
+#
+# Sessions are SCOPED ONE PER RUN (a case phase instance): within a
+# session_scope the run's LLM calls share one pi process and one
+# conversation prefix, so the provider's prompt cache hits across them
+# (measured on the demo cases: ~40% of the second call's input served
+# from cache). A new run — another case or another phase — starts a
+# fresh session: nothing crosses case/phase boundaries, and the
+# conversation holds only the senses' own Q&A (never the engine's
+# conclusions), so the scoping adds cache hits without bias.
 # Callers fall back to recorded sensing artifacts when the LLM is
 # unreachable or the retries exhaust.
 #
@@ -34,6 +43,8 @@ import json
 import os
 import subprocess
 import sys
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 
 ENGINE_DIR = Path(__file__).resolve().parent
@@ -107,73 +118,166 @@ def pi_command():
     return cmd
 
 
-def _pi_runner(staged_path, stream):
-    """Call the LLM via pi's RPC mode, streaming. The staged assignment
-    (self-contained — the evidence is inlined) travels as a JSONL
-    `prompt` command on stdin; `text_delta` events stream the response
-    (reassembled into lines for the stream callback). `agent_settled`
-    ends the call — pi is shut down immediately (no lingering after the
-    response, no session files). Returns the full response text. Raises
-    RuntimeError if the call fails (unreachable / no credential). The
-    subprocess registers with procs — a quit mid-call leaves nothing
-    behind (kill_all on exit)."""
-    proc = subprocess.Popen(pi_command(), stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            text=True, bufsize=1, start_new_session=True)
-    procs.register(proc)
-    try:
-        prompt = Path(staged_path).read_text()
+class SensingSession:
+    """One pi RPC process shared by the LLM calls of a run (a case phase
+    instance). Within a session the calls share the conversation prefix,
+    so the provider's prompt cache hits across them (measured on the
+    demo cases: ~40% of the second call's input served from cache). A
+    session is scoped per run — a new case or phase starts a fresh one,
+    so nothing crosses case/phase boundaries, and the conversation holds
+    only the senses' own Q&A (never the engine's conclusions): cache
+    hits without bias. The process registers with procs — a quit mid-run
+    leaves nothing behind (kill_all on exit)."""
+
+    def __init__(self):
+        self.proc = None
+        self.calls = 0
+        self.usage = []   # per-call usage dicts (input / cacheRead / …)
+
+    def _spawn(self):
+        self.proc = subprocess.Popen(pi_command(), stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,
+                                     text=True, bufsize=1,
+                                     start_new_session=True)
+        procs.register(self.proc)
+
+    def _kill(self):
+        proc, self.proc = self.proc, None
+        if proc is None:
+            return
         try:
-            proc.stdin.write(json.dumps({"id": "sense", "type": "prompt",
-                                         "message": prompt}) + "\n")
-            proc.stdin.flush()
-        except (BrokenPipeError, OSError) as exc:
-            raise RuntimeError(f"pi exited before the prompt was accepted: {exc}")
-        chunks, pending, settled = [], "", False
-        for line in proc.stdout:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue  # not a protocol record
-            rtype = rec.get("type")
-            if rtype == "message_update":
-                ev = rec.get("assistantMessageEvent") or {}
-                if ev.get("type") == "text_delta":
-                    delta = ev.get("delta", "")
-                    chunks.append(delta)
-                    if stream is not None:
-                        pending += delta
-                        while "\n" in pending:
-                            out, pending = pending.split("\n", 1)
-                            stream(out)
-            elif rtype == "response" and rec.get("id") == "sense" \
-                    and not rec.get("success", True):
-                raise RuntimeError(f"pi rejected the prompt: {rec.get('error')}")
-            elif rtype == "agent_settled":
-                settled = True
-                break
-        if stream is not None and pending:
-            stream(pending)  # the final partial line
-        proc.stdin.close()
+            proc.kill()
+            proc.wait(timeout=5)
+        except Exception:
+            pass
+        procs.unregister(proc)
+
+    def close(self):
+        """Shut pi down (stdin close → pi exits; kill on timeout)."""
+        proc, self.proc = self.proc, None
+        if proc is None:
+            return
+        try:
+            proc.stdin.close()
+        except OSError:
+            pass
         try:
             proc.wait(timeout=20)
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait()
-        stderr = proc.stderr.read()
-    except BaseException:
-        proc.kill()  # never leave a pi behind on the error path
-        raise
-    finally:
         procs.unregister(proc)
-    if proc.returncode != 0:
-        raise RuntimeError(stderr.strip() or f"pi exited with code {proc.returncode}")
-    if not settled:
-        raise RuntimeError("pi RPC ended without agent_settled")
-    return "".join(chunks)
+
+    def call(self, staged_path, stream):
+        """One LLM call in this session (the runner contract: the staged
+        assignment travels as a JSONL `prompt` command, `text_delta`
+        events stream the response reassembled into lines, `agent_settled`
+        ends the call). Returns the full response text; raises
+        RuntimeError if the call fails (unreachable / no credential)."""
+        if self.proc is None or self.proc.poll() is not None:
+            self._spawn()
+        self.calls += 1
+        req = f"sense-{self.calls}"
+        try:
+            prompt = Path(staged_path).read_text()
+            try:
+                self.proc.stdin.write(
+                    json.dumps({"id": req, "type": "prompt",
+                                "message": prompt}) + "\n")
+                self.proc.stdin.flush()
+            except (BrokenPipeError, OSError) as exc:
+                raise RuntimeError(
+                    f"pi exited before the prompt was accepted: {exc}")
+            chunks, pending, usage, settled = [], "", None, False
+            for line in self.proc.stdout:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue  # not a protocol record
+                rtype = rec.get("type")
+                if rtype == "message_update":
+                    ev = rec.get("assistantMessageEvent") or {}
+                    if ev.get("type") == "text_delta":
+                        delta = ev.get("delta", "")
+                        chunks.append(delta)
+                        if stream is not None:
+                            pending += delta
+                            while "\n" in pending:
+                                out, pending = pending.split("\n", 1)
+                                stream(out)
+                    u = rec.get("usage")
+                    if u:
+                        usage = u  # the last event carries the message totals
+                elif rtype == "response" and rec.get("id") == req \
+                        and not rec.get("success", True):
+                    raise RuntimeError(
+                        f"pi rejected the prompt: {rec.get('error')}")
+                elif rtype == "agent_settled":
+                    settled = True
+                    break
+            if stream is not None and pending:
+                stream(pending)  # the final partial line
+            if usage:
+                self.usage.append(usage)
+            if not settled:
+                err = ""
+                try:
+                    err = (self.proc.stderr.read() or "").strip()
+                except OSError:
+                    pass
+                raise RuntimeError(err or "pi RPC ended without agent_settled")
+            return "".join(chunks)
+        except BaseException:
+            self._kill()  # a broken session is not reused — the next call respawns
+            raise
+
+    def summary(self):
+        """A one-line provider-cache summary for the run ('' when the
+        session made fewer than 2 calls — nothing to hit)."""
+        if len(self.usage) < 2:
+            return ""
+        read = sum(u.get("cacheRead") or 0 for u in self.usage)
+        total = sum(u.get("input") or 0 for u in self.usage)
+        pct = round(100 * read / total) if total else 0
+        return (f"provider prompt cache: {read}/{total} input tokens ({pct}%)"
+                f" served from cache across {len(self.usage)} LLM calls"
+                " (one pi session this run)")
+
+
+_current = threading.local()
+
+
+@contextmanager
+def session_scope():
+    """Scope the LLM calls to ONE pi session (one process, one
+    conversation prefix — the provider's prompt cache hits across the
+    calls). Leaving the scope shuts the session down; a new scope (a new
+    case or phase instance) starts fresh — nothing crosses runs."""
+    sess = SensingSession()
+    _current.session = sess
+    try:
+        yield sess
+    finally:
+        _current.session = None
+        sess.close()
+
+
+def _pi_runner(staged_path, stream):
+    """Call the LLM via pi's RPC mode, streaming (see SensingSession).
+    Within a session_scope the call joins the run's shared session;
+    otherwise it gets a one-shot session (spawn → call → shut down)."""
+    sess = getattr(_current, "session", None)
+    if sess is not None:
+        return sess.call(staged_path, stream)
+    sess = SensingSession()
+    try:
+        return sess.call(staged_path, stream)
+    finally:
+        sess.close()
 
 
 def llm_text(task, stream=None, label="explain", runner=None):

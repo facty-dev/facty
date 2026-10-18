@@ -1,0 +1,19 @@
+{
+  "file": "evidence/alerts.csv",
+  "idColumn": "alert_id",
+  "textColumn": "message",
+  "sourceColumn": "src_ip",
+  "timeColumn": "timestamp",
+  "subject": "alerts",
+  "labels": [
+    "a targeted attack",
+    "a probing scan",
+    "a benign authorized activity"
+  ],
+  "template": "This alert is {}.",
+  "scoring": "margin",
+  "threshold": 0.65,
+  "model": "onnx-community/ModernBERT-base-nli-ONNX",
+  "precision": "fp32",
+  "prep": "none"
+}

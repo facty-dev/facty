@@ -88,7 +88,7 @@ info:
 # over canonical case artifacts. The LLM senses and proposes; the engine
 # decides. See docs/adr/0003-detective-dss-neurosymbolic-core.md.
 
-.PHONY: dss-demo dss-demo-2 dss-demo-fraud dss-demo-fraud-2 dss-demo-rca dss-demo-rca-2 dss-selftest dss-live dss-test dss-sense deps
+.PHONY: dss-demo dss-demo-2 dss-demo-fraud dss-demo-fraud-2 dss-demo-rca dss-demo-rca-2 dss-selftest dss-live dss-test dss-sense deps deps-sensors
 
 OP ?= facts
 
@@ -131,6 +131,13 @@ dss-sense:
 deps:
 	uv venv
 	uv pip install -r requirements.txt
+
+# The optional sensor layer (engine/label.py): the label sensor (a small
+# CPU-only zero-shot classifier). Host/CI-only — the gondolin VM snapshot
+# has no pypi egress (by design); see requirements-sensors.txt.
+deps-sensors:
+	uv venv
+	uv pip install -r requirements-sensors.txt
 
 # ── Agentic Runtime (SDLC) ──────────────────────────────────────────────────
 # Asset-oriented SDLC: OST → PRD → BDD → Implementation → ADRs

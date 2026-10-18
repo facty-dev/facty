@@ -37,6 +37,7 @@ sys.path.insert(0, str(ENGINE_DIR))
 import engine  # noqa: E402
 import cli     # noqa: E402  (control-plane helpers: sense_one, drop_file, …)
 import auth    # noqa: E402  (Mistral subscription sign-in via the extension)
+import sensing # noqa: E402  (session_scope — the run's LLM calls share one pi session)
 import procs   # noqa: E402  (subprocess registry — no dangling processes)
 
 from textual import on, work
@@ -231,6 +232,7 @@ class DetailBlock(VerticalScroll):
 # (text-primary, text-success, …) so they adapt to the active theme.
 TOOL_BADGES = {
     "llm · induction": "#0891B2",               # cyan
+    "classifier · induction": "#0D9488",        # teal (the label sensor)
     "llm · commentary": "#7C3AED",              # violet (out-of-band explanations)
     "fwd chain · deduction": "#2563EB",         # blue
     "constraint solver · deduction": "#D97706", # amber
@@ -274,8 +276,14 @@ class PickerScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header()
         yield Label("Facty — the detective DSS · pick a case", classes="title")
-        yield ListView(*[ListItem(Label(c.name), name=c.name) for c in cli.list_cases()],
-                       id="picker")
+        sensor_cases = {c.name for c in cli.list_cases()
+                        if (c / "classify.json").exists()}
+        yield ListView(*[
+            ListItem(Label(f"{c.name} [dim]· classifier[/dim]"
+                           if c.name in sensor_cases else c.name),
+                     name=c.name)
+            for c in cli.list_cases()],
+            id="picker")
         yield Footer()
         yield Tooltip()
 
@@ -510,6 +518,7 @@ class CaseScreen(Screen):
     def run_stage(self, label, op, *args, offline=False, engine_context=None):
         """One sensing stage (called from the run worker). See _live_call."""
         op_label = cli.sensing_ops(self.case)[op][0]
+        tag = "classifier · induction" if op == "label" else "llm · induction"
 
         def call(ui, stream, on_response):
             return cli.sense_one(ui, self.case, op, *args, stream=stream,
@@ -517,7 +526,7 @@ class CaseScreen(Screen):
                                  mode="cache" if offline else None,
                                  engine_context=engine_context)
 
-        return self._live_call(label, "llm · induction", call,
+        return self._live_call(label, tag, call,
                                strip=f"{op_label} — ")
 
     def _live_call(self, label, tag, call, strip=""):
@@ -583,28 +592,43 @@ class CaseScreen(Screen):
         sense the initial evidence → the engine solves phase 1 and opens
         its questions → the LLM senses the test's evidence WITH that
         context (the questions + the hypothesis space — never the
-        engine's conclusions) → the engine re-solves."""
+        engine's conclusions) → the engine re-solves.
+
+        The run's LLM calls share ONE pi session (session_scope, scoped
+        one per case phase instance): the provider's prompt cache hits
+        across them; a new run starts a fresh session, so nothing
+        crosses case/phase boundaries."""
         if offline:
             self.write(self._stage_text("running without the LLM (cached responses)"))
-        index = self.run_stage("classify the evidence pile "
-                               "(messy input → typed evidence)", "classify",
-                               offline=offline)
-        ents = self.run_stage("extract the entities "
-                              "(extraction is sensing, not reasoning)", "entities",
-                              offline=offline)
-        facts = self.run_stage("sense the evidence → facts "
-                               "(judge: schema + compute checks)", "facts",
-                               index, ents, offline=offline)
-        self.entities = ents
-        if add_facts is not None:
-            # phase 1: the engine decides on the initial evidence — its
-            # open questions + hypothesis space are the context for
-            # sensing the recommended test's evidence
-            r1 = self._engine_run(facts, "on the initial evidence")
-            label = Path(add_facts).stem.replace("facts-", "")
-            facts = facts + self.run_stage(
-                f"sense the {label} evidence (with the engine's open questions)",
-                "drop", index, ents, engine_context=r1, offline=offline)
+        with sensing.session_scope() as sess:
+            index = self.run_stage("classify the evidence pile "
+                                   "(messy input → typed evidence)", "classify",
+                                   offline=offline)
+            ents = self.run_stage("extract the entities "
+                                  "(extraction is sensing, not reasoning)", "entities",
+                                  offline=offline)
+            facts = self.run_stage("sense the evidence → facts "
+                                   "(judge: schema + compute checks)", "facts",
+                                   index, ents, offline=offline)
+            if (self.case / "classify.json").exists():
+                label_facts = self.run_stage("label the evidence pile — the "
+                                             "classifier (a small local model; "
+                                             "no LLM tokens)", "label",
+                                             offline=offline)
+                facts = facts + label_facts
+            self.entities = ents
+            if add_facts is not None:
+                # phase 1: the engine decides on the initial evidence — its
+                # open questions + hypothesis space are the context for
+                # sensing the recommended test's evidence
+                r1 = self._engine_run(facts, "on the initial evidence")
+                label = Path(add_facts).stem.replace("facts-", "")
+                facts = facts + self.run_stage(
+                    f"sense the {label} evidence (with the engine's open questions)",
+                    "drop", index, ents, engine_context=r1, offline=offline)
+            summary = sess.summary()
+            if summary:
+                self.write(self._content("foreground-muted", summary))
         self._engine_run(facts, "with the recommended test's evidence"
                          if add_facts is not None else "on the initial evidence")
 

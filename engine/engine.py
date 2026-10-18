@@ -440,6 +440,7 @@ CASES = [
     ("attribution-silver-blaze", "facts-ledger.json"),
     ("adjudication-phantom-invoice", "facts-trail.json"),
     ("causation-three-am-outage", "facts-postmortem.json"),
+    ("triage-alert-flood", "facts-threat-intel.json"),
 ]
 
 
@@ -613,6 +614,33 @@ def cmd_selftest(args):
     check("phase 2: the detection gap is derived (no upstream health check — the fix)",
           "d6" in derived and derived["d6"].get("value") == "no upstream health check",
           str(derived.get("d6")))
+
+    # ── 3c. triage case (triage): the label sensor in the loop ─────
+
+    print("")
+    print("--- triage case (triage-alert-flood): the label sensor in the loop, asserted ---")
+    t1, t2 = proof["triage-alert-flood"]
+    pruned1 = {p["hypothesis"] for p in t1["pruned"]}
+    check("phase 1 prunes the false-positive flood (H3) — the pile is not mostly misfires",
+          "H3" in pruned1, str(pruned1))
+    ids = [rk["id"] for rk in t1["ranking"]]
+    check("phase 1 ranks the targeted attack (H1) above background noise (H2)",
+          ids[:2] == ["H1", "H2"], str(ids))
+    derived1 = {f["id"] for f in t1["derived_facts"]}
+    check("the classifier aggregates drive the chain (coordinatedAttackLikely derived)",
+          "d1" in derived1, str(derived1))
+    check("recommended test is the threat-intel correlation (the discriminating question)",
+          t1["recommended_test"] is not None
+          and t1["recommended_test"]["slot"] == "threat-intel",
+          str(t1["recommended_test"]))
+    pruned2 = {p["hypothesis"] for p in t2["pruned"]}
+    check("phase 2: the threat intel prunes background noise (H2) — the top source is known-bad",
+          "H2" in pruned2, str(pruned2))
+    v = t2["verdict"]
+    check("phase 2: the targeted attack (H1) wins — route P1 to incident response",
+          v is not None and v["id"] == "H1", str(v and v["id"]))
+    check("phase 2: the verdict is high-confidence (score ≥ 0.7)",
+          v is not None and v["score"] >= 0.7, str(v and v["score"]))
 
     print("")
     failed = len(checks) - sum(checks)

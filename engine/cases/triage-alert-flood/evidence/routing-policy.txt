@@ -1,0 +1,20 @@
+SECURITY ALERT ROUTING POLICY — SOC tier-1, current revision
+
+When an alert flood arrives, tier-1 routes it by 06:00 using three
+dispositions:
+
+P1 — targeted attack. Route to incident response; hand off to
+     attribution (identify the operator). Trigger: a coordinated set of
+     attack-classified alerts from a small number of sources in a
+     short window, confirmed against threat intelligence.
+
+P2 — detector false-positive flood. Route to detection engineering
+     for signature tuning. Trigger: the flood is mostly benign
+     activity misflagged by the SIEM.
+
+P3 — background scanning noise. Route to the tier-1 suppression queue.
+     Trigger: the flood is internet background radiation — scans
+     from many unrelated sources, no attack-classified activity.
+
+The disposition is a routing decision, not an accusation: the pack
+computes it from the classified evidence; the human owns the call.

@@ -41,8 +41,12 @@ graceful fallback. See
   extraction (schema + messy input → validated object, LLM streamed),
   with a judge layer (schema + compute checks) and a capped correction
   loop — rejections feed back to the LLM, max 3 turns
+- `label.py` — the label sensor: a small CPU-only zero-shot classifier
+  (see "The label sensor" below)
 - `test_retry.py` — the correction loop, tested with a stubbed runner
   (no LLM needed)
+- `test_label.py` — the label sensor, tested with a stubbed classifier
+  (no model needed)
 - `cli.py` — the `facty` CLI: the workbench entry (bare `./facty`) +
   the scriptable control plane (subcommands)
 - `tui.py` — the Textual workbench (the primary interface; optional dep)
@@ -80,8 +84,19 @@ response at the end). Each call is lean and one-shot: no tools, no
 skills/context files/MCP, no session files, thinking off (a measured
 ~4.5x faster end-to-end on the demo cases), and pi is shut down the
 moment the agent settles — no lingering process after the response.
-Env knobs: `FACTY_PROVIDER`, `FACTY_MODEL`, `FACTY_THINKING`. To debug
-the sensing steps:
+Env knobs: `FACTY_PROVIDER`, `FACTY_MODEL`, `FACTY_THINKING`.
+
+Sessions are **scoped one per run** (a case phase instance):
+`sensing.session_scope()` wraps a run (the workbench's `do_run`, the
+walkthrough), so its LLM calls share one pi process and one conversation
+prefix — the provider's prompt cache hits across the calls (measured
+19–77% of input served from cache on the demo cases; the run log prints
+the summary). A new run — another case or another phase — starts a
+fresh session: nothing crosses case/phase boundaries, and the
+conversation holds only the senses' own Q&A, never the engine's
+conclusions — the cache benefits without the bias.
+
+To debug the sensing steps:
 
 ```bash
 # one sensing op, standalone (fast prompt iteration)
@@ -128,6 +143,7 @@ as triples: `subject / predicate = value`.
 | Tag | Tool | Inference |
 |---|---|---|
 | `llm · induction` | the senses — messy evidence → facts; proposes hypotheses + tests | induction |
+| `classifier · induction` | the label sensor — a small CPU-only classifier labels the evidence pile (per-row + aggregate facts, confidence-gated) | induction |
 | `llm · commentary` | out-of-band LLM explanations (entities / ranking / verdict) — presentation only, never the verdict path | commentary |
 | `fwd chain · deduction` | rules fire: derive facts, open questions, raise the hypothesis space | deduction |
 | `constraint solver · deduction` | prune impossible explanations, support the survivors | deduction |
@@ -170,6 +186,55 @@ without the LLM (cached responses)** checkbox — enabled only when the
 cache has an entry for every sensing step of the case
 (`cli.cache_ready`); it is enabled automatically once a live run has
 populated the cache.
+
+## The label sensor
+
+The numeric sense for categorical evidence (`engine/label.py`). A case
+declares its labeling task in `classify.json` — the evidence file, the
+text column, the label set, a confidence threshold, the model, the prep
+mode — and the sensor scores every row against the labels with a small
+NLI model (zero-shot: premise = the row text, hypothesis = the template
+with the label, entailment − contradiction softmaxed across the labels),
+emitting one fact per row plus aggregate facts. Below the threshold the
+fact says `unclassified` — the confidence-gated handoff (the LLM picks
+those rows up). The sensor never touches the verdict path; it emits
+facts, the engine decides.
+
+```bash
+make deps-sensors                                   # onnxruntime + transformers<5 (host/CI)
+./facty sense alert-flood --op label                # label the pile (streamed log)
+./facty sense alert-flood --op label --json         # machine-readable facts
+./facty sense alert-flood --op parser               # generate sensor/extract.py (prep=parser cases)
+FACTY_SENSE=cache ./facty sense alert-flood --op label   # replay the cache, no model call
+```
+
+`classify.json` knobs: `labels` + `template` (the pack owns the
+vocabulary — phrasing is pack design, measured to matter), `scoring`
+(`margin` default — calibrated confidences; `entail`), `threshold`
+(per-pack calibration knob), `model` (an ONNX repo) + `precision`
+(`fp32` | `int8`), and `prep`:
+
+- `none` (default) — structured evidence (CSV): read the columns
+  directly; the LLM never sees the pile (the token-saving case).
+- `parser` — semi-structured mess: a generated, committed, tested,
+  stdlib-only parser (`sensor/extract.py` + `sensor/extract_test.py`)
+  extracts the rows. The parser is written once per evidence format by
+  an LLM (`--op parser`) in a capped correction loop (1 initial + 2
+  revisions) judged by a **code judge**: a static contract check
+  (stdlib-only imports, no dangerous builtins, a `parse(text)` function),
+  an execution check in a subprocess with a timeout, its unit tests,
+  a completeness check (no silent line drops), and the row schema.
+- `llm-filter` — the LLM reads the messy evidence and emits candidate
+  rows (its judgment strength: relevance); the classifier labels them.
+
+Fallback ladder (logged, never silent): rows → classifier → facts;
+prep or classifier failure → raw chunks (classify the messy text
+as-is, threshold-gated) → facts; everything failed → the response cache,
+then the recorded facts. Sensor-sourced evidence is excluded from the
+LLM's phase-1 files (`cli.phase1_evidence`), so the pile never enters an
+LLM call. The demo case `triage-alert-flood` shows the classifier in
+the verdict loop; see its `SENSING.md` for the measured accuracy and
+calibration notes.
 
 ## Workbench authentication
 
