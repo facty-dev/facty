@@ -12,7 +12,10 @@ read-write at `/workspace` (your current working directory). Everything you
 write lands directly in the repo.
 
 You may use the bigpowers skills available to you (e.g. `develop-tdd`,
-`enforce-first`, `verify-work`) and web search (ddgr) for API/docs lookups.
+`ponytail`, `verify-work`). There is no web search in the VM — cases
+handle sensitive data, and the egress allow-list is api.mistral.ai +
+registry.npmjs.org only. For API/docs lookups, rely on the repo and the
+skills; note any gap in your result.
 
 ## Workflow
 

@@ -116,9 +116,6 @@ cmd_up() {
     --resume "$SNAP" \
     --mount-hostfs "$PROJECT_DIR:/workspace" \
     --allow-host api.mistral.ai \
-    --allow-host duckduckgo.com \
-    --allow-host html.duckduckgo.com \
-    --allow-host lite.duckduckgo.com \
     --allow-host registry.npmjs.org \
     --host-secret MISTRAL_API_KEY@api.mistral.ai \
     -- bash -c "mkdir -p /root/.agents/skills /root/.session-env; umask 077; [ -n \"\${MISTRAL_API_KEY:-}\" ] && printf 'export MISTRAL_API_KEY=%s\\n' \"\$MISTRAL_API_KEY\" > /root/.session-env/mistral.sh; for s in /opt/skills/*/; do ln -sfn \"\$s\" \"/root/.agents/skills/\$(basename \"\$s\")\"; done; [ -f /opt/skills/SKILL-INDEX.md ] && ln -sfn /opt/skills/SKILL-INDEX.md /root/.agents/SKILL-INDEX.md; touch /root/.vm-ready; cd /workspace; exec bash -l # $SESSION_TAG"
@@ -133,7 +130,7 @@ cmd_status() {
   echo "status: up"
   echo "session: $(meta_id)"
   echo "project: $PROJECT_DIR -> /workspace"
-  echo "egress: api.mistral.ai, duckduckgo.com (+html/lite), registry.npmjs.org"
+  echo "egress: api.mistral.ai, registry.npmjs.org (no web search — sensitive case data)"
   echo "secrets: MISTRAL_API_KEY (host-side placeholder substitution)"
 }
 

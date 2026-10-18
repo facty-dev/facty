@@ -12,8 +12,10 @@ isolated micro-VM with the repository mounted read-write at `/workspace`
 the repo.
 
 You may use the bigpowers skills available to you (e.g. `survey-context`,
-`elaborate-spec`, `grill-me`) and web search (ddgr) when a phase calls for
-research.
+`elaborate-spec`, `scope-work`). There is no web search in the VM — cases
+handle sensitive data, and the egress allow-list is api.mistral.ai +
+registry.npmjs.org only. When a phase calls for research, use the repo's
+own docs and note what could not be verified externally.
 
 ## Phase workflows
 

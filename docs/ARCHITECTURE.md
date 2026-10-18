@@ -23,15 +23,15 @@
 │            └───────────►│ GONDOLIN VM SESSION                  │  │
 │                         │ (booted from pi-sandbox snapshot)     │  │
 │            boot-time    │                                      │  │
-│            injection ──►│  rootfs: Alpine + pi + ddgr + 88     │  │
-│            --host-secret│  skills (~/code/gondolin-pi template) │  │
+│            injection ──►│  rootfs: Alpine + pi + 33 skills      │  │
+│            --host-secret│  (gondolin/ vendored image)          │  │
 │                         │                                      │  │
 │                         │  /workspace  = Facty repo (rw)  │  │
 │                         │  guest env:  MISTRAL_API_KEY =        │  │
 │                         │      <random-placeholder>             │  │
 │                         │  egress: api.mistral.ai,              │  │
-│                         │      duckduckgo.com(+html/lite),      │  │
 │                         │      registry.npmjs.org               │  │
+│                         │  (no web search — sensitive data)     │  │
 │                         └──────────────────────────────────────┘  │
 │                                                                    │
 │  Host-side secret flow:                                            │
@@ -62,7 +62,7 @@
 | `scripts/agent-pi.sh` | Role runner: composes role prompt + assignment (`templates/sdlc/agents/`), execs pi in the VM, appends audit entries to `.agentic/audit.jsonl` |
 | `.agentic/vm-session.json` | Session record `{id, pid, socketPath}` written at boot by a user-side watcher; the ONLY sanctioned discovery mechanism from sandboxed sessions |
 | `/root/.session-env/` (guest) | Placeholder env stashed at boot; exec'd agents source it (exec commands don't inherit boot env) |
-| `~/code/gondolin-pi/` | VM template: snapshot builder + skills (bigpowers 81, ponytail 6, ddgr) — infra, shared across projects |
+| `gondolin/` | VM template (vendored in-repo): snapshot builder + the facty-optimized skill set — see [gondolin/README.md](../gondolin/README.md) |
 
 ## Session lifecycle
 

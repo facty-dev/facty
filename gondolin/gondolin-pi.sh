@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# gondolin-pi.sh — run the pi coding agent inside a gondolin micro-VM,
-# with ddgr (DuckDuckGo) web search and the ddgr skill preinstalled.
+# gondolin-pi.sh — run the pi coding agent inside a gondolin micro-VM.
+# No web-search tooling: Facty cases handle sensitive data, so the VM
+# must not be able to leak it to an untrusted third party (runtime egress
+# is api.mistral.ai + registry.npmjs.org only — see the allow-list below).
 #
 # Usage:
 #   gondolin-pi.sh [project-dir]            interactive pi session (default dir: $PWD)
@@ -15,7 +17,7 @@
 # Requires: MISTRAL_API_KEY in the environment.
 #
 # The VM is ephemeral per run, but boots instantly from the snapshot —
-# pi, ddgr, the skill, and the pi-sandbox + pi-mistral-subscription
+# pi, the skill set, and the pi-sandbox + pi-mistral-subscription
 # extensions are baked in (see build-snapshot.sh).
 # The project directory is mounted read-write at /workspace in the guest.
 
@@ -71,8 +73,9 @@ fi
 
 # Egress allow-list (an explicit --allow-host list replaces the defaults):
 #   api.mistral.ai     — LLM API (mistral-large-4 et al.)
-#   duckduckgo hosts   — ddgr web search
 #   registry.npmjs.org — project npm installs inside the VM
+# No web-search hosts: cases handle sensitive data — nothing leaves the
+# VM except LLM calls (and npm installs).
 # MISTRAL_API_KEY is passed as a host-secret: the guest only sees a
 # placeholder, which the host substitutes into outbound requests to
 # api.mistral.ai.
@@ -81,9 +84,6 @@ gondolin bash \
   --resume "$SNAP" \
   ${PROJECT_DIR:+--mount-hostfs "$PROJECT_DIR:/workspace"} \
   --allow-host api.mistral.ai \
-  --allow-host duckduckgo.com \
-  --allow-host html.duckduckgo.com \
-  --allow-host lite.duckduckgo.com \
   --allow-host registry.npmjs.org \
   --host-secret MISTRAL_API_KEY@api.mistral.ai \
   "${GUEST_ENV[@]}" \

@@ -1,24 +1,29 @@
 #!/usr/bin/env bash
 # build-snapshot.sh — build the reusable pi-sandbox VM snapshot.
 #
-# Boots a fresh gondolin VM, installs pi + ddgr + textual (for projects
-# with a Textual CLI/workbench, e.g. facty's `./facty`) + the ddgr skill
+# Boots a fresh gondolin VM, installs pi + textual (for projects
+# with a Textual CLI/workbench, e.g. facty's `./facty`) + the skill set
 # onto the root disk, then snapshots it. Future runs resume from the
 # snapshot instantly (qcow2 overlay) — nothing is installed at session
 # start.
 #
 # Idempotent: re-run any time to rebuild (e.g. after bumping the pi version
-# or editing skills/ddgr/).
+# or editing the skills/).
+#
+# No web-search tooling (ddgr or similar) is baked in, by design: Facty
+# cases handle sensitive data, so the VM must not be able to leak it to
+# an untrusted third party. Runtime egress is api.mistral.ai +
+# registry.npmjs.org only (see gondolin-pi.sh).
 #
 # Notes:
 # - Installs go to /usr/local and /usr/lib (root disk — persisted in snapshots).
-# - /root is tmpfs and NOT captured by snapshots, so the skill is stored at
-#   /opt/skills/ddgr; the runner symlinks it into /root/.agents/skills at boot.
+# - /root is tmpfs and NOT captured by snapshots, so the skills are stored
+#   at /opt/skills; the runner symlinks them into /root/.agents/skills at boot.
 # - pi extensions (pi-sandbox, pi-mistral-subscription) are installed with
 #   PI_CODING_AGENT_DIR=/opt/pi-agent (also persisted); the runner exports
 #   that env var at boot so pi loads them. Users can then /login with a
 #   Mistral Pro subscription inside the VM to bill their quotas.
-# - pi + ddgr are symlinked into /usr/bin so they are on the guest's default PATH.
+# - pi is symlinked into /usr/bin so it is on the guest's default PATH.
 
 set -euo pipefail
 
@@ -56,7 +61,7 @@ gondolin bash --rootfs-size 4G \
   --allow-host pypi.org --allow-host files.pythonhosted.org \
   --allow-host registry.npmjs.org \
   --allow-host github.com --allow-host codeload.github.com \
-  -- bash -c "set -eu; echo '>> (vm) apk add py3-pip'; apk add -q --no-progress py3-pip git ca-certificates; echo '>> (vm) pip install ddgr'; python3 -m pip install --break-system-packages --no-cache-dir --root-user-action=ignore -q ddgr; echo '>> (vm) pip install textual (the facty CLI workbench)'; python3 -m pip install --break-system-packages --no-cache-dir --root-user-action=ignore -q textual; echo '>> (vm) npm install -g pi'; npm install -g --silent @earendil-works/pi-coding-agent; echo '>> (vm) put npm global bin on PATH (gondolin bash PATH lacks /usr/local/bin)'; export PATH="$(npm prefix -g)/bin:$PATH"; command -v pi; echo '>> (vm) install pi extensions to /opt/pi-agent/'; export PI_CODING_AGENT_DIR=/opt/pi-agent; pi install npm:pi-sandbox; pi install https://github.com/5omeOtherGuy/pi-mistral-subscription; echo '>> (vm) install skills to /opt/skills/'; mkdir -p /opt/skills; cp -r /mnt/skills/. /opt/skills/; echo '>> (vm) link pi onto default PATH (/usr/bin)'; ln -sf /usr/local/bin/pi /usr/bin/; touch /opt/.pi-sandbox-ready; echo '>> (vm) setup complete'; sleep 600 # $BUILD_TAG" > "$SNAPSHOT_DIR/build.log" 2>&1 &
+  -- bash -c "set -eu; echo '>> (vm) apk add py3-pip'; apk add -q --no-progress py3-pip git ca-certificates; echo '>> (vm) pip install textual (the facty CLI workbench)'; python3 -m pip install --break-system-packages --no-cache-dir --root-user-action=ignore -q textual; echo '>> (vm) npm install -g pi'; npm install -g --silent @earendil-works/pi-coding-agent; echo '>> (vm) put npm global bin on PATH (gondolin bash PATH lacks /usr/local/bin)'; export PATH="$(npm prefix -g)/bin:$PATH"; command -v pi; echo '>> (vm) install pi extensions to /opt/pi-agent/'; export PI_CODING_AGENT_DIR=/opt/pi-agent; pi install npm:pi-sandbox; pi install https://github.com/5omeOtherGuy/pi-mistral-subscription; echo '>> (vm) install skills to /opt/skills/'; mkdir -p /opt/skills; cp -r /mnt/skills/. /opt/skills/; echo '>> (vm) link pi onto default PATH (/usr/bin)'; ln -sf /usr/local/bin/pi /usr/bin/; touch /opt/.pi-sandbox-ready; echo '>> (vm) setup complete'; sleep 600 # $BUILD_TAG" > "$SNAPSHOT_DIR/build.log" 2>&1 &
 SETUP_PID=$!
 
 # Wait for the session to register.

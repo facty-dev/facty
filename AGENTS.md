@@ -83,8 +83,9 @@ Schemas: `engine/schemas/*.schema.json`. Codegen: `engine/emit.py` →
    agent — unless the PO directs a rename or reframe. Coding agents
    report to `.agentic/messages/coding-to-decision/<NNN>-result.md`.
 7. **VM egress is an explicit allow-list** (api.mistral.ai,
-   duckduckgo.com + html/lite, registry.npmjs.org). Don't add network
-   features that assume open egress.
+   registry.npmjs.org). Don't add network features that assume open
+   egress — and don't add web-search tooling (ddgr or similar): cases
+   handle sensitive data, so nothing leaves the VM except LLM calls.
 
 ## Common commands
 
@@ -230,8 +231,9 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
 - **Network egress** from a sandboxed session is restricted per
   `.pi/sandbox.json` (currently only `earendil-works.github.io` +
   `docassemble.org`). Web search/scraping skills will not work from the
-  sandbox; use the VM's ddgr instead (it runs inside the session with its
-  own allow-list).
+  sandbox — and the VM has no web-search tooling by design (cases handle
+  sensitive data; its egress is api.mistral.ai + registry.npmjs.org
+  only). Do web research on the host, or skip it for sensitive cases.
 - **Cross-project paths** (`~/.cache/gondolin`) may be unreadable from
   the sandbox — expect prompts or failures when scripts probe them; run
   those commands from the user's terminal or a pi `!` escape. (The gondolin
