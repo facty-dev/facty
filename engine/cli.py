@@ -860,13 +860,48 @@ def sense_one(ui, case, op, evidence_index=None, entities=None, stream=None,
 
 # ── Out-of-band commentary (the LLM as explainer, never as decider) ──
 
+def _label_tier(case):
+    """The label sensor's tier as the case pins it (classify.json
+    `backend`): strom (the default — the Strom decider tier scores every
+    row, the local classifier is the automatic fallback), hybrid (the
+    classifier scores the bulk, the decider adjudicates the gated rows),
+    local (the offline-only classifier). The explainer describes the tier
+    the case actually runs — not a hardcoded one."""
+    backend = "strom"
+    try:
+        backend = json.loads((Path(case) / "classify.json").read_text()).get(
+            "backend", "strom")
+    except (ValueError, OSError):
+        pass
+    try:
+        import strom  # the decider tier's client (stdlib-only)
+        hosted = f"the Strom decider tier (Uprelic {strom.DEFAULT_MODEL}, EU/Paris)"
+    except Exception:
+        hosted = "the Strom decider tier (Uprelic, EU/Paris)"
+    tier = {
+        "strom": f"{hosted} scores every row; the local classifier is "
+                 "the automatic fallback",
+        "hybrid": f"the local classifier (tier 1) scores the bulk; "
+                  f"{hosted} adjudicates the rows below the confidence gate",
+        "local": "a small local classifier (tier 1, CPU-only, no LLM "
+                 "tokens) scores every row",
+    }.get(backend, f"the label sensor ({backend} backend)")
+    short = {
+        "strom": hosted,
+        "hybrid": f"the local classifier + {hosted}",
+        "local": "the local classifier (CPU-only)",
+    }.get(backend, f"the label sensor ({backend})")
+    return backend, tier, short
+
+
 def sensing_block(case, result, entities):
     """The induction half of the run, as the commentary sees it: the
-    steps the senses performed (classify → entities → facts → sensor
-    labels → the test evidence), with their outputs — so the explainer
-    can walk the WHOLE run (induction + deduction), not just the
-    engine's half. The facts are compact triples (the judge layer
-    already checked them: schema + compute)."""
+    models behind it and the steps the senses performed (classify →
+    entities → facts → the label sensor's tier → the test evidence),
+    with their outputs — so the explainer can walk the WHOLE run
+    (induction + deduction), not just the engine's half. The facts are
+    compact triples (the judge layer already checked them: schema +
+    compute)."""
     case = Path(case)
     index = engine.load_validated(case / "evidence-index.json",
                                   "evidence-index.schema.json")
@@ -883,13 +918,16 @@ def sensing_block(case, result, entities):
          "facts": [{k: f.get(k) for k in ("id", "subject", "predicate", "value")}
                    for f in facts]},
     ]
+    models = {"reading — classify · entities · facts":
+              f"{sensing.PROVIDER} / {sensing.MODEL} (the LLM reads "
+              "the evidence)"}
     sensor_srcs = sensor_source_names(case)
     if sensor_srcs:
         n = sum(1 for f in facts
                 if Path(str(f.get("source", "")).split(":")[0]).name in sensor_srcs)
-        steps.append({"step": "label the evidence pile — a small local "
-                              "classifier (no LLM tokens); rows below its "
-                              "confidence gate are left to the LLM",
+        backend, tier, short = _label_tier(case)
+        models["label sensor"] = f"{backend} backend — {short}"
+        steps.append({"step": f"label the evidence pile — {tier}",
                       "files": sorted(sensor_srcs),
                       "facts_contributed": n})
     drop = drop_file(case)
@@ -898,7 +936,7 @@ def sensing_block(case, result, entities):
                               "the engine's open questions as context — "
                               "never its conclusions)",
                       "count": len(engine.load_array(drop, "fact.schema.json"))})
-    return {"steps": steps}
+    return {"models": models, "steps": steps}
 
 
 def explain_task(target, result, entities, sensing=None):
@@ -983,14 +1021,15 @@ def explain_task(target, result, entities, sensing=None):
             f"{ask}\n\n")
     senses = ""
     if sensing:
-        senses = ("THE SENSES (induction — the LLM and the sensors read "
-                  "the evidence; probabilistic, never the decider):\n"
+        senses = ("THE SENSES (induction — the reading model + the label "
+                  "sensor read the evidence; probabilistic, never in the "
+                  "verdict path):\n"
                   f"{json.dumps(sensing, indent=2)}\n\n"
                   "Entities extracted (the case's people, animals, places, "
                   f"objects):\n{json.dumps(ents, indent=2)}\n\n")
     return (head + senses
-            + "THE ENGINE (deduction — deterministic, the decider; its "
-              "output, verbatim):\n"
+            + "THE ENGINE (deduction — deterministic; it alone decides "
+              "the verdict; its output, verbatim):\n"
               f"{json.dumps(summary, indent=2)}\n\n"
               "Write the commentary in plain language (markdown is fine).")
 

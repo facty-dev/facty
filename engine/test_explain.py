@@ -273,11 +273,34 @@ def main():
               and esc(h3s[0]["reason"]) in seen_t[0] and "C1" in seen_t[0]
               and esc(stmt_t["H3"]) in seen_t[0],
               seen_t[0][:200] if seen_t else "no prompt seen")
-        check("the triage commentary prompt carries the classifier step "
-              "(the label sensor — no LLM tokens)",
+        backend = json.loads((triage / "classify.json").read_text()).get(
+            "backend", "strom")
+        tier_word = {"strom": "Strom decider tier", "hybrid": "decider tier",
+                     "local": "local classifier"}[backend]
+        check("the triage commentary prompt carries the label-sensor step "
+              f"(the {backend} backend the case pins)",
               len(seen_t) == 1 and "label the evidence pile" in seen_t[0]
-              and "no LLM tokens" in seen_t[0]
+              and tier_word in seen_t[0]
               and all(p in seen_t[0] for p in pile))
+        check("the commentary prompt names the induction models (the reading "
+              "model + the label sensor's tier)",
+              len(seen_t) == 1 and '"models"' in seen_t[0]
+              and cli.sensing.MODEL in seen_t[0]
+              and ("Strom" in seen_t[0] if backend in ("strom", "hybrid")
+                   else "local classifier" in seen_t[0]))
+
+        # the tier description follows the configured backend — all three
+        for be, word in (("strom", "Strom decider tier"),
+                         ("hybrid", "adjudicates the rows below"),
+                         ("local", "no LLM tokens")):
+            with tempfile.TemporaryDirectory() as tmpc:
+                c = Path(tmpc) / be
+                c.mkdir()
+                (c / "classify.json").write_text(
+                    json.dumps({"file": "x.csv", "backend": be}))
+                got_backend, tier, _short = cli._label_tier(c)
+                check(f"_label_tier describes the {be} backend",
+                      got_backend == be and word in tier, tier)
         check("the triage commentary prompt carries the classifier's "
               "sensed facts (the sensor's contribution)",
               len(seen_t) == 1 and '"facts_contributed"' in seen_t[0]
