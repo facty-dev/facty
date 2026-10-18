@@ -867,27 +867,35 @@ def explain_task(target, result, entities):
     path); this is the LLM as explainer, fed the engine's conclusions
     (unlike the senses, which never see them).
 
-    The summary carries the WHOLE candidate story — raised, pruned (with
-    the constraint + reason + the pruned hypothesis's own statement),
-    and ranked — so the commentary can reconcile the counts ("three were
-    raised, one was eliminated, two ranked") instead of mistaking the
-    ranking for the full candidate set."""
+    The summary carries the WHOLE candidate story, in the order the
+    engine performed it — the forward chain's fired rules + derived
+    facts + opened questions + raised candidates, the pruned records
+    (constraint + reason + the pruned hypothesis's own statement), and
+    the ranking — so the commentary can reconcile the counts ("three
+    were raised, one was eliminated, two ranked") and walk the steps."""
     summary = {
+        "fired_rules": [{"rule": e.get("rule"), "round": e.get("round"),
+                         "op": ("derived" if "derived" in e
+                                else "opened" if "opened" in e else "raised"),
+                         "target": (e.get("derived") or e.get("opened")
+                                    or e.get("raised")),
+                         "from": e.get("sources", [])}
+                        for e in result.get("fired_rules", [])],
+        "derived_facts": [{k: f.get(k) for k in ("id", "subject", "predicate", "value")}
+                          for f in result.get("derived_facts", [])],
+        "opened_questions": [{k: q.get(k) for k in ("id", "text", "discriminates")}
+                             for q in result.get("opened_questions", [])],
         "raised": list(result.get("raised_hypotheses", [])),
+        "pruned": [{k: p.get(k) for k in ("hypothesis", "constraint",
+                                          "reason", "statement")}
+                   if isinstance(p, dict) else p
+                   for p in result.get("pruned", [])],
         "ranking": [{k: rk[k] for k in ("id", "statement", "score",
                                         "claims_proven", "claims_total",
                                         "support", "prior")}
                     for rk in result.get("ranking", [])],
         "verdict": (result.get("verdict") or {}).get("id"),
         "recommended_test": result.get("recommended_test"),
-        "pruned": [{k: p.get(k) for k in ("hypothesis", "constraint",
-                                          "reason", "statement")}
-                   if isinstance(p, dict) else p
-                   for p in result.get("pruned", [])],
-        "derived_facts": [{k: f.get(k) for k in ("id", "subject", "predicate", "value")}
-                          for f in result.get("derived_facts", [])],
-        "opened_questions": [{k: q.get(k) for k in ("id", "text", "discriminates")}
-                             for q in result.get("opened_questions", [])],
     }
     ents = [{k: e.get(k) for k in ("id", "name", "kind", "role")}
             for e in (entities or [])]
@@ -902,14 +910,21 @@ def explain_task(target, result, entities):
                "the ranking is not mistaken for the full candidate set.")
     else:
         ask = ("Explain the whole result for a human reader, in plain "
-               "language, with short sections: (1) the case in one "
-               "paragraph — the key entities and what happened; (2) every "
-               "candidate explanation the engine considered — how many "
-               "were raised, which were eliminated (pruned) and the reason "
-               "each was eliminated, and why each survivor ranked where it "
-               "did; (3) the verdict and the reasoning behind it; (4) the "
-               "recommended next check and what would change the "
-               "conclusion.")
+               "language — the conclusion first, the details after. "
+               "(1) Open with an ELI5 executive summary of at most three "
+               "sentences: what the case was about, what the engine "
+               "concluded (the verdict), and what should happen next — a "
+               "reader who stops there already has the answer. (2) Then "
+               "the step-by-step details, in the order the engine "
+               "performed them: what the forward chain did (the rules "
+               "that fired, the facts it derived, the questions it "
+               "opened, the candidate explanations it raised); what the "
+               "constraint layer did (which candidates it eliminated "
+               "and the reason each was eliminated); what the backward "
+               "chain did (which claims were proven, how the survivors "
+               "ranked and why); the verdict and the reasoning behind "
+               "it; and the recommended next check — what would change "
+               "the conclusion. Short sections, no jargon.")
     return ("You are explaining a deterministic detective engine's result "
             "to a human. The engine's output is below, verbatim — explain "
             "it, do not re-derive it. Plain language, short sections, no "

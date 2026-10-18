@@ -205,8 +205,20 @@ def main():
               len(seen) == 1 and '"raised"' in seen[0]
               and all(h in seen[0] for h in phase1["raised_hypotheses"]))
         check("the commentary asks for the eliminated candidates and their reasons",
-              len(seen) == 1 and "the reason each was eliminated" in seen[0]
-              and "how many" in seen[0])
+              len(seen) == 1 and "which candidates it eliminated" in seen[0]
+              and "the reason each was eliminated" in seen[0])
+        check("the commentary asks for the conclusion first (an ELI5 summary), "
+              "then the step-by-step details",
+              len(seen) == 1 and "conclusion first" in seen[0]
+              and "executive summary" in seen[0]
+              and "at most three sentences" in seen[0]
+              and "step-by-step" in seen[0]
+              and "in the order the engine performed them" in seen[0])
+        check("the commentary prompt carries the forward chain's fired rules "
+              "(the steps performed)",
+              len(seen) == 1 and '"fired_rules"' in seen[0]
+              and all(f'"{e["rule"]}"' in seen[0]
+                      for e in phase1["fired_rules"][:3]))
 
         # the reported scenario: the triage case prunes H3 — the prompt
         # must carry what H3 claimed and why it fell (constraint C1)
