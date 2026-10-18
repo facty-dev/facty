@@ -23,14 +23,15 @@
 │            └───────────►│ GONDOLIN VM SESSION                  │  │
 │                         │ (booted from pi-sandbox snapshot)     │  │
 │            boot-time    │                                      │  │
-│            injection ──►│  rootfs: Alpine + pi + 33 skills      │  │
+│            injection ──►│  rootfs: Alpine + pi + 34 skills      │  │
 │            --host-secret│  (gondolin/ vendored image)          │  │
 │                         │                                      │  │
 │                         │  /workspace  = Facty repo (rw)  │  │
 │                         │  guest env:  MISTRAL_API_KEY =        │  │
 │                         │      <random-placeholder>             │  │
 │                         │  egress: api.mistral.ai,              │  │
-│                         │      registry.npmjs.org               │  │
+│                         │      registry.npmjs.org,              │  │
+│                         │      api.uprelic.com                  │  │
 │                         │  (no web search — sensitive data)     │  │
 │                         └──────────────────────────────────────┘  │
 │                                                                    │
@@ -51,6 +52,7 @@
 | **Project** | `--mount-hostfs <dir>:/workspace` | Unmounted host paths do not exist in the guest |
 | **Network** | Programmable TCP stack + synthetic DNS | Explicit `--allow-host` list; denied hosts are unreachable |
 | **Process** | Hypervisor (QEMU micro-VM; krun optional) | No shared kernel with the host |
+| **Guest agent sandboxing** | none needed — the hypervisor is the boundary | pi runs unsandboxed inside the VM: the egress allow-list, host-secret injection, and ephemeral disk are the isolation. `pi-sandbox` is for host-side pi sessions only |
 | **State** | Snapshot boot (`--resume pi-sandbox.qcow2`) | Fresh, deterministic guest per session; nothing persists unless written to `/workspace` |
 | **Host orchestration** | pi-sandbox on the driving session + socket-path-only IPC | The orchestrating agent cannot signal foreign processes (session GC safe), cannot read host secrets, can only exec into the VM |
 

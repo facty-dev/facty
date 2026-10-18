@@ -19,10 +19,13 @@
 # - Installs go to /usr/local and /usr/lib (root disk — persisted in snapshots).
 # - /root is tmpfs and NOT captured by snapshots, so the skills are stored
 #   at /opt/skills; the runner symlinks them into /root/.agents/skills at boot.
-# - pi extensions (pi-sandbox, pi-mistral-subscription) are installed with
+# - the pi-mistral-subscription extension is installed with
 #   PI_CODING_AGENT_DIR=/opt/pi-agent (also persisted); the runner exports
-#   that env var at boot so pi loads them. Users can then /login with a
+#   that env var at boot so pi loads it. Users can then /login with a
 #   Mistral Pro subscription inside the VM to bill their quotas.
+#   (No pi-sandbox in the guest: the VM itself — hypervisor, egress
+#   allow-list, host-secret injection, ephemeral disk — is the
+#   isolation; pi-sandbox is for host-side pi sessions only.)
 # - pi is symlinked into /usr/bin so it is on the guest's default PATH.
 
 set -euo pipefail
@@ -61,7 +64,7 @@ gondolin bash --rootfs-size 4G \
   --allow-host pypi.org --allow-host files.pythonhosted.org \
   --allow-host registry.npmjs.org \
   --allow-host github.com --allow-host codeload.github.com \
-  -- bash -c "set -eu; echo '>> (vm) apk add py3-pip'; apk add -q --no-progress py3-pip git ca-certificates; echo '>> (vm) pip install textual (the facty CLI workbench)'; python3 -m pip install --break-system-packages --no-cache-dir --root-user-action=ignore -q textual; echo '>> (vm) npm install -g pi'; npm install -g --silent @earendil-works/pi-coding-agent; echo '>> (vm) put npm global bin on PATH (gondolin bash PATH lacks /usr/local/bin)'; export PATH="$(npm prefix -g)/bin:$PATH"; command -v pi; echo '>> (vm) install pi extensions to /opt/pi-agent/'; export PI_CODING_AGENT_DIR=/opt/pi-agent; pi install npm:pi-sandbox; pi install https://github.com/5omeOtherGuy/pi-mistral-subscription; echo '>> (vm) install skills to /opt/skills/'; mkdir -p /opt/skills; cp -r /mnt/skills/. /opt/skills/; echo '>> (vm) link pi onto default PATH (/usr/bin)'; ln -sf /usr/local/bin/pi /usr/bin/; touch /opt/.pi-sandbox-ready; echo '>> (vm) setup complete'; sleep 600 # $BUILD_TAG" > "$SNAPSHOT_DIR/build.log" 2>&1 &
+  -- bash -c "set -eu; echo '>> (vm) apk add py3-pip'; apk add -q --no-progress py3-pip git ca-certificates; echo '>> (vm) pip install textual (the facty CLI workbench)'; python3 -m pip install --break-system-packages --no-cache-dir --root-user-action=ignore -q textual; echo '>> (vm) npm install -g pi'; npm install -g --silent @earendil-works/pi-coding-agent; echo '>> (vm) put npm global bin on PATH (gondolin bash PATH lacks /usr/local/bin)'; export PATH="$(npm prefix -g)/bin:$PATH"; command -v pi; echo '>> (vm) install the mistral-subscription extension to /opt/pi-agent/'; export PI_CODING_AGENT_DIR=/opt/pi-agent; pi install https://github.com/5omeOtherGuy/pi-mistral-subscription; echo '>> (vm) install skills to /opt/skills/'; mkdir -p /opt/skills; cp -r /mnt/skills/. /opt/skills/; echo '>> (vm) link pi onto default PATH (/usr/bin)'; ln -sf /usr/local/bin/pi /usr/bin/; touch /opt/.pi-sandbox-ready; echo '>> (vm) setup complete'; sleep 600 # $BUILD_TAG" > "$SNAPSHOT_DIR/build.log" 2>&1 &
 SETUP_PID=$!
 
 # Wait for the session to register.

@@ -17,8 +17,8 @@
 # Requires: MISTRAL_API_KEY in the environment.
 #
 # The VM is ephemeral per run, but boots instantly from the snapshot —
-# pi, the skill set, and the pi-sandbox + pi-mistral-subscription
-# extensions are baked in (see build-snapshot.sh).
+# pi, the skill set, and the pi-mistral-subscription extension are
+# baked in (see build-snapshot.sh).
 # The project directory is mounted read-write at /workspace in the guest.
 
 set -euo pipefail
@@ -74,18 +74,24 @@ fi
 # Egress allow-list (an explicit --allow-host list replaces the defaults):
 #   api.mistral.ai     — LLM API (mistral-large-4 et al.)
 #   registry.npmjs.org — project npm installs inside the VM
+#   api.uprelic.com    — the Strom decider tier (the label sensor's
+#                        decision tier; EU/Paris, calibrated, vetted
+#                        data policy: deleted after 90 days, never
+#                        trained on, zero retention on request)
 # No web-search hosts: cases handle sensitive data — nothing leaves the
-# VM except LLM calls (and npm installs).
+# VM except LLM calls, npm installs, and Strom decision calls.
 # MISTRAL_API_KEY is passed as a host-secret: the guest only sees a
 # placeholder, which the host substitutes into outbound requests to
-# api.mistral.ai.
+# api.mistral.ai. UPRELIC_API_KEY rides the same mechanism for Strom.
 gondolin bash \
   --rootfs-size 4G \
   --resume "$SNAP" \
   ${PROJECT_DIR:+--mount-hostfs "$PROJECT_DIR:/workspace"} \
   --allow-host api.mistral.ai \
   --allow-host registry.npmjs.org \
+  --allow-host api.uprelic.com \
   --host-secret MISTRAL_API_KEY@api.mistral.ai \
+  --host-secret UPRELIC_API_KEY@api.uprelic.com \
   "${GUEST_ENV[@]}" \
   -- bash -c '
     set -e
@@ -93,9 +99,10 @@ gondolin bash \
     mkdir -p /root/.agents/skills
     for s in /opt/skills/*/; do ln -sfn "$s" "/root/.agents/skills/$(basename "$s")"; done
     [ -f /opt/skills/SKILL-INDEX.md ] && ln -sfn /opt/skills/SKILL-INDEX.md /root/.agents/SKILL-INDEX.md
-    # Extensions (pi-sandbox, pi-mistral-subscription) are baked into the
-    # snapshot at /opt/pi-agent (persisted; /root is tmpfs). Older snapshots
-    # without it simply run without extensions.
+    # The pi-mistral-subscription extension is baked into the snapshot at
+    # /opt/pi-agent (persisted; /root is tmpfs). No pi-sandbox in the
+    # guest — the VM itself is the isolation. Older snapshots simply
+    # run without extensions.
     if [ -d /opt/pi-agent ]; then export PI_CODING_AGENT_DIR=/opt/pi-agent; fi
     cd /workspace 2>/dev/null || cd /root
     if [[ -n "${PI_PROMPT:-}" ]]; then
