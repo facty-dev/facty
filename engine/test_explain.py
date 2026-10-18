@@ -184,6 +184,44 @@ def main():
         check("a changed result means a fresh commentary (no stale replay)",
               text3 == "fresh commentary" and calls3["n"] == 1)
 
+        # the candidate story: raised → pruned (with reasons) → ranked —
+        # the commentary must be able to reconcile the counts, not just
+        # echo the ranking (the manual-test report: "only 2 hypotheses,
+        # but three were raised")
+        pr = phase1["pruned"]
+        esc = lambda s: json.dumps(s)[1:-1]  # the prompt is JSON — non-ASCII escapes
+        check("the commentary prompt carries the pruned candidates + their reasons",
+              len(seen) == 1 and pr
+              and all(p["hypothesis"] in seen[0] and p["constraint"] in seen[0]
+                      and esc(p["reason"]) in seen[0] for p in pr),
+              str([p["hypothesis"] for p in pr]))
+        hyps = engine.load_array(case / "pack" / "hypotheses.json",
+                                 "hypothesis.schema.json")
+        stmt = {h["id"]: h["statement"] for h in hyps}
+        check("the commentary prompt carries the pruned hypotheses' statements",
+              len(seen) == 1 and all(esc(stmt[p["hypothesis"]]) in seen[0]
+                                     for p in pr))
+        check("the commentary prompt carries the raised candidate set",
+              len(seen) == 1 and '"raised"' in seen[0]
+              and all(h in seen[0] for h in phase1["raised_hypotheses"]))
+        check("the commentary asks for the eliminated candidates and their reasons",
+              len(seen) == 1 and "the reason each was eliminated" in seen[0]
+              and "how many" in seen[0])
+
+        # the reported scenario: the triage case prunes H3 — the prompt
+        # must carry what H3 claimed and why it fell (constraint C1)
+        triage = ENGINE_DIR / "cases" / "triage-alert-flood"
+        r_triage = engine.run_case(triage)
+        seen_t, calls_t = [], {"n": 0}
+        cli.explain(ui, triage, r_triage, [], "verdict",
+                    runner=stub_runner(["commentary"], calls_t, seen=seen_t))
+        h3 = next(p for p in r_triage["pruned"] if p["hypothesis"] == "H3")
+        check("the triage commentary prompt carries pruned H3 + its reason + statement",
+              len(seen_t) == 1 and calls_t["n"] == 1
+              and esc(h3["reason"]) in seen_t[0] and "C1" in seen_t[0]
+              and "Detector false-positive flood" in seen_t[0],
+              seen_t[0][:200] if seen_t else "no prompt seen")
+
         # no cache entry + cache mode → None (logged, never silent)
         with tempfile.TemporaryDirectory() as tmp2:
             os.environ["FACTY_CACHE_DIR"] = str(Path(tmp2) / "cache3")

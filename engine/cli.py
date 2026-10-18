@@ -865,15 +865,24 @@ def explain_task(target, result, entities):
     result. Presentation only — the verdict is deterministic and never
     depends on this call (ADR-0003: the LLM is never in the verdict
     path); this is the LLM as explainer, fed the engine's conclusions
-    (unlike the senses, which never see them)."""
+    (unlike the senses, which never see them).
+
+    The summary carries the WHOLE candidate story — raised, pruned (with
+    the constraint + reason + the pruned hypothesis's own statement),
+    and ranked — so the commentary can reconcile the counts ("three were
+    raised, one was eliminated, two ranked") instead of mistaking the
+    ranking for the full candidate set."""
     summary = {
+        "raised": list(result.get("raised_hypotheses", [])),
         "ranking": [{k: rk[k] for k in ("id", "statement", "score",
                                         "claims_proven", "claims_total",
                                         "support", "prior")}
                     for rk in result.get("ranking", [])],
         "verdict": (result.get("verdict") or {}).get("id"),
         "recommended_test": result.get("recommended_test"),
-        "pruned": [p.get("id") if isinstance(p, dict) else p
+        "pruned": [{k: p.get(k) for k in ("hypothesis", "constraint",
+                                          "reason", "statement")}
+                   if isinstance(p, dict) else p
                    for p in result.get("pruned", [])],
         "derived_facts": [{k: f.get(k) for k in ("id", "subject", "predicate", "value")}
                           for f in result.get("derived_facts", [])],
@@ -888,14 +897,19 @@ def explain_task(target, result, entities):
     elif target == "ranking":
         ask = ("Explain the ranking for a human reader: why each hypothesis "
                "scored where it did (claims proven, support, prior) — and "
-               "what the scores mean in plain language.")
+               "what the scores mean in plain language. Also name the "
+               "candidates that were eliminated before ranking and why, so "
+               "the ranking is not mistaken for the full candidate set.")
     else:
         ask = ("Explain the whole result for a human reader, in plain "
-               "language, with short sections: (1) the case in one paragraph "
-               "— the key entities and what happened; (2) the competing "
-               "explanations and why each ranked where it did; (3) the "
-               "verdict and the reasoning behind it; (4) the recommended "
-               "next check and what would change the conclusion.")
+               "language, with short sections: (1) the case in one "
+               "paragraph — the key entities and what happened; (2) every "
+               "candidate explanation the engine considered — how many "
+               "were raised, which were eliminated (pruned) and the reason "
+               "each was eliminated, and why each survivor ranked where it "
+               "did; (3) the verdict and the reasoning behind it; (4) the "
+               "recommended next check and what would change the "
+               "conclusion.")
     return ("You are explaining a deterministic detective engine's result "
             "to a human. The engine's output is below, verbatim — explain "
             "it, do not re-derive it. Plain language, short sections, no "
@@ -923,6 +937,16 @@ def explain(ui, case, result, entities, target="verdict", stream=None,
     mode = mode or os.environ.get("FACTY_SENSE", "live")
     tag = "llm · commentary"
     label = f"explain the {target}"
+    # the prune records carry the constraint + reason; add the pruned
+    # hypothesis's own statement (from the pack) so the commentary can
+    # say what the eliminated candidate claimed before why it fell
+    result = dict(result or {})
+    hyps = engine.load_array(Path(case) / "pack" / "hypotheses.json",
+                             "hypothesis.schema.json")
+    stmt = {h["id"]: h.get("statement") for h in hyps}
+    result["pruned"] = [dict(p, statement=stmt.get(p.get("hypothesis")))
+                        if isinstance(p, dict) else p
+                        for p in result.get("pruned", [])]
     task = explain_task(target, result, entities)
     cache_file = _cache_file(Path(case).name, label, task=task)
 
