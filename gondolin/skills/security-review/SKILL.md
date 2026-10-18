@@ -1,0 +1,120 @@
+---
+name: security-review
+model: sonnet
+effort: standard
+description: >
+  AI-powered security analysis of code changes — traces data flow, detects
+  injection, auth bypass, secrets exposure, and unsafe deserialization across
+  files. Use when reviewing pending changes, before release-branch, during
+  verify-work Phase 5, during build-epic Step 0 threat modeling, or when
+  the user says "security review" or "scan for vulns".
+---
+
+# story: e45s41
+<!-- story: e45s18 -->
+# story: e26s01
+# story: e26s02
+# story: e26s03
+# story: e26s04
+# story: e26s05
+# story: e26s06
+# story: e26s07
+# story: e45s26
+
+# Security Review
+
+> **HARD GATE** — Requires git context (branch with merge-base or diff). Never
+> writes files outside `specs/security/`. Findings below confidence 8/10 are
+> suppressed. Pre-flight: `git rev-parse HEAD >/dev/null 2>&1`
+
+## Parallel worktree mode (e45s18)
+
+When running alongside `audit-code`, use isolated worktrees so scans do not race on the same index:
+
+```bash
+bash scripts/lib/parallel-review-worktrees.sh security-review
+```
+
+Each check gets a detached worktree at `.bigpowers/worktrees/review-<name>/`; reports still write only under `specs/security/`.
+
+## 5-phase scan
+
+| # | Phase | What |
+|---|-------|------|
+| 1 | **Scope Resolution** | Detect diff via `git diff --merge-base origin/HEAD`; resolve languages/frameworks from dependency files |
+| 2 | **Context Research** | Identify existing security patterns, sanitization, auth model in the codebase |
+| 3 | **Vulnerability Assessment** | Trace user input → sink; check auth boundaries, crypto, deserialization, path ops |
+| 4 | **False-Positive Filtering** | Cross-check each finding against exclusion rules; reject confidence < 8 |
+| 5 | **Report Generation** | Output structured markdown: file:line, severity, category, exploit scenario, fix |
+
+## Categories
+
+Covered: SQLi, XSS, SSRF, command injection, auth bypass, unsafe deserialization, path traversal, IDOR, crypto flaws, secrets exposure, template injection, NoSQLi
+
+## CWE mapping mandate (e45s26)
+
+Every **new detection rule** added to this skill MUST:
+
+1. Map to a [CWE](https://cwe.mitre.org/) ID in `REFERENCE-vuln-categories.md` (e.g. SQLi → CWE-89, XSS → CWE-79).
+2. Ship **two fixture pairs** under `skills/security-review/fixtures/`:
+   - **Positive** — minimal code the rule MUST flag (vulnerable pattern present).
+   - **Negative** — structurally similar code the rule MUST NOT flag (safe pattern / false-positive guard).
+
+| Rule | CWE | Positive fixture | Negative fixture |
+|------|-----|------------------|------------------|
+| SQL injection | CWE-89 | `fixtures/CWE-89-sqli-positive.py` | `fixtures/CWE-89-sqli-negative.py` |
+| XSS (DOM) | CWE-79 | `fixtures/CWE-79-xss-positive.js` | `fixtures/CWE-79-xss-negative.js` |
+| Missing tenant scoping (IDOR) | CWE-639 | `fixtures/CWE-639-idor-positive.go` | `fixtures/CWE-639-idor-negative.go` |
+| Fail-open verify directive | CWE-754 | `fixtures/CWE-fail-open-verify-positive.sh` | `fixtures/CWE-fail-open-verify-negative.sh` |
+
+Before merging a new category, run both fixtures through the detection guidance and confirm positive flags / negative passes.
+
+## SQL-safety doctrine (e45s41 — proven authorship)
+
+Formal rule for SQL injection classification:
+
+| SQL source | Attacker-reachable input? | Verdict |
+|------------|---------------------------|---------|
+| Hardcoded / compile-time constant string | N/A | **Safe** — proven authorship |
+| Developer-authored query with bound parameters only | No dynamic fragments from user input | **Safe** |
+| String concatenation / template with user-controlled values | Yes | **Unsafe** — report as SQLi |
+| ORM query builder with user input in WHERE/JOIN | Yes | **Unsafe** unless parameterized |
+| Stored procedure call with bound args | Args from trusted constants only | **Safe** |
+| Stored procedure with dynamic SQL inside | User input reaches EXEC | **Unsafe** |
+
+**Provenance test:** If the agent cannot prove the query string was authored entirely by the developer (no attacker-reachable interpolation), treat as vulnerable. Hardcoded SQL in migrations, seeds, and admin scripts is safe; anything reachable from HTTP/CLI/user input is not.
+
+## BCP Plus Integration
+
+This skill maps to **BCP Plus dimension 12 (Security & Compliance)**. When BCP Plus sizing is active, the threat model categories above correspond to sub-elements within dimension 12. The NFR Gate rule applies: standard-expectation items (e.g., "use HTTPS", "hash passwords") score 0 with a one-line rationale; only above-standard security requirements contribute to the dimension 12 count. See `docs/references/bcp-plus.md` for the full 13-dimension framework and NFR Gate pattern.
+
+## Integration points
+
+| Skill | Touchpoint |
+|-------|------------|
+| `build-epic` | Step 0 — threat-model epic scope → `specs/security/epics/<id>/THREAT_MODEL.md` |
+| `plan-work` | `security:` field (none/low/medium/high) on story tasks |
+| `plan-release` | +2 WSJF risk boost for HIGH+ risk epics |
+| `audit-code` | Checklist: "diff scanned — no unaddressed HIGH findings" |
+| `request-review` | Inject threat model categories + false-positive rules into reviewer prompt |
+| `investigate-bug` | Security-impact assessment in RCA (NONE→CRITICAL) |
+| `validate-fix` | Recurrence hardening check for security bugs |
+| `verify-work` | Phase 5 — blocks on HIGH findings ≥ 8 confidence |
+| `release-branch` | Hard gate — blocks merge if unresolved HIGH findings |
+
+## Report format
+
+Each finding: **`File:Line` — Severity — Category**
+- Description: how the vulnerability manifests
+- Exploit scenario: concrete attack path
+- Recommendation: fix with code example
+
+## Reference files
+
+- [Vuln categories](REFERENCE-vuln-categories.md) — detection guidance per vuln type
+- [False positives](REFERENCE-false-positives.md) — hard exclusions + precedent
+- [Confidence rubric](REFERENCE-confidence-rubric.md) — scoring methodology (0–10)
+
+## Verify
+
+→ verify: `test -d specs/security && test -f scripts/lib/parallel-review-worktrees.sh && bash scripts/verify-cwe-fixture-sync.sh >/dev/null && git rev-parse HEAD >/dev/null 2>&1`

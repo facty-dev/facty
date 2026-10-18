@@ -361,9 +361,9 @@ def main():
     # the doctor self-check runs and reports the loaded workbench
     r = subprocess.run([sys.executable, str(ENGINE_DIR / "cli.py"), "doctor"],
                        capture_output=True, text=True)
-    check("`facty doctor` runs and reports the loaded workbench + cache",
+    check("`facty doctor` runs and reports the loaded workbench + cache + gondolin",
           r.returncode == 0 and "workbench:  loaded" in r.stdout
-          and "cache:" in r.stdout,
+          and "cache:" in r.stdout and "gondolin:" in r.stdout,
           (r.stdout + r.stderr)[-200:])
     print("")
     failed = len(checks) - sum(checks)

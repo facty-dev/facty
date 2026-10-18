@@ -27,7 +27,8 @@
 #   MISTRAL_API_KEY      boot-time source for the host-secret; falls back
 #                        to `pi auth print-api-key` (stored credential —
 #                        only readable outside the pi-sandbox)
-#   PI_SNAPSHOT          VM snapshot (default: gondolin-pi template's)
+#   PI_SNAPSHOT          VM snapshot (default: <repo>/gondolin/snapshots/
+#                        pi-sandbox.qcow2 — the vendored image config's)
 
 set -euo pipefail
 
@@ -43,7 +44,7 @@ err()  { echo -e "${RED}✗${NC} $*" >&2; }
 SESSION_TAG="facty-sdlc-vm"
 SESSION_META="$PROJECT_DIR/.agentic/vm-session.json"
 SESSIONS_DIR="${GONDOLIN_SESSIONS_DIR:-$HOME/.cache/gondolin/sessions}"
-SNAP="${PI_SNAPSHOT:-/Users/chart/code/gondolin-pi/snapshots/pi-sandbox.qcow2}"
+SNAP="${PI_SNAPSHOT:-$PROJECT_DIR/gondolin/snapshots/pi-sandbox.qcow2}"
 
 # Probe liveness by connecting to the session socket (no pid signaling).
 socket_alive() {

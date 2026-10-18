@@ -22,13 +22,15 @@
 # The dss-* targets below are thin wrappers over ./facty, kept for muscle
 # memory. See `./facty --help` and engine/README.md.
 #
+#   make vm-image             # Build the gondolin VM image (from gondolin/, one-time)
 #   make vm-up                # Boot the pack-factory VM session (from YOUR terminal)
 #   make agent-decision PHASE=discovery TASK="..."
 #   make agent-coding TASK=<task-file>
 #   make vm-status            # Session state (safe from sandboxed sessions)
 #   make vm-down              # Stop the session (from YOUR terminal)
 #
-# Runtime: gondolin micro-VMs + pi (template: ~/code/gondolin-pi).
+# Runtime: gondolin micro-VMs + pi (image config vendored in-repo: gondolin/;
+# build the snapshot with `make vm-image`).
 # Secrets: host-side placeholder substitution — never guest-readable.
 
 # ── Help ─────────────────────────────────────────────────────────────────────
@@ -48,6 +50,7 @@ help:
 	@echo "  make dss-*              Thin wrappers over ./facty (kept for muscle memory)"
 	@echo ""
 	@echo "═══ Pack-factory VM session ═══"
+	@echo "  make vm-image           Build the gondolin VM image (gondolin/, one-time)"
 	@echo "  make vm-up              Boot the SDLC VM session (from your terminal)"
 	@echo "  make vm-status          Show session state"
 	@echo "  make vm-down            Stop the session (from your terminal)"
@@ -78,7 +81,7 @@ info:
 	@echo "gondolin:  $$(command -v gondolin || echo 'not found')"
 	@echo "pi:        $$(command -v pi || echo 'not found')"
 	@echo "session:   $$(./scripts/vm-session.sh status | head -1)"
-	@echo "template:  $$(ls ~/code/gondolin-pi/snapshots/pi-sandbox.qcow2 >/dev/null 2>&1 && echo ok || echo missing)"
+	@echo "image:     $$(ls gondolin/snapshots/pi-sandbox.qcow2 >/dev/null 2>&1 && echo 'built (gondolin/)' || echo 'missing — make vm-image')"
 
 # ── Facty engine (the product) ─────────────────────────────────────────────
 # The deterministic symbolic half: forward/backward chaining + constraints
@@ -197,6 +200,11 @@ agent-coding:
 		exit 1; \
 	fi
 	@./scripts/agent-pi.sh coding --task $(TASK) $(if $(BDD),--bdd "$(BDD)")
+
+# Build the gondolin VM image from the repo-local config (gondolin/) —
+# one-time per machine; the snapshot lands in gondolin/snapshots/ (gitignored).
+vm-image:
+	@./gondolin/gondolin-pi.sh build
 
 # SDLC VM session lifecycle — boot from YOUR shell (or pi `!` escape) so the
 # API key stays host-side; sandboxed agents exec phases into it over IPC.

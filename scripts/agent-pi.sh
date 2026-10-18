@@ -2,9 +2,9 @@
 # agent-pi.sh — Run an SDLC agent (decision|coding) inside the gondolin-pi VM.
 #
 # PRD-003 (agent orchestration), pi-VM runtime: each agent run boots pi in
-# the gondolin micro-VM (~/code/gondolin-pi template) with this repo mounted
-# at /workspace. Agents read/write repo assets directly; every run is
-# appended to .agentic/audit.jsonl.
+# the gondolin micro-VM (the image config vendored in this repo at gondolin/)
+# with this repo mounted at /workspace. Agents read/write repo assets
+# directly; every run is appended to .agentic/audit.jsonl.
 #
 # Usage:
 #   ./scripts/agent-pi.sh decision --phase <discovery|prd|bdd|review> [--task "<task>"]
@@ -15,7 +15,7 @@
 #     defaults: decision → mistral-large-4 / max   (strong reasoner)
 #               coding   → mistral-large-4 / low   (fast implementation)
 #   GONDOLIN_PI  path to gondolin-pi.sh
-#     (default: /Users/chart/code/gondolin-pi/gondolin-pi.sh)
+#     (default: <repo>/gondolin/gondolin-pi.sh — the vendored image config)
 #   MISTRAL_API_KEY  required by the ephemeral VM runtime (passed as host-secret)
 #   AGENT_RUNTIME  runtime selection:
 #     auto        (default) use the SDLC VM session if reachable, else ephemeral boot
@@ -55,8 +55,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-GONDOLIN_PI="${GONDOLIN_PI:-/Users/chart/code/gondolin-pi/gondolin-pi.sh}"
-[[ -x "$GONDOLIN_PI" ]] || { err "gondolin-pi.sh not found: $GONDOLIN_PI"; exit 1; }
+GONDOLIN_PI="${GONDOLIN_PI:-$PROJECT_DIR/gondolin/gondolin-pi.sh}"
+[[ -x "$GONDOLIN_PI" ]] || { err "gondolin-pi.sh not found: $GONDOLIN_PI (build it: make vm-image)"; exit 1; }
 
 # ── Runtime selection ────────────────────────────────────────────────────────
 AGENT_RUNTIME="${AGENT_RUNTIME:-auto}"

@@ -113,6 +113,7 @@ make dss-live               # walkthrough
 make dss-sense OP=facts     # one sensing op
 
 # Session lifecycle (user terminal only for up/down)
+make vm-image                  # build the gondolin VM image (gondolin/, one-time)
 make vm-up                     # boot the pack-factory VM session (foreground, keep open)
 make vm-status                 # session state — sandbox-safe
 make vm-down                   # stop session (user terminal)
@@ -209,7 +210,9 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
 
 - Models: decision `mistral-large-4` @ max thinking; coding `mistral-large-4` @ low.
   Per-run overrides: `AGENT_MODEL`, `AGENT_THINKING`. VM template path:
-  `GONDOLIN_PI` (default `~/code/gondolin-pi/gondolin-pi.sh`).
+  `GONDOLIN_PI` (default `<repo>/gondolin/gondolin-pi.sh` — the gondolin
+  image config is vendored in-repo at `gondolin/`; build the snapshot
+  with `make vm-image`).
 - Run modes: preferred `gondolin-pi-session` (long-lived VM session,
   key held host-side); fallback ephemeral `gondolin-pi` boot (needs the key
   in the launching shell or the stored `pi auth` credential).
@@ -229,9 +232,11 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
   `docassemble.org`). Web search/scraping skills will not work from the
   sandbox; use the VM's ddgr instead (it runs inside the session with its
   own allow-list).
-- **Cross-project paths** (`~/code/gondolin-pi`, `~/.cache/gondolin`) may
-  be unreadable from the sandbox — expect prompts or failures when scripts
-  probe them; run those commands from the user's terminal or a pi `!` escape.
+- **Cross-project paths** (`~/.cache/gondolin`) may be unreadable from
+  the sandbox — expect prompts or failures when scripts probe them; run
+  those commands from the user's terminal or a pi `!` escape. (The gondolin
+  image config itself is vendored in-repo at `gondolin/`, so it is always
+  readable — the sandbox sees the repo.)
 - Machine-local state is gitignored: `.agentic/tmp/`,
   `.agentic/vm-session.json`, `.agentic/vm-session.log`.
 

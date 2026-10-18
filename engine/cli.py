@@ -905,8 +905,16 @@ def cmd_doctor(args):
     except ImportError:
         print("  textual:    NOT INSTALLED — the workbench needs it (`make deps`)")
     for var in ("TERM", "NO_COLOR", "FACTY_SENSE", "FACTY_CACHE_DIR",
-                "FACTY_PROVIDER", "FACTY_MODEL"):
+                "FACTY_PROVIDER", "FACTY_MODEL", "GONDOLIN_PI", "PI_SNAPSHOT"):
         print(f"  {var.lower()}:  {os.environ.get(var) or '(unset)'}")
+    gondolin_dir = ENGINE_DIR.parent / "gondolin"
+    snap = gondolin_dir / "snapshots" / "pi-sandbox.qcow2"
+    if (gondolin_dir / "gondolin-pi.sh").exists():
+        state = ("snapshot built" if snap.exists()
+                 else "snapshot missing — `make vm-image`")
+        print(f"  gondolin:   {gondolin_dir.name}/ (vendored image config — {state})")
+    else:
+        print("  gondolin:   not vendored in this repo")
     try:
         import tui
         keys = sorted({(b.key if hasattr(b, "key") else b[0])

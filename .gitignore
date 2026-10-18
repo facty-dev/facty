@@ -24,6 +24,9 @@ Thumbs.db
 .agentic/
 .gondolin-pi/
 
+# The vendored gondolin VM image — the built snapshot is a build artifact
+gondolin/snapshots/
+
 # Python (uv) — the optional DX layer venv (make deps)
 .venv/
 

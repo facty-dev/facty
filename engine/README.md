@@ -154,9 +154,14 @@ seam for **custom providers** — see
 
 ## In the gondolin VM
 
-The snapshot bakes `textual` (pip, system python3) and git, so the CLI
-and the workbench run inside the VM with zero runtime installs (the
-runtime egress allow-list has no pypi, by design). The runner injects
+The image config (runner + snapshot build + skills) is **vendored in this
+repo at `gondolin/`** — the tooling (`scripts/agent-pi.sh`,
+`scripts/vm-session.sh`, `make vm-up`) passes this copy in by default.
+Build the snapshot once per machine with `make vm-image` (it lands in
+`gondolin/snapshots/`, gitignored). The snapshot bakes `textual` (pip,
+system python3) and git, so the CLI and the workbench run inside the VM
+with zero runtime installs (the runtime egress allow-list has no pypi,
+by design). The runner injects
 `MISTRAL_API_KEY` via gondolin's host-secret interface — the guest sees
 a placeholder, the host proxy substitutes the real value into outbound
 requests to api.mistral.ai. The `facty` launcher prefers the project
