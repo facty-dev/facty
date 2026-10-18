@@ -860,20 +860,66 @@ def sense_one(ui, case, op, evidence_index=None, entities=None, stream=None,
 
 # ── Out-of-band commentary (the LLM as explainer, never as decider) ──
 
-def explain_task(target, result, entities):
-    """The commentary prompt: a plain-language explanation of the engine's
-    result. Presentation only — the verdict is deterministic and never
-    depends on this call (ADR-0003: the LLM is never in the verdict
-    path); this is the LLM as explainer, fed the engine's conclusions
-    (unlike the senses, which never see them).
+def sensing_block(case, result, entities):
+    """The induction half of the run, as the commentary sees it: the
+    steps the senses performed (classify → entities → facts → sensor
+    labels → the test evidence), with their outputs — so the explainer
+    can walk the WHOLE run (induction + deduction), not just the
+    engine's half. The facts are compact triples (the judge layer
+    already checked them: schema + compute)."""
+    case = Path(case)
+    index = engine.load_validated(case / "evidence-index.json",
+                                  "evidence-index.schema.json")
+    facts = engine.load_array(case / "facts.json", "fact.schema.json")
+    steps = [
+        {"step": "classify the evidence pile (messy input → typed evidence)",
+         "items": [{k: e.get(k) for k in ("file", "evidenceClass", "summary")}
+                   for e in index]},
+        {"step": "extract the entities (extraction is sensing, not reasoning)",
+         "count": len(entities or [])},
+        {"step": "sense the evidence → facts (a judge layer checks the "
+                 "schema + the compute)",
+         "count": len(facts),
+         "facts": [{k: f.get(k) for k in ("id", "subject", "predicate", "value")}
+                   for f in facts]},
+    ]
+    sensor_srcs = sensor_source_names(case)
+    if sensor_srcs:
+        n = sum(1 for f in facts
+                if Path(str(f.get("source", "")).split(":")[0]).name in sensor_srcs)
+        steps.append({"step": "label the evidence pile — a small local "
+                              "classifier (no LLM tokens); rows below its "
+                              "confidence gate are left to the LLM",
+                      "files": sorted(sensor_srcs),
+                      "facts_contributed": n})
+    drop = drop_file(case)
+    if drop is not None and "recommended test" in str(result.get("phase", "")):
+        steps.append({"step": "sense the recommended test's evidence (with "
+                              "the engine's open questions as context — "
+                              "never its conclusions)",
+                      "count": len(engine.load_array(drop, "fact.schema.json"))})
+    return {"steps": steps}
+
+
+def explain_task(target, result, entities, sensing=None):
+    """The commentary prompt: a plain-language explanation of the whole
+    run — the senses (induction) and the engine (deduction). Presentation
+    only — the verdict is deterministic and never depends on this call
+    (ADR-0003: the LLM is never in the verdict path); this is the LLM as
+    explainer, fed the run's artifacts (unlike the senses, which never
+    see the engine's conclusions).
 
     The summary carries the WHOLE candidate story, in the order the
     engine performed it — the forward chain's fired rules + derived
     facts + opened questions + raised candidates, the pruned records
     (constraint + reason + the pruned hypothesis's own statement), and
     the ranking — so the commentary can reconcile the counts ("three
-    were raised, one was eliminated, two ranked") and walk the steps."""
+    were raised, one was eliminated, two ranked") and walk the steps.
+    With `sensing`, the prompt opens with the induction half (the steps
+    the senses performed + their outputs), so the step-by-step covers
+    the whole run, not just the engine's half."""
     summary = {
+        "phase": result.get("phase"),
         "fired_rules": [{"rule": e.get("rule"), "round": e.get("round"),
                          "op": ("derived" if "derived" in e
                                 else "opened" if "opened" in e else "raised"),
@@ -909,44 +955,55 @@ def explain_task(target, result, entities):
                "candidates that were eliminated before ranking and why, so "
                "the ranking is not mistaken for the full candidate set.")
     else:
-        ask = ("Explain the whole result for a human reader, in plain "
+        ask = ("Explain the whole run for a human reader, in plain "
                "language — the conclusion first, the details after. "
                "(1) Open with an ELI5 executive summary of at most three "
                "sentences: what the case was about, what the engine "
                "concluded (the verdict), and what should happen next — a "
                "reader who stops there already has the answer. (2) Then "
-               "the step-by-step details, in the order the engine "
-               "performed them: what the forward chain did (the rules "
-               "that fired, the facts it derived, the questions it "
-               "opened, the candidate explanations it raised); what the "
-               "constraint layer did (which candidates it eliminated "
-               "and the reason each was eliminated); what the backward "
-               "chain did (which claims were proven, how the survivors "
-               "ranked and why); the verdict and the reasoning behind "
-               "it; and the recommended next check — what would change "
-               "the conclusion. Short sections, no jargon.")
-    return ("You are explaining a deterministic detective engine's result "
-            "to a human. The engine's output is below, verbatim — explain "
-            "it, do not re-derive it. Plain language, short sections, no "
-            "jargon, no speculation beyond what the output says. This is "
-            "commentary for a human reader; the engine's verdict stands on "
-            "its own.\n\n"
-            f"{ask}\n\n"
-            "Entities extracted (the case's people, animals, places, "
-            f"objects):\n{json.dumps(ents, indent=2)}\n\n"
-            "The engine's result (verbatim):\n"
-            f"{json.dumps(summary, indent=2)}\n\n"
-            "Write the commentary in plain language (markdown is fine).")
+               "the step-by-step details, in the order the run performed "
+               "them: first the senses (induction — the evidence "
+               "classified, the entities extracted, the facts sensed and "
+               "judge-checked, any sensor labels, and for a phase-2 run "
+               "the test evidence sensed with the engine's open "
+               "questions); then the engine (deduction — the forward "
+               "chain's fired rules, derived facts, opened questions and "
+               "raised candidates; the constraint layer's eliminations "
+               "and the reason each; the backward chain's claim proofs "
+               "and ranking; the verdict and the reasoning behind it); "
+               "and finally the recommended next check — what would "
+               "change the conclusion. Short sections, no jargon.")
+    head = ("You are explaining a deterministic detective engine's run — "
+            "the senses (induction) and the engine (deduction) — to a "
+            "human. Everything below is verbatim: the run's sensing, the "
+            "engine's output. Explain it, do not re-derive it. Plain "
+            "language, short sections, no jargon, no speculation beyond "
+            "what the output says. This is commentary for a human reader; "
+            "the engine's verdict stands on its own.\n\n"
+            f"{ask}\n\n")
+    senses = ""
+    if sensing:
+        senses = ("THE SENSES (induction — the LLM and the sensors read "
+                  "the evidence; probabilistic, never the decider):\n"
+                  f"{json.dumps(sensing, indent=2)}\n\n"
+                  "Entities extracted (the case's people, animals, places, "
+                  f"objects):\n{json.dumps(ents, indent=2)}\n\n")
+    return (head + senses
+            + "THE ENGINE (deduction — deterministic, the decider; its "
+              "output, verbatim):\n"
+              f"{json.dumps(summary, indent=2)}\n\n"
+              "Write the commentary in plain language (markdown is fine).")
 
 
 def explain(ui, case, result, entities, target="verdict", stream=None,
             on_response=None, mode=None, runner=None):
     """Out-of-band LLM commentary: a plain-language explanation of the
-    engine's result (entities | ranking | verdict). Presentation only —
-    the verdict is deterministic and never depends on this call. The
-    commentary is cached like the sensing responses (keyed by the full
-    prompt, so a changed result means a fresh key) and replayed in cache
-    mode; with no cache entry it degrades to None (logged, never silent).
+    whole run — the senses (induction) and the engine's result
+    (entities | ranking | verdict). Presentation only — the verdict is
+    deterministic and never depends on this call. The commentary is
+    cached like the sensing responses (keyed by the full prompt, so a
+    changed result means a fresh key) and replayed in cache mode; with
+    no cache entry it degrades to None (logged, never silent).
     on_response(text, source) carries the raw commentary + its source
     (live | cache) to the caller."""
     mode = mode or os.environ.get("FACTY_SENSE", "live")
@@ -962,7 +1019,8 @@ def explain(ui, case, result, entities, target="verdict", stream=None,
     result["pruned"] = [dict(p, statement=stmt.get(p.get("hypothesis")))
                         if isinstance(p, dict) else p
                         for p in result.get("pruned", [])]
-    task = explain_task(target, result, entities)
+    task = explain_task(target, result, entities,
+                        sensing=sensing_block(case, result, entities))
     cache_file = _cache_file(Path(case).name, label, task=task)
 
     def on_stream(line):

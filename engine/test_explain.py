@@ -205,20 +205,55 @@ def main():
               len(seen) == 1 and '"raised"' in seen[0]
               and all(h in seen[0] for h in phase1["raised_hypotheses"]))
         check("the commentary asks for the eliminated candidates and their reasons",
-              len(seen) == 1 and "which candidates it eliminated" in seen[0]
-              and "the reason each was eliminated" in seen[0])
+              len(seen) == 1 and "the constraint layer's eliminations" in seen[0]
+              and "the reason each" in seen[0])
         check("the commentary asks for the conclusion first (an ELI5 summary), "
               "then the step-by-step details",
               len(seen) == 1 and "conclusion first" in seen[0]
               and "executive summary" in seen[0]
               and "at most three sentences" in seen[0]
               and "step-by-step" in seen[0]
-              and "in the order the engine performed them" in seen[0])
+              and "in the order the run performed them" in seen[0])
         check("the commentary prompt carries the forward chain's fired rules "
               "(the steps performed)",
               len(seen) == 1 and '"fired_rules"' in seen[0]
               and all(f'"{e["rule"]}"' in seen[0]
                       for e in phase1["fired_rules"][:3]))
+
+        # the induction half: the senses' steps + outputs (the whole run,
+        # not just the engine's half)
+        check("the commentary prompt carries the senses (induction) section",
+              len(seen) == 1 and "THE SENSES" in seen[0]
+              and "THE ENGINE" in seen[0])
+        check("the senses section lists the classify step (the typed evidence)",
+              len(seen) == 1 and "classify the evidence pile" in seen[0]
+              and '"evidenceClass"' in seen[0])
+        check("the senses section lists the sensed facts (so the fired rules' "
+              "source fact-ids are decodable)",
+              len(seen) == 1 and "sense the evidence" in seen[0]
+              and '"facts"' in seen[0]
+              and all(f'"{f["id"]}"' in seen[0]
+                      for f in engine.load_array(
+                          case / "facts.json", "fact.schema.json")[:5]))
+        check("the senses section lists the entity extraction step",
+              len(seen) == 1 and "extract the entities" in seen[0])
+        check("the engine summary carries the phase (1 vs 2)",
+              len(seen) == 1 and '"phase"' in seen[0]
+              and phase1["phase"] in seen[0])
+        check("a phase-1 result does not claim a second sensing wave",
+              len(seen) == 1
+              and "sense the recommended test's evidence" not in seen[0])
+
+        # a phase-2 result: the test evidence was sensed in a second wave
+        phase2 = engine.run_case(case, add_facts=cli.drop_file(case))
+        seen_p2, calls_p2 = [], {"n": 0}
+        cli.explain(ui, case, phase2, entities, "verdict",
+                    runner=stub_runner(["phase-2 commentary"], calls_p2,
+                                       seen=seen_p2))
+        check("a phase-2 result's commentary carries the second sensing wave",
+              len(seen_p2) == 1 and "sense the recommended test's evidence"
+              in seen_p2[0] and phase2["phase"] in seen_p2[0],
+              seen_p2[0][:200] if seen_p2 else "no prompt seen")
 
         # the reported scenario: the triage case prunes H3 — the prompt
         # must carry what H3 claimed and why it fell (constraint C1)
@@ -227,12 +262,73 @@ def main():
         seen_t, calls_t = [], {"n": 0}
         cli.explain(ui, triage, r_triage, [], "verdict",
                     runner=stub_runner(["commentary"], calls_t, seen=seen_t))
-        h3 = next(p for p in r_triage["pruned"] if p["hypothesis"] == "H3")
+        # expectations derived from the case's own artifacts (the triage
+        # case is being reworked in a parallel session — don't hardcode)
+        h3s = [p for p in r_triage["pruned"] if p["hypothesis"] == "H3"]
+        stmt_t = {h["id"]: h["statement"] for h in engine.load_array(
+            triage / "pack" / "hypotheses.json", "hypothesis.schema.json")}
+        pile = sorted(cli.sensor_source_names(triage))
         check("the triage commentary prompt carries pruned H3 + its reason + statement",
-              len(seen_t) == 1 and calls_t["n"] == 1
-              and esc(h3["reason"]) in seen_t[0] and "C1" in seen_t[0]
-              and "Detector false-positive flood" in seen_t[0],
+              len(seen_t) == 1 and calls_t["n"] == 1 and h3s
+              and esc(h3s[0]["reason"]) in seen_t[0] and "C1" in seen_t[0]
+              and esc(stmt_t["H3"]) in seen_t[0],
               seen_t[0][:200] if seen_t else "no prompt seen")
+        check("the triage commentary prompt carries the classifier step "
+              "(the label sensor — no LLM tokens)",
+              len(seen_t) == 1 and "label the evidence pile" in seen_t[0]
+              and "no LLM tokens" in seen_t[0]
+              and all(p in seen_t[0] for p in pile))
+        check("the triage commentary prompt carries the classifier's "
+              "sensed facts (the sensor's contribution)",
+              len(seen_t) == 1 and '"facts_contributed"' in seen_t[0]
+              and any(f'"{f["id"]}"' in seen_t[0]
+                      for f in engine.load_array(
+                          triage / "facts.json", "fact.schema.json")
+                      if Path(str(f.get("source", "")).split(":")[0]).name in pile))
+
+        # explainer coverage on another demo case: the RCA (causation) case
+        # — phase 2 flips the verdict (H1 → H3) and prunes H1 (C5), so the
+        # commentary must walk both phases' whole runs (senses + engine)
+        rca = ENGINE_DIR / "cases" / "causation-three-am-outage"
+        rca_ents = engine.load_validated(rca / "entities.json",
+                                         "entities.schema.json")
+        rca1 = engine.run_case(rca)
+        rca2 = engine.run_case(rca, add_facts=cli.drop_file(rca))
+        seen_r, calls_r = [], {"n": 0}
+        cli.explain(ui, rca, rca1, rca_ents, "verdict",
+                    runner=stub_runner(["rca phase 1"], calls_r, seen=seen_r))
+        check("the RCA case (phase 1): the prompt walks the whole run — "
+              "senses + engine, fired rules + pruned + raised",
+              len(seen_r) == 1 and "THE SENSES" in seen_r[0]
+              and "THE ENGINE" in seen_r[0]
+              and all(f'"{e["rule"]}"' in seen_r[0]
+                      for e in rca1["fired_rules"][:3])
+              and all(p["hypothesis"] in seen_r[0] and esc(p["reason"]) in seen_r[0]
+                      for p in rca1["pruned"])
+              and all(h in seen_r[0] for h in rca1["raised_hypotheses"]))
+        check("the RCA case (phase 1): the senses section carries this case's "
+              "evidence + facts, and no second wave yet",
+              len(seen_r) == 1 and "classify the evidence pile" in seen_r[0]
+              and all(f'"{f["id"]}"' in seen_r[0]
+                      for f in engine.load_array(
+                          rca / "facts.json", "fact.schema.json")[:5])
+              and "sense the recommended test's evidence" not in seen_r[0])
+        seen_r2, calls_r2 = [], {"n": 0}
+        cli.explain(ui, rca, rca2, rca_ents, "verdict",
+                    runner=stub_runner(["rca phase 2"], calls_r2, seen=seen_r2))
+        stmt_r = {h["id"]: h["statement"] for h in engine.load_array(
+            rca / "pack" / "hypotheses.json", "hypothesis.schema.json")}
+        check("the RCA case (phase 2): the second sensing wave + the flipped "
+              "verdict + the new prunes are in the prompt",
+              len(seen_r2) == 1
+              and "sense the recommended test's evidence" in seen_r2[0]
+              and rca2["phase"] in seen_r2[0]
+              and all(p["hypothesis"] in seen_r2[0] and esc(p["reason"]) in seen_r2[0]
+                      and esc(stmt_r[p["hypothesis"]]) in seen_r2[0]
+                      for p in rca2["pruned"])
+              and all(f'"{f["id"]}"' in seen_r2[0] for f in rca2["derived_facts"])
+              and f'"{rca2["verdict"]["id"]}"' in seen_r2[0],
+              seen_r2[0][:200] if seen_r2 else "no prompt seen")
 
         # no cache entry + cache mode → None (logged, never silent)
         with tempfile.TemporaryDirectory() as tmp2:
