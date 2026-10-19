@@ -217,12 +217,31 @@ class PackStudioScreen(Screen):
                 # The agent pane IS pi's TUI (embedded via a PTY terminal
                 # emulator). The ask_questions questionnaire dialog renders
                 # natively here — tabs, previews, notes, review tab.
-                # The skill path is absolute (pi's --skill takes a path,
-                # not a name; the host install is at ~/.agents/skills/).
+                #
+                # Runs pi INSIDE the gondolin VM (the running SDLC session):
+                # the VM has the pack-factory skill + ask-questions extension
+                # baked in, authenticates via the host-secret proxy (the
+                # subscription token), and is hypervisor-isolated.
+                # Fallback: run pi on the host if no VM session is up.
+                import json as _json
                 from pathlib import Path as _Path
-                skill_path = _Path.home() / ".agents" / "skills" / "pack-factory"
+                _session_file = _Path(".agentic/vm-session.json")
+                if _session_file.exists():
+                    try:
+                        _sid = _json.loads(_session_file.read_text())["id"]
+                        _cmd = ["gondolin", "attach", _sid, "--",
+                                "pi", "--skill",
+                                "/root/.agents/skills/pack-factory"]
+                    except Exception:
+                        _cmd = None
+                else:
+                    _cmd = None
+                if _cmd is None:
+                    # Fallback: pi on the host
+                    _skill = _Path.home() / ".agents" / "skills" / "pack-factory"
+                    _cmd = ["pi", "--skill", str(_skill)]
                 yield TerminalPane(
-                    ["pi", "--skill", str(skill_path)],
+                    _cmd,
                     id="agent-terminal",
                     classes="agent-terminal",
                 )
