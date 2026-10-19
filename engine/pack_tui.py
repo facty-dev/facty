@@ -229,9 +229,16 @@ class PackStudioScreen(Screen):
                 if _session_file.exists():
                     try:
                         _sid = _json.loads(_session_file.read_text())["id"]
+                        # Source the session env (MISTRAL_API_KEY placeholder —
+                        # the host proxy substitutes the real subscription
+                        # token into requests to api.mistral.ai) and set
+                        # PI_CODING_AGENT_DIR (the mistral-subscription
+                        # extension lives at /opt/pi-agent in the VM).
                         _cmd = ["gondolin", "attach", _sid, "--",
-                                "pi", "--skill",
-                                "/root/.agents/skills/pack-factory"]
+                                "bash", "-c",
+                                "source /root/.session-env/mistral.sh 2>/dev/null; "
+                                "export PI_CODING_AGENT_DIR=/opt/pi-agent; "
+                                "exec pi --skill /root/.agents/skills/pack-factory"]
                     except Exception:
                         _cmd = None
                 else:
