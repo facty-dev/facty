@@ -39,6 +39,7 @@ from textual.widgets import (Button, Footer, Header, Input, Label, ListItem,
                              ListView, Static, TabbedContent, TabPane, TextArea)
 
 import agent  # noqa: E402  (the embedded agent — pi RPC)
+from terminal import TerminalPane  # noqa: E402  (embedded pi TUI — the questionnaire dialog)
 
 
 class AskDialogScreen(ModalScreen):
@@ -159,18 +160,14 @@ class PackStudioScreen(Screen):
     CSS = """
     #pack-left { width: 28; }
     #pack-right { width: 1fr; }
-    #pack-agent { width: 42; border-left: solid $primary; }
+    #pack-agent { width: 60; border-left: solid $primary; }
     #pack-list { height: 1fr; }
     #pack-tabs { height: 1fr; }
     .editor { height: 1fr; }
     #test-log { height: 1fr; border: solid green; }
     #validate-result { height: auto; padding: 0 1; }
     #pack-status { height: auto; padding: 0 1; color: $text-muted; }
-    #agent-log { height: 1fr; border: solid $accent; padding: 0 1; }
-    #agent-input { dock: bottom; }
-    .agent-user { color: $text-accent; text-style: bold; }
-    .agent-msg { color: $text; }
-    .agent-error { color: $text-error; }
+    .agent-terminal { height: 1fr; border: solid $accent; }
     """
 
     def __init__(self, pack_slug=None):
@@ -217,9 +214,18 @@ class PackStudioScreen(Screen):
                 yield Static("", id="pack-status")
             with Vertical(id="pack-agent"):
                 yield Label("Agent (pi) — your pair programmer", classes="title")
-                yield VerticalScroll(id="agent-log")
-                yield Input(placeholder="Ask the agent to draft, review, explain…",
-                            id="agent-input")
+                # The agent pane IS pi's TUI (embedded via a PTY terminal
+                # emulator). The ask_questions questionnaire dialog renders
+                # natively here — tabs, previews, notes, review tab.
+                # The skill path is absolute (pi's --skill takes a path,
+                # not a name; the host install is at ~/.agents/skills/).
+                from pathlib import Path as _Path
+                skill_path = _Path.home() / ".agents" / "skills" / "pack-factory"
+                yield TerminalPane(
+                    ["pi", "--skill", str(skill_path)],
+                    id="agent-terminal",
+                    classes="agent-terminal",
+                )
         yield Footer()
 
     def on_mount(self):

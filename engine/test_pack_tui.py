@@ -43,7 +43,7 @@ class PackStudioApp(App):
 
 
 async def run_tests():
-    from textual.widgets import (Button, Label, ListView, Static,
+    from textual.widgets import (Button, Input, Label, ListView, Static,
                                  TabbedContent, TextArea)
 
     app = PackStudioApp()
@@ -145,59 +145,28 @@ async def run_tests():
               PACK_SLUG in status_text,
               f"got: {status_text[:80]}")
 
-        # 14. The agent pane is present
-        from textual.containers import Vertical, VerticalScroll
-        from textual.widgets import Input
+        # 14. The agent pane is present — it's pi's TUI embedded via a
+        # PTY terminal emulator (TerminalPane). The ask_questions
+        # questionnaire dialog renders natively inside it.
+        from textual.containers import Vertical
+        from terminal import TerminalPane
         agent_pane = screen.query_one("#pack-agent", Vertical)
         check("the agent pane is present", agent_pane is not None)
 
-        agent_log = screen.query_one("#agent-log", VerticalScroll)
-        check("the agent chat log is present", agent_log is not None)
+        term = screen.query_one("#agent-terminal", TerminalPane)
+        check("the TerminalPane (pi's embedded TUI) is present", term is not None)
+        check("the TerminalPane is focusable (keyboard input)",
+              term.can_focus)
 
-        agent_input = screen.query_one("#agent-input", Input)
-        check("the agent input is present", agent_input is not None)
+        # The TerminalPane spawns pi in a PTY on mount — give it a moment
+        await pilot.pause(2)
+        check("the TerminalPane spawned the pi subprocess",
+              term.proc is not None,
+              f"proc: {term.proc}")
 
-        # 15. The agent input is functional (stub the AgentSession)
-        import agent as agent_mod
-        original_init = agent_mod.AgentSession.__init__
-
-        class StubAgentSession:
-            def __init__(self, pack_context=""):
-                self.pack_context = pack_context
-                self.sent = []
-
-            def send(self, message, stream=None, ui_handler=None):
-                self.sent.append(message)
-                if stream:
-                    stream("stub response: I can help you draft rules.")
-                return "stub response: I can help you draft rules."
-
-            def close(self):
-                pass
-
-        agent_mod.AgentSession = StubAgentSession
-        try:
-            # Call the agent logic directly (synchronous — bypasses the
-            # @work decorator for testability)
-            screen._agent_send_impl("draft rules for inflated labor rates")
-            await pilot.pause(1)
-            # The stub agent should have been called
-            check("the agent input sends a message to pi",
-                  screen.agent is not None,
-                  f"agent: {screen.agent}")
-            log_text = " ".join(
-                str(c.render()) for c in agent_log.children)
-            check("the chat log shows the user's message",
-                  "draft rules" in log_text.lower(),
-                  f"got: {log_text[:100]}")
-            check("the chat log shows the agent's response",
-                  "stub response" in log_text.lower(),
-                  f"got: {log_text[:100]}")
-        finally:
-            agent_mod.AgentSession = original_init
-            if screen.agent is not None:
-                screen.agent.close()
-                screen.agent = None
+        # 15. The AskDialogScreen (the RPC fallback for ask_questions —
+        # kept for headless/RPC mode; the TerminalPane renders the full
+        # questionnaire natively in pi's TUI)
 
         # 16. The AskDialogScreen (the ask_questions elicitation dialog)
         import threading

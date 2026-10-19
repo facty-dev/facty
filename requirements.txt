@@ -19,3 +19,4 @@
 # (`make deps-sensors`) — onnxruntime is heavy-ish and host/CI-only, never
 # in the gondolin VM snapshot.
 textual
+pyte  # terminal emulator for the embedded pi TUI (TerminalPane)
