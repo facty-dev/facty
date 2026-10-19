@@ -91,16 +91,63 @@ class TerminalPane(Static):
         self.can_focus = True  # receive keyboard input
 
     def on_mount(self):
+        # Delay the spawn until after the first layout pass — the
+        # widget's actual size isn't known at on_mount time. This
+        # ensures the terminal matches the widget (no cut-off content).
+        self.call_after_refresh(self._spawn_and_start)
+
+    def _spawn_and_start(self):
+        self._resize_to_widget()
         self._spawn()
         self._start_reader()
 
-    def _spawn(self):
-        """Spawn the subprocess in a PTY."""
-        master_fd, slave_fd = pty.openpty()
-        # Set the PTY window size
+    def on_resize(self, event):
+        """Resize the terminal when the widget is resized."""
+        self._resize_to_widget()
+
+    def _resize_to_widget(self):
+        """Resize the pyte terminal + PTY to match the widget's size."""
         import fcntl
         import struct
         import termios
+        # Get the widget's actual size (fallback to current/defaults)
+        try:
+            w, h = self.size.width, self.size.height
+            # If the size is 0 (not laid out yet), keep the current size
+            if w > 0 and h > 0:
+                new_cols = max(20, w)
+                new_rows = max(5, h)
+            else:
+                new_cols, new_rows = self.cols, self.rows
+        except Exception:
+            new_cols, new_rows = self.cols, self.rows
+        if new_cols == self.cols and new_rows == self.rows:
+            return
+        self.cols = new_cols
+        self.rows = new_rows
+        # Resize the pyte terminal (preserves content where possible)
+        try:
+            self.term.resize(new_rows, new_cols)
+        except Exception:
+            # If resize fails, recreate the terminal
+            self.term = pyte.Screen(new_cols, new_rows)
+            self.stream = pyte.ByteStream(self.term)
+        # Resize the PTY (so the subprocess sees the new size)
+        if self.master_fd:
+            try:
+                winsize = struct.pack("HHHH", new_rows, new_cols, 0, 0)
+                fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, winsize)
+            except OSError:
+                pass
+        self.refresh()
+
+    def _spawn(self):
+        """Spawn the subprocess in a PTY."""
+        import fcntl
+        import struct
+        import termios
+        master_fd, slave_fd = pty.openpty()
+        # Set the PTY window size
         winsize = struct.pack("HHHH", self.rows, self.cols, 0, 0)
         fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, winsize)
         self.master_fd = master_fd
@@ -135,12 +182,25 @@ class TerminalPane(Static):
         self._reader.start()
 
     def render(self):
-        """Render the terminal screen as a Rich Text object."""
+        """Render the terminal screen as a Rich Text object.
+
+        The terminal size matches the widget's size (dynamic resize),
+        so the full screen is visible — no cut-off content, and the
+        message entry bar (at the bottom) is always visible.
+
+        Clips to the widget's actual size (in case the terminal is
+        briefly larger during the initial render before the resize)."""
         with self._lock:
+            # Clip to the widget's actual size
+            try:
+                render_rows = min(self.rows, max(1, self.size.height))
+                render_cols = min(self.cols, max(1, self.size.width))
+            except Exception:
+                render_rows, render_cols = self.rows, self.cols
             lines = []
-            for y in range(self.rows):
+            for y in range(render_rows):
                 line = Text()
-                for x in range(self.cols):
+                for x in range(render_cols):
                     char = self.term.buffer[y][x]
                     style = self._char_style(char)
                     line.append(char.data, style=style or None)
