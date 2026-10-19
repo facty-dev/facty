@@ -171,22 +171,29 @@ class TerminalPane(Static):
         os.close(slave_fd)
 
     def _start_reader(self):
-        """Start a background thread to read the PTY output."""
+        """Start a background thread to read the PTY output.
+
+        Reads until EOF (the subprocess exits and closes the slave fd),
+        NOT until the process exits — the PTY may still have buffered
+        data after the process exits (e.g., a fast command like echo).
+        """
         def reader():
-            while self.proc and self.proc.poll() is None:
+            while self.master_fd is not None:
                 try:
                     data = os.read(self.master_fd, 65536)
                     if not data:
-                        break
+                        break  # EOF — the subprocess exited
                     with self._lock:
                         self.stream.feed(data)
-                    # Trigger a refresh on the app thread
+                    # Trigger a refresh on the app thread — if there's
+                    # no app (test) or it's shutting down, keep reading
+                    # (the render() call picks up the new content).
                     try:
                         self.app.call_from_thread(self.refresh)
-                    except RuntimeError:
-                        break  # app is shutting down
+                    except Exception:
+                        pass
                 except OSError:
-                    break
+                    break  # PTY closed (unmount)
         self._reader = threading.Thread(target=reader, daemon=True)
         self._reader.start()
 
@@ -202,10 +209,16 @@ class TerminalPane(Static):
 
         Highlights the text selection (reverse video)."""
         with self._lock:
-            # Clip to the widget's actual size
+            # Clip to the widget's actual size — but if the size is 0×0
+            # (not laid out yet), render the full terminal (otherwise the
+            # pane shows a single blank cell).
             try:
-                render_rows = min(self.rows, max(1, self.size.height))
-                render_cols = min(self.cols, max(1, self.size.width))
+                w, h = self.size.width, self.size.height
+                if w > 0 and h > 0:
+                    render_rows = min(self.rows, h)
+                    render_cols = min(self.cols, w)
+                else:
+                    render_rows, render_cols = self.rows, self.cols
             except Exception:
                 render_rows, render_cols = self.rows, self.cols
             # Selection range (normalized: start before end)
