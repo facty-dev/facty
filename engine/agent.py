@@ -63,11 +63,36 @@ The pack's artifacts:
 
 Schemas: engine/schemas/. The engine validates every artifact.
 
-The pack's current state is given below. Help the user author it:
-draft rules from plain language, suggest labels, review for gaps
-(dead rules, unraised hypotheses, unanswered questions), explain
-engine behavior. Be terse — the user is a domain expert, not a Facty
-engineer.
+## The meta-Facty loop (your main job)
+
+Your primary mode is ELICITATION: use the ask_questions tool to interview
+the user about their domain, then generate the pack artifacts from their
+answers. The loop:
+
+1. Ask questions (ask_questions) to elicit the domain:
+   - Entities: "What entities exist in your domain?" (options: person,
+     organization, place, object, animal, other)
+   - Predicates: "What can facts say about these entities?" (free-text
+     with examples from their answers)
+   - Hypotheses: "What are the competing explanations?" (options + free-text)
+   - Rules: "What rules should fire?" (free-text: "when X, then Y")
+   - Labels: "What labels should the sensor use?" (options + free-text)
+   - Constraints: "What should eliminate/support a hypothesis?" (free-text)
+2. Generate the pack artifacts from the answers (write them to
+   packs/<slug>/pack/*.json and packs/<slug>/classify.json).
+3. Tell the user to validate (the TUI's Validate button, or
+   ./facty pack validate <slug>).
+4. Ask more questions for the gaps (dead rules, unraised hypotheses,
+   unanswered questions) and iterate.
+
+Use ask_questions for ALL elicitation — never ask free-form in chat.
+The dialog captures the user's choices with context. Batch related
+questions (up to 4 per call).
+
+When you write artifacts, write them to the pack directory and tell
+the user what you wrote. The user reviews in the TUI editors.
+
+Be terse — the user is a domain expert, not a Facty engineer.
 """
 
 
@@ -138,14 +163,37 @@ class AgentSession:
             proc.wait()
         procs.unregister(proc)
 
-    def send(self, message, stream=None):
+    def _send_ui_response(self, request_id, value=None, confirmed=None,
+                          cancelled=False):
+        """Send an extension_ui_response command to pi (the host's answer
+        to an extension_ui_request — a select/input/confirm dialog)."""
+        if cancelled:
+            resp = {"type": "extension_ui_response", "id": request_id,
+                    "cancelled": True}
+        elif confirmed is not None:
+            resp = {"type": "extension_ui_response", "id": request_id,
+                    "confirmed": confirmed}
+        else:
+            resp = {"type": "extension_ui_response", "id": request_id,
+                    "value": value or ""}
+        try:
+            self.proc.stdin.write(json.dumps(resp) + "\n")
+            self.proc.stdin.flush()
+        except (BrokenPipeError, OSError):
+            pass
+
+    def send(self, message, stream=None, ui_handler=None):
         """Send a user message to the agent; stream the response lines.
         Returns the full response text. Raises RuntimeError on failure.
 
         The stream callback receives lines (strings) as they arrive.
-        Tool calls (ask_questions) are NOT handled here — the TUI must
-        pass a tool_handler callback for that (the MVP streams text
-        only; tool support is the meta-Facty loop follow-up)."""
+
+        ui_handler: a callback (request: dict) -> str | None, called when
+        the agent requests a UI dialog (extension_ui_request — the
+        ask_questions elicitation: select / input / confirm). The callback
+        shows the dialog and returns the answer (None = cancelled). It
+        runs in this worker thread; it must block until the user responds
+        (the TUI's handler uses call_from_thread + a threading.Event)."""
         with self._lock:
             if self.proc is None or self.proc.poll() is not None:
                 self._spawn()
@@ -170,7 +218,28 @@ class AgentSession:
                 except json.JSONDecodeError:
                     continue
                 rtype = rec.get("type")
-                if rtype == "message_update":
+                if rtype == "extension_ui_request":
+                    # The agent (via the ask_questions extension) wants a
+                    # dialog. Call the UI handler (blocks until the user
+                    # responds), then send the answer back to pi.
+                    if ui_handler is None:
+                        self._send_ui_response(rec.get("id", ""),
+                                               cancelled=True)
+                        continue
+                    try:
+                        answer = ui_handler(rec)
+                    except Exception:
+                        answer = None
+                    if answer is None:
+                        self._send_ui_response(rec.get("id", ""),
+                                               cancelled=True)
+                    elif rec.get("method") == "confirm":
+                        self._send_ui_response(rec.get("id", ""),
+                                               confirmed=bool(answer))
+                    else:
+                        self._send_ui_response(rec.get("id", ""),
+                                               value=str(answer))
+                elif rtype == "message_update":
                     ev = rec.get("assistantMessageEvent") or {}
                     if ev.get("type") == "text_delta":
                         delta = ev.get("delta", "")

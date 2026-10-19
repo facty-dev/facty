@@ -34,11 +34,97 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import Screen
+from textual.screen import Screen, ModalScreen
 from textual.widgets import (Button, Footer, Header, Input, Label, ListItem,
                              ListView, Static, TabbedContent, TabPane, TextArea)
 
 import agent  # noqa: E402  (the embedded agent — pi RPC)
+
+
+class AskDialogScreen(ModalScreen):
+    """A modal dialog for the agent's extension_ui_request (the
+    ask_questions elicitation over RPC — one question at a time).
+
+    method="select": a ListView of options, Enter to pick.
+    method="input": an Input, Enter to submit.
+    method="confirm": Yes / No buttons.
+
+    The result is stored in self.result; the event is set when the
+    user answers (or cancels with Escape)."""
+
+    CSS = """
+    AskDialogScreen {
+        align: center middle;
+    }
+    AskDialogScreen > Vertical {
+        width: 70; height: auto; max-height: 80%;
+        border: solid $accent; background: $surface; padding: 1 2;
+    }
+    #ask-title { text-style: bold; padding: 0 0 1 0; }
+    #ask-options { height: auto; max-height: 12; }
+    #ask-input { margin-top: 1; }
+    #ask-buttons { height: auto; align-horizontal: center; }
+    """
+
+    BINDINGS = [("escape", "cancel", "Cancel")]
+
+    def __init__(self, request, done, result):
+        super().__init__()
+        self.request = request
+        self.done = done       # threading.Event
+        self.result = result   # [value] — set before done.set()
+
+    def compose(self) -> ComposeResult:
+        method = self.request.get("method", "input")
+        title = self.request.get("title", "")
+        with Vertical():
+            yield Label(title, id="ask-title")
+            if method == "select":
+                options = self.request.get("options", [])
+                yield ListView(*[ListItem(Label(o)) for o in options],
+                               id="ask-options")
+            elif method == "confirm":
+                with Horizontal(id="ask-buttons"):
+                    yield Button("Yes", id="ask-yes", variant="primary")
+                    yield Button("No", id="ask-no")
+            else:  # input / editor
+                yield Input(placeholder=self.request.get("placeholder", ""),
+                            id="ask-input")
+
+    def on_mount(self):
+        method = self.request.get("method", "input")
+        if method == "select":
+            self.query_one("#ask-options", ListView).focus()
+        elif method == "input":
+            self.query_one("#ask-input", Input).focus()
+
+    def _submit(self, value):
+        self.result[0] = value
+        self.done.set()
+        self.app.pop_screen()
+
+    def _cancel(self):
+        self.result[0] = None
+        self.done.set()
+        self.app.pop_screen()
+
+    def on_list_view_selected(self, event):
+        if event.list_view.id == "ask-options":
+            label = event.item.query_one(Label)
+            self._submit(str(label.render()))
+
+    def on_input_submitted(self, event):
+        if event.input.id == "ask-input":
+            self._submit(event.input.value)
+
+    def on_button_pressed(self, event):
+        if event.button.id == "ask-yes":
+            self._submit("yes")
+        elif event.button.id == "ask-no":
+            self._submit("no")
+
+    def action_cancel(self):
+        self._cancel()
 
 ENGINE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(ENGINE_DIR))
@@ -424,6 +510,22 @@ class PackStudioScreen(Screen):
         log = self.query_one("#agent-log", VerticalScroll)
         log.scroll_end(animate=False)
 
+    def _agent_ui_handler(self, request):
+        """Handle an extension_ui_request from the agent (the ask_questions
+        elicitation over RPC — one question at a time). Called from the
+        worker thread; shows the dialog on the app thread and blocks until
+        the user responds (threading.Event). Returns the answer (or None
+        if cancelled)."""
+        done = threading.Event()
+        result = [None]
+
+        def show_dialog():
+            self.app.push_screen(AskDialogScreen(request, done, result))
+
+        self.app.call_from_thread(show_dialog)
+        done.wait(timeout=600)  # 10 minute timeout
+        return result[0]
+
     def _agent_send_impl(self, message):
         """The agent send logic (synchronous — the @work wrapper calls
         this in a thread; tests call this directly).
@@ -431,7 +533,11 @@ class PackStudioScreen(Screen):
         Streaming: a single Static widget per response, updated via
         call_next (non-blocking) as text arrives — no per-line widget
         mounts, and the 'agent: ' label appears once (part of the
-        initial text), not on every line."""
+        initial text), not on every line.
+
+        UI dialogs: the ask_questions elicitation (extension_ui_request)
+        is handled by _agent_ui_handler — it shows the AskDialogScreen
+        and blocks until the user answers."""
         # User message (one widget)
         self._ui_call(self._agent_log, f"you: {message}", "agent-user")
         if self.agent is None:
@@ -460,7 +566,8 @@ class PackStudioScreen(Screen):
             self.call_next(self._scroll_agent_log)
 
         try:
-            self.agent.send(message, stream=stream)
+            self.agent.send(message, stream=stream,
+                            ui_handler=self._agent_ui_handler)
         except RuntimeError as exc:
             self.agent = None  # respawn on the next message
             self._ui_call(self._agent_log,

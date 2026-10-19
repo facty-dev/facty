@@ -166,7 +166,7 @@ async def run_tests():
                 self.pack_context = pack_context
                 self.sent = []
 
-            def send(self, message, stream=None):
+            def send(self, message, stream=None, ui_handler=None):
                 self.sent.append(message)
                 if stream:
                     stream("stub response: I can help you draft rules.")
@@ -198,6 +198,45 @@ async def run_tests():
             if screen.agent is not None:
                 screen.agent.close()
                 screen.agent = None
+
+        # 16. The AskDialogScreen (the ask_questions elicitation dialog)
+        import threading
+        from pack_tui import AskDialogScreen
+        done = threading.Event()
+        result = [None]
+        dialog = AskDialogScreen(
+            {"method": "select", "title": "What entities exist?",
+             "options": ["person", "organization", "other"]},
+            done, result)
+        app.push_screen(dialog)
+        await pilot.pause()
+        check("the AskDialogScreen mounts", isinstance(app.screen, AskDialogScreen))
+        # Select the first option
+        lv = dialog.query_one("#ask-options", ListView)
+        lv.index = 0
+        await pilot.press("enter")
+        await pilot.pause()
+        check("the AskDialogScreen returns the selected option",
+              result[0] == "person",
+              f"got: {result[0]}")
+        check("the AskDialogScreen signals done", done.is_set())
+
+        # 17. The input dialog
+        done2 = threading.Event()
+        result2 = [None]
+        dialog2 = AskDialogScreen(
+            {"method": "input", "title": "What predicates?",
+             "placeholder": "e.g. damageAmount"},
+            done2, result2)
+        app.push_screen(dialog2)
+        await pilot.pause()
+        inp = dialog2.query_one("#ask-input", Input)
+        inp.value = "damageAmount, witnessRelationship"
+        await pilot.press("enter")
+        await pilot.pause()
+        check("the input dialog returns the typed text",
+              result2[0] == "damageAmount, witnessRelationship",
+              f"got: {result2[0]}") 
 
 
 def main():
