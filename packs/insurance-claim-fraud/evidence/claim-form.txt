@@ -1,0 +1,8 @@
+INSURANCE CLAIM FORM
+Claim #: CL-2026-1042
+Policyholder: Maria Santos
+Date of incident: 2026-10-15, 23:47
+Location: Parking lot, Rua das Flores 12
+Vehicle: 2019 Honda Civic, plate AB-12-CD
+Description: "My car was hit while parked. The other driver left the scene. I found the damage when I returned at midnight."
+Estimated damage: €4,200

@@ -1,0 +1,20 @@
+[
+  {"id": "f01", "type": "case", "subject": "claim", "predicate": "claimId", "value": "CL-2026-1042", "confidence": 0.95, "source": "evidence/claim-form.txt"},
+  {"id": "f02", "type": "case", "subject": "claim", "predicate": "estimatedDamage", "value": 4200, "confidence": 0.95, "source": "evidence/claim-form.txt"},
+  {"id": "f03", "type": "case", "subject": "claim", "predicate": "incidentType", "value": "hit-and-run-parked", "confidence": 0.9, "source": "evidence/claim-form.txt"},
+  {"id": "f04", "type": "evidence", "subject": "police-report", "predicate": "hasWitnesses", "value": false, "confidence": 0.9, "source": "evidence/police-report.txt"},
+  {"id": "f05", "type": "evidence", "subject": "police-report", "predicate": "hasPaintTransfer", "value": false, "confidence": 0.85, "source": "evidence/police-report.txt"},
+  {"id": "f06", "type": "evidence", "subject": "police-report", "predicate": "hasCCTV", "value": false, "confidence": 0.9, "source": "evidence/police-report.txt"},
+  {"id": "f07", "type": "evidence", "subject": "witness", "predicate": "relationshipToClaimant", "value": "same-building-neighbor", "confidence": 0.8, "source": "evidence/witness-statement.txt"},
+  {"id": "f08", "type": "evidence", "subject": "witness", "predicate": "sawOtherVehicle", "value": false, "confidence": 0.85, "source": "evidence/witness-statement.txt"},
+  {"id": "f09", "type": "evidence", "subject": "witness", "predicate": "sawSuspiciousActivity", "value": true, "confidence": 0.8, "source": "evidence/witness-statement.txt"},
+  {"id": "f10", "type": "evidence", "subject": "repair-estimate", "predicate": "totalAmount", "value": 4200, "confidence": 0.95, "source": "evidence/repair-estimate.csv"},
+  {"id": "f11", "type": "evidence", "subject": "repair-estimate", "predicate": "hasPaintCorrection", "value": true, "confidence": 0.9, "source": "evidence/repair-estimate.csv"},
+  {"id": "f12", "type": "evidence", "subject": "repair-estimate", "predicate": "hasTotalLossAdjusterFee", "value": true, "confidence": 0.9, "source": "evidence/repair-estimate.csv"},
+  {"id": "f13", "type": "evidence", "subject": "repair-estimate", "predicate": "itemCount", "value": 6, "confidence": 0.95, "source": "evidence/repair-estimate.csv"},
+  {"id": "f14", "type": "evidence", "subject": "prior-claims", "predicate": "claimCount", "value": 3, "confidence": 0.95, "source": "evidence/prior-claims.csv"},
+  {"id": "f15", "type": "evidence", "subject": "prior-claims", "predicate": "priorParkingLotClaims", "value": 2, "confidence": 0.9, "source": "evidence/prior-claims.csv"},
+  {"id": "f16", "type": "world", "subject": "policy", "predicate": "requiresPoliceReport", "value": true, "confidence": 1.0, "source": "policy"},
+  {"id": "f17", "type": "world", "subject": "policy", "predicate": "requiresPaintTransfer", "value": false, "confidence": 1.0, "source": "policy"},
+  {"id": "f18", "type": "world", "subject": "policy", "predicate": "maxClaimRatio", "value": 2.5, "confidence": 1.0, "source": "policy"}
+]

@@ -1,0 +1,4 @@
+claim_id,date,type,amount,status
+CL-2024-0891,2024-03-12,parking-lot collision,1800,paid
+CL-2025-0233,2025-07-22,parking-lot collision,2400,paid
+CL-2026-1042,2026-10-15,hit-and-run (parked),4200,pending

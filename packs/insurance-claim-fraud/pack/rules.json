@@ -1,0 +1,191 @@
+[
+  {
+    "id": "r-staged-accident",
+    "pack": "insurance-claim-fraud",
+    "salience": 10,
+    "confidence": 0.8,
+    "when": [
+      {
+        "subject": "police-report",
+        "predicate": "hasWitnesses",
+        "value": false
+      },
+      {
+        "subject": "police-report",
+        "predicate": "hasPaintTransfer",
+        "value": false
+      },
+      {
+        "subject": "witness",
+        "predicate": "sawSuspiciousActivity",
+        "value": true
+      }
+    ],
+    "then": [
+      {
+        "op": "derive",
+        "fact": {
+          "id": "d1",
+          "type": "derived",
+          "subject": "claim",
+          "predicate": "stagedAccidentLikely",
+          "value": true,
+          "confidence": 0.8,
+          "source": "r-staged-accident"
+        }
+      },
+      {
+        "op": "raise",
+        "hypotheses": [
+          "H1"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "r-inflated-estimate",
+    "pack": "insurance-claim-fraud",
+    "salience": 9,
+    "confidence": 0.75,
+    "when": [
+      {
+        "subject": "repair-estimate",
+        "predicate": "hasPaintCorrection",
+        "value": true
+      }
+    ],
+    "then": [
+      {
+        "op": "derive",
+        "fact": {
+          "id": "d2",
+          "type": "derived",
+          "subject": "repair-estimate",
+          "predicate": "inflatedDamagesLikely",
+          "value": true,
+          "confidence": 0.75,
+          "source": "r-inflated-estimate"
+        }
+      },
+      {
+        "op": "raise",
+        "hypotheses": [
+          "H2"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "r-inflated-estimate-adjuster-fee",
+    "pack": "insurance-claim-fraud",
+    "salience": 9,
+    "confidence": 0.75,
+    "when": [
+      {
+        "subject": "repair-estimate",
+        "predicate": "hasTotalLossAdjusterFee",
+        "value": true
+      }
+    ],
+    "then": [
+      {
+        "op": "derive",
+        "fact": {
+          "id": "d2b",
+          "type": "derived",
+          "subject": "repair-estimate",
+          "predicate": "inflatedDamagesLikely",
+          "value": true,
+          "confidence": 0.75,
+          "source": "r-inflated-estimate-adjuster-fee"
+        }
+      },
+      {
+        "op": "raise",
+        "hypotheses": [
+          "H2"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "r-repeat-claimant",
+    "pack": "insurance-claim-fraud",
+    "salience": 8,
+    "confidence": 0.7,
+    "when": [
+      {
+        "subject": "prior-claims",
+        "predicate": "priorParkingLotClaims",
+        "value": 2
+      }
+    ],
+    "then": [
+      {
+        "op": "derive",
+        "fact": {
+          "id": "d3",
+          "type": "derived",
+          "subject": "claimant",
+          "predicate": "repeatClaimant",
+          "value": true,
+          "confidence": 0.7,
+          "source": "r-repeat-claimant"
+        }
+      },
+      {
+        "op": "raise",
+        "hypotheses": [
+          "H1",
+          "H2"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "r-hit-and-run-no-evidence",
+    "pack": "insurance-claim-fraud",
+    "salience": 7,
+    "confidence": 0.6,
+    "when": [
+      {
+        "subject": "claim",
+        "predicate": "incidentType",
+        "value": "hit-and-run-parked"
+      },
+      {
+        "subject": "police-report",
+        "predicate": "hasCCTV",
+        "value": false
+      },
+      {
+        "subject": "police-report",
+        "predicate": "hasWitnesses",
+        "value": false
+      }
+    ],
+    "then": [
+      {
+        "op": "derive",
+        "fact": {
+          "id": "d4",
+          "type": "derived",
+          "subject": "claim",
+          "predicate": "uncorroboratedHitAndRun",
+          "value": true,
+          "confidence": 0.6,
+          "source": "r-hit-and-run-no-evidence"
+        }
+      },
+      {
+        "op": "raise",
+        "hypotheses": [
+          "H1",
+          "H2",
+          "H3",
+          "H4"
+        ]
+      }
+    ]
+  }
+]

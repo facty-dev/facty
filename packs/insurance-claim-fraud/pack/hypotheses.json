@@ -1,0 +1,92 @@
+[
+  {
+    "id": "H1",
+    "statement": "The accident was staged — the collision was deliberately caused or fabricated, not a genuine hit-and-run.",
+    "status": "open",
+    "prior": 0.25,
+    "claims": [
+      { "subject": "police-report", "predicate": "hasWitnesses", "value": false },
+      { "subject": "police-report", "predicate": "hasPaintTransfer", "value": false },
+      { "subject": "witness", "predicate": "sawSuspiciousActivity", "value": true }
+    ],
+    "evidenceFor": [
+      "No witnesses and no paint transfer on the vehicle",
+      "Witness saw a person loitering near the car, no other vehicle",
+      "Hit-and-run claim with no corroborating physical evidence"
+    ],
+    "evidenceAgainst": [
+      "Police report corroborates a parking-lot collision damage pattern",
+      "CCTV or independent witness confirms another vehicle made contact"
+    ],
+    "discriminatingTests": [
+      "Is there paint transfer or foreign material on the damaged panel?",
+      "Does any independent witness or CCTV show another vehicle striking the car?"
+    ]
+  },
+  {
+    "id": "H2",
+    "statement": "The repair estimate is inflated — it contains padded, unnecessary, or overpriced line items.",
+    "status": "open",
+    "prior": 0.3,
+    "claims": [
+      { "subject": "repair-estimate", "predicate": "hasPaintCorrection", "value": true }
+    ],
+    "evidenceFor": [
+      "Estimate includes 'paint correction' for scratches unrelated to the reported bumper damage",
+      "Estimate includes a 'total loss adjuster fee' on a repairable vehicle",
+      "Estimated total is far above market rate for the described damage"
+    ],
+    "evidenceAgainst": [
+      "Independent second-shop estimate is comparable",
+      "Every line item maps to damage documented in the police report or photos"
+    ],
+    "discriminatingTests": [
+      "Does an independent appraiser's estimate come in materially lower?",
+      "Do the flagged line items correspond to damage visible in the evidence photos?"
+    ]
+  },
+  {
+    "id": "H3",
+    "statement": "The claimed damage is pre-existing — part of the estimate covers damage that predates the accident.",
+    "status": "open",
+    "prior": 0.2,
+    "claims": [
+      { "subject": "repair-estimate", "predicate": "hasPaintCorrection", "value": true }
+    ],
+    "evidenceFor": [
+      "'Paint correction (minor scratches, passenger door)' is unrelated to a rear-bumper hit-and-run",
+      "Prior photos or claim history show the same scratches before the incident date"
+    ],
+    "evidenceAgainst": [
+      "Photos timestamped before the incident show no such damage",
+      "Damage pattern is fully consistent with the reported collision"
+    ],
+    "discriminatingTests": [
+      "Do pre-incident photos or prior claim records show the passenger-door scratches?",
+      "Is the rust/wear pattern on the flagged damage older than the incident date?"
+    ]
+  },
+  {
+    "id": "H4",
+    "statement": "The claim is legitimate — a genuine accident with an honest estimate.",
+    "status": "open",
+    "prior": 0.5,
+    "claims": [
+      { "subject": "police-report", "predicate": "hasWitnesses", "value": true }
+    ],
+    "evidenceFor": [
+      "Police report corroborates the claimant's account",
+      "No prior claims of the same type; clean history",
+      "Estimate line items all map to documented damage at market rates"
+    ],
+    "evidenceAgainst": [
+      "No witnesses, no paint transfer, no CCTV",
+      "Estimate contains items unrelated to the reported damage",
+      "Claimant has multiple prior claims of the same type"
+    ],
+    "discriminatingTests": [
+      "Does the police report independently corroborate the claimant's version?",
+      "Is the claimant's history free of similar prior claims?"
+    ]
+  }
+]

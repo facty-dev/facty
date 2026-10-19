@@ -1,0 +1,37 @@
+{
+  "model": "strom-1.0.7",
+  "questions": {
+    "lineItemClassification": {
+      "type": "choice",
+      "instructions": "Classify this repair estimate line item given the reported accident (a rear-bumper hit-and-run on a parked car).",
+      "criteria": {
+        "a legitimate repair line item": "The item is a fair, market-rate charge for parts or labor needed to repair the damage described in the claim (rear bumper damage from a parking-lot collision).",
+        "an inflated line item": "The item is overpriced, padded, or for work far beyond what the described damage requires — e.g. excessive labor hours, OEM pricing for aftermarket parts, or duplicate charges.",
+        "a line item for staged or fabricated damage": "The item charges for damage that was deliberately caused or entirely fabricated as part of a staged accident — work with no plausible connection to any real collision.",
+        "a line item for pre-existing damage": "The item covers damage that existed before the reported incident — e.g. old scratches on an unrelated panel, wear, or rust repair bundled into the claim."
+      }
+    },
+    "hasPaintTransfer": {
+      "type": "noul",
+      "instructions": "Does the evidence (police report, photos, inspection) show paint transfer or foreign material on the claimant's vehicle indicating another car made contact?"
+    },
+    "witnessCredibility": {
+      "type": "score",
+      "instructions": "How credible is this witness's account?",
+      "criteria": [
+        "not credible — contradicted by physical evidence or clear motive to lie",
+        "weak — vague, uncertain, or with a relationship to the claimant",
+        "moderate — plausible but uncorroborated",
+        "strong — independent, specific, and consistent with physical evidence"
+      ]
+    },
+    "estimateMatchesDamage": {
+      "type": "noul",
+      "instructions": "Does every line item in the repair estimate correspond to damage consistent with the reported accident?"
+    },
+    "priorDamageEvidence": {
+      "type": "noul",
+      "instructions": "Is there evidence (pre-incident photos, prior claim records, inspection notes) that any of the claimed damage existed before the incident date?"
+    }
+  }
+}
