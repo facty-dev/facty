@@ -81,10 +81,10 @@ def pi_command(system_prompt=None):
            "--provider", PROVIDER, "--model", MODEL,
            "--thinking", THINKING]
     if system_prompt:
-        # Stage the system prompt to a file (long prompts break arg handling)
-        sp = Path("/tmp/facty-agent-system-prompt.md")
-        sp.write_text(system_prompt)
-        cmd += ["--system-prompt-file", str(sp)]
+        # --system-prompt takes the text directly (no --system-prompt-file
+        # in this pi version). The prompt is short enough (~2KB) for a
+        # CLI arg; the pack context rides the first user message if long.
+        cmd += ["--system-prompt", system_prompt]
     return cmd
 
 
