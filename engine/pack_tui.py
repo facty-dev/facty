@@ -413,9 +413,26 @@ class PackStudioScreen(Screen):
         else:
             fn(*args)
 
+    def _mount_agent_widget(self, widget):
+        """Mount the agent's response widget on the app thread."""
+        log = self.query_one("#agent-log", VerticalScroll)
+        log.mount(widget)
+        log.scroll_end(animate=False)
+
+    def _scroll_agent_log(self):
+        """Scroll the agent chat log to the bottom."""
+        log = self.query_one("#agent-log", VerticalScroll)
+        log.scroll_end(animate=False)
+
     def _agent_send_impl(self, message):
         """The agent send logic (synchronous — the @work wrapper calls
-        this in a thread; tests call this directly)."""
+        this in a thread; tests call this directly).
+
+        Streaming: a single Static widget per response, updated via
+        call_next (non-blocking) as text arrives — no per-line widget
+        mounts, and the 'agent: ' label appears once (part of the
+        initial text), not on every line."""
+        # User message (one widget)
         self._ui_call(self._agent_log, f"you: {message}", "agent-user")
         if self.agent is None:
             ctx = ""
@@ -430,13 +447,19 @@ class PackStudioScreen(Screen):
                 self._ui_call(self._agent_log,
                               f"agent: failed to start: {exc}", "agent-error")
                 return
+        # Mount the agent's response widget (blocking — ensures it's
+        # mounted before streaming starts)
+        response_widget = Static("agent: ", classes="agent-msg")
+        self._ui_call(self._mount_agent_widget, response_widget)
+        # Stream the response into the widget (non-blocking updates)
+        accumulated = ["agent: "]
+
+        def stream(line):
+            accumulated[0] += line + "\n"
+            self.call_next(response_widget.update, accumulated[0])
+            self.call_next(self._scroll_agent_log)
+
         try:
-            response_lines = []
-
-            def stream(line):
-                response_lines.append(line)
-                self._ui_call(self._agent_log, f"agent: {line}", "agent-msg")
-
             self.agent.send(message, stream=stream)
         except RuntimeError as exc:
             self.agent = None  # respawn on the next message
