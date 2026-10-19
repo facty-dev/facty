@@ -16,6 +16,7 @@ The primary interface is the **`facty` CLI** (`./facty`, or
 ```bash
 ./facty                  # the Textual workbench (TUI — the primary interface)
 ./facty tui <case>       # the workbench, straight into a case
+./facty tui --pack [slug]  # the Pack Studio TUI (author a pack interactively)
 ./facty cases            # the demo cases (type · pack · phase-2 drop)
 ./facty run <case>       # run a case (phase 1) · --add-facts <drop> = phase 2 · --json
 ./facty selftest         # acceptance test — every case, asserted
@@ -67,7 +68,9 @@ graceful fallback. See
 - `cli.py` — the `facty` CLI: the workbench entry (bare `./facty`) +
   the scriptable control plane (subcommands)
 - `tui.py` — the Textual workbench (the primary interface; optional dep)
+- `pack_tui.py` — the Pack Studio TUI (author a pack: editors + test tab)
 - `test_tui.py` — the workbench, tested headless (Textual's pilot)
+- `test_pack_tui.py` — the Pack Studio TUI, tested headless (Textual's pilot)
 - `cases/<type>-<slug>/` — the demo cases, prefixed with the
   investigation type
   ([docs/INVESTIGATION-TYPES.md](../docs/INVESTIGATION-TYPES.md)).

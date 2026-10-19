@@ -276,11 +276,13 @@ def _contrast_fg(bg_hex):
 class PickerScreen(Screen):
     """The case picker — the workbench's front door."""
 
-    BINDINGS = [("q", "quit", "Quit"), ("?", "help", "Help")]
+    BINDINGS = [("q", "quit", "Quit"), ("p", "pack_studio", "Pack Studio"),
+                ("?", "help", "Help")]
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield Label("Facty — the detective DSS · pick a case", classes="title")
+        yield Label("Facty — the detective DSS · pick a case · [p] Pack Studio",
+                    classes="title")
         def sensor_mark(c):
             """The case picker's sensor marker: which tiers the case's
             label sensor runs (from classify.json's backend)."""
@@ -310,6 +312,10 @@ class PickerScreen(Screen):
 
     def action_quit(self):
         self.app.exit()
+
+    def action_pack_studio(self):
+        from pack_tui import PackStudioScreen
+        self.app.push_screen(PackStudioScreen())
 
     def action_help(self):
         self.app.push_screen(HelpScreen())
@@ -929,10 +935,12 @@ class FactyApp(App):
     COMMANDS = App.COMMANDS | {FactyCommands}
     BINDINGS = [("ctrl+p", "command_palette", "Command palette")]
 
-    def __init__(self, case=None, auto=False):
+    def __init__(self, case=None, auto=False, pack_studio=False, pack_slug=None):
         super().__init__()
         self.initial_case = case
         self.auto = auto
+        self.pack_studio = pack_studio
+        self.pack_slug = pack_slug
 
     def exit(self, *args, **kwargs):
         # quitting must not leave LLM/auth subprocesses behind
@@ -940,12 +948,16 @@ class FactyApp(App):
         return super().exit(*args, **kwargs)
 
     def get_default_screen(self) -> Screen:
+        if self.pack_studio:
+            from pack_tui import PackStudioScreen
+            return PackStudioScreen(self.pack_slug)
         if self.initial_case is not None:
             return CaseScreen(self.initial_case, auto=self.auto)
         return PickerScreen()
 
 
-def run(case=None, auto=False):
+def run(case=None, auto=False, pack_studio=False, pack_slug=None):
     """Launch the workbench (imported lazily by cli.py — Textual is the
     repo's one optional dependency)."""
-    FactyApp(case, auto=auto).run()
+    FactyApp(case, auto=auto, pack_studio=pack_studio,
+             pack_slug=pack_slug).run()

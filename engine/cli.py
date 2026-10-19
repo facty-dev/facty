@@ -92,6 +92,8 @@ EXAMPLES = """\
 examples:
   ./facty                            the workbench (Textual TUI — the primary interface)
   ./facty tui phantom-invoice        the workbench, straight into a case
+  ./facty tui --pack                 the Pack Studio (author a pack)
+  ./facty tui --pack triage-alert-flood   the Pack Studio, straight into a pack
   ./facty cases                      the demo cases (type · pack · phase-2 drop)
   ./facty run phantom-invoice        phase 1 (unique slug match)
   ./facty run three-am-outage --add-facts engine/cases/causation-three-am-outage/facts-postmortem.json
@@ -2503,7 +2505,7 @@ def cmd_test(args):
     for script in ("test_retry.py", "test_tui.py", "test_cache.py",
                    "test_auth.py", "test_explain.py", "test_label.py",
                    "test_strom.py", "test_dotenv.py", "test_session.py",
-                   "test_pack.py"):
+                   "test_pack.py", "test_pack_tui.py"):
         r = subprocess.run([sys.executable, str(ENGINE_DIR / script)])
         if r.returncode:
             return r.returncode
@@ -2565,7 +2567,13 @@ def cmd_tui(args):
         print("       the control plane works without it: "
               "./facty cases · ./facty run <case> · ./facty selftest", file=sys.stderr)
         return 1
-    return tui.run(case, auto=getattr(args, "auto", False))
+    pack_slug = None
+    pack_studio = False
+    if getattr(args, "pack", None) is not None:
+        pack_studio = True
+        pack_slug = args.pack or None
+    return tui.run(case, auto=getattr(args, "auto", False),
+                   pack_studio=pack_studio, pack_slug=pack_slug)
 
 
 def cmd_completion(args):
@@ -2931,6 +2939,9 @@ def main(argv=None):
     p = sub.add_parser("tui", help="the Textual workbench (the primary interface; needs `make deps`)")
     p.add_argument("case", nargs="?", help="open this case directly (default: the case picker)")
     p.add_argument("--auto", action="store_true", help="run phase 1 on mount")
+    p.add_argument("--pack", nargs="?", const="", default=None, metavar="SLUG",
+                   help="open the Pack Studio (the pack authoring workbench); "
+                        "optionally straight into this pack")
     p.set_defaults(func=cmd_tui)
 
     p = sub.add_parser("emit", help="codegen projections (TS types + Datalog per case)")
