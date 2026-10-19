@@ -1,0 +1,15 @@
+THREAT INTEL FEED — pulled 2026-10-12 05:40 by the on-call
+
+185.220.44.0/24 is a known bulletproof-hosting range (listed by two
+independent feeds this quarter). It is associated with credential
+stuffing and card-testing campaigns against retail checkouts, and it
+shows current activity in our sector.
+
+185.220.45.11 sits in the same provider block and was active against
+two other retailers last week.
+
+91.240.7.3 resolves to a VPN exit node flagged in the same campaign
+report.
+
+No attribution yet — but the top alert sources are not background
+radiation. Correlate with the alert export before routing.

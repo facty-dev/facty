@@ -1,0 +1,6 @@
+{
+  "verdict": "H1",
+  "pruned": ["H3"],
+  "derived": ["d1", "d2", "d2b"],
+  "recommended_test": "q1"
+}

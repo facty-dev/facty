@@ -24,9 +24,14 @@
 #   ./scripts/vm-session.sh down            # stop the session (from YOUR side)
 #
 # Env:
-#   MISTRAL_API_KEY      boot-time source for the host-secret; falls back
-#                        to `pi auth print-api-key` (stored credential —
-#                        only readable outside the pi-sandbox)
+#   MISTRAL_API_KEY      boot-time source for the host-secret (production:
+#                        set it explicitly for the pay-per-use API key).
+#                        Local dev (unset): falls back to the Mistral
+#                        subscription OAuth bearer token (pi auth
+#                        print-bearer-token — no per-token charges), then
+#                        to the stored API key (pi auth print-api-key).
+#                        The guest only ever sees a placeholder; the host
+#                        proxy substitutes the real value into requests.
 #   PI_SNAPSHOT          VM snapshot (default: <repo>/gondolin/snapshots/
 #                        pi-sandbox.qcow2 — the vendored image config's)
 
@@ -72,11 +77,32 @@ session_up() {
 }
 
 resolve_key() {
-  if [[ -n "${MISTRAL_API_KEY:-}" ]]; then return 0; fi
+  # Explicit MISTRAL_API_KEY (production) — always wins.
+  if [[ -n "${MISTRAL_API_KEY:-}" ]]; then
+    info "using MISTRAL_API_KEY from the environment"
+    return 0
+  fi
+  # Local dev: prefer the Mistral subscription token — no per-token
+  # charges. The token is the long-lived API key the pi-mistral-
+  # subscription extension obtains via browser sign-in (stored in
+  # ~/.pi/agent/auth.json under "mistral-subscription"). It rides the
+  # same host-secret mechanism as a pay-per-use API key: the guest sees
+  # a placeholder, the host proxy substitutes the real value into
+  # requests to api.mistral.ai. Both auth styles use the same
+  # Authorization: Bearer <token> header, so the mistral provider picks
+  # it up unchanged. (Read directly from auth.json — pi auth doesn't
+  # recognise extension-registered providers by ID.)
+  if _token="$(python3 -c "import json,os; print(json.load(open(os.path.expanduser('~/.pi/agent/auth.json'))).get('mistral-subscription',{}).get('access',''))" 2>/dev/null)" \
+     && [[ -n "$_token" ]]; then
+    export MISTRAL_API_KEY="$_token"
+    info "using Mistral subscription token (from ~/.pi/agent/auth.json)"
+    return 0
+  fi
+  # Fallback: the pay-per-use API key.
   if _key="$(pi auth print-api-key --provider mistral 2>/dev/null)" \
      && [[ -n "$_key" && "$_key" != "null" ]]; then
     export MISTRAL_API_KEY="${_key//\"/}"
-    info "using stored mistral credential (pi auth)"
+    warn "no subscription credential — using Mistral API key (pay-per-use)"
     return 0
   fi
   err "MISTRAL_API_KEY not set and no stored credential readable"

@@ -266,6 +266,12 @@ def session_scope():
         sess.close()
 
 
+def current_session():
+    """The run's sensing session (set inside a session_scope), else None
+    — the CLI's run-level affordances (the cache summary) read it."""
+    return getattr(_current, "session", None)
+
+
 def _pi_runner(staged_path, stream):
     """Call the LLM via pi's RPC mode, streaming (see SensingSession).
     Within a session_scope the call joins the run's shared session;

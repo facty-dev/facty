@@ -23,6 +23,15 @@ The primary interface is the **`facty` CLI** (`./facty`, or
 ./facty sense <case> --op facts    # one sensing op, standalone (streamed LLM)
 ./facty walkthrough <case>         # terminal step-through (VMs, no-TTY)
 ./facty emit             # codegen projections (TS types + Datalog per case)
+./facty pack list        # the Pack Studio: the packs under packs/ (artifact counts)
+./facty pack validate <pack>       # validate a pack (schema + cross-artifact)
+./facty pack test <pack> --facts <file>    # run the pack on a fact set + gap analysis
+./facty pack test <pack> --tests <dir>     # run every scenario, assert expected
+./facty pack draft-rules <pack> --domain "..." [--write]   # draft rules.json (LLM, judged, staged)
+./facty pack suggest-labels <pack> --evidence <file> [--write]   # draft classify.json (LLM, staged)
+./facty pack draft-hypotheses <pack> --domain "..." [--write]   # draft hypotheses.json (LLM, staged)
+./facty pack draft-questions <pack> [--write]   # draft sensor/decisions.json (LLM, judged, staged)
+./facty pack review <pack>     # advisory gap review (prose, never written)
 ./facty completion bash  # shell completion (bash|zsh|fish)
 make deps                # install the optional deps (Textual — the workbench)
 ```
@@ -70,6 +79,11 @@ graceful fallback. See
   - `attribution-silver-blaze/` — the exemplar (detective work)
   - `adjudication-phantom-invoice/` — invoice fraud (adjudication)
   - `causation-three-am-outage/` — incident RCA (causation)
+- `pack.py` — the Pack Studio library: validate, test, and diagnose
+  knowledge packs (`packs/<slug>/`) — the authoring side of the
+  detective DSS (PRD-007). stdlib only; the deterministic half
+  (schema + cross-artifact validation, the test run with gap
+  analysis, the scenario runner, the draft staging policy)
 - `emit.py` → `emit/` — codegen projections (TypeScript types, Datalog)
 
 ## The protocol
@@ -288,6 +302,44 @@ LLM's phase-1 files (`cli.phase1_evidence`), so the pile never enters an
 LLM call. The demo case `triage-alert-flood` shows the ladder in the
 verdict loop (classifier bulk + Strom adjudication); see its
 `SENSING.md` for the measured accuracy and calibration notes.
+
+## Pack Studio — the LLM authoring ops
+
+The one-shot authoring ops (`pack draft-rules` / `suggest-labels` /
+`draft-hypotheses` / `draft-questions` / `review`) are the "pair
+programmer" half of the Pack Studio MVP (PRD-007 REQ-010…016): the LLM
+drafts a pack artifact, the judge layer checks it (the artifact's
+schema + the pack's cross-artifact rules — unique ids, raise targets
+that exist, the pack field matching the directory; `suggest-labels`
+checks the classify.json structure; `draft-questions` reuses the
+`--op decide` decision-question judge, dry run against Strom
+included), and the human accepts. Like the sensing ops they are
+induction only — never in the verdict path — and the prompts carry the
+author's domain description plus the pack's ontology (its hypotheses
+and term vocabulary), never the engine's conclusions. The `review` op
+is the exception by design: it is advisory commentary *about* the pack,
+fed the artifacts plus the deterministic gap analysis over the pack's
+test scenarios (dead rules, unraised hypotheses, unanswered questions).
+
+The draft write policy (REQ-015): a draft op **never writes the pack**.
+It stages `<artifact>.draft.json` beside the target and prints a
+summary; the human accepts explicitly with `--write` (or re-runs the
+op with `--write`). `pack review` prints advisory prose and never
+writes — the pack directory is byte-identical before and after.
+
+The plumbing (REQ-016) is the sensing path's: the LLM's response
+streams live, the raw response is cached (`.agentic/cache/sensing/`,
+keyed by the pack + the prompt), and `FACTY_SENSE=cache` or
+`--offline` replays it byte-identically with no LLM call. One pi
+session per `pack` command (the CLI wraps it in
+`sensing.session_scope()`), so the provider's prompt cache hits across
+the op's correction turns. When the LLM is unreachable or the judge
+rejects, the op logs the failure and exits with a clear error — no
+silent fallback (the draft is the point; re-run when the LLM is back).
+Locally the ops run through the pi agent's RPC mode and bill on the
+Mistral **subscription** (the same credential as the workbench's `a`
+key — no per-token overage; see AGENTS.md); `draft-questions`
+additionally needs `UPRELIC_API_KEY` for the judge's dry run.
 
 ## Workbench authentication
 

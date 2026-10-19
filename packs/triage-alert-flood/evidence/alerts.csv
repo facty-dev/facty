@@ -1,0 +1,201 @@
+alert_id,timestamp,src_ip,signature,severity,message
+A-0001,2026-10-12T02:10:00,185.220.44.7,sql-injection,high,SQL injection attempt on /login — payload ' OR 1=1 -- blocked by WAF
+A-0002,2026-10-12T02:10:23,185.220.44.7,credential-stuffing,high,Credential stuffing: 620 failed logins across 57 accounts in 10 minutes
+A-0003,2026-10-12T02:10:46,185.220.44.7,beaconing,high,Beaconing: internal host contacts evil-791.example every 60 seconds
+A-0004,2026-10-12T02:11:09,185.220.44.7,password-spraying,high,Password spraying: single password tried against 71 VPN accounts
+A-0005,2026-10-12T02:11:32,185.220.44.7,web-shell,high,Web shell upload attempt: POST /uploads/shell.php with base64 payload
+A-0006,2026-10-12T02:11:55,185.220.44.7,log4shell,high,Log4Shell exploit attempt: JNDI lookup in User-Agent header
+A-0007,2026-10-12T02:12:18,185.220.44.7,session-hijack,high,Session hijacking: admin session token replayed from a new geo
+A-0008,2026-10-12T02:12:41,185.220.44.7,data-exfiltration,high,Data exfiltration: 885 GB outbound to an unknown host overnight
+A-0009,2026-10-12T02:13:04,185.220.44.7,ssh-brute-force,high,363 SSH auth failures for root within 20 minutes
+A-0010,2026-10-12T02:13:27,185.220.44.7,phishing-kit,high,Phishing kit clone of /login detected serving from this source
+A-0011,2026-10-12T02:13:50,185.220.44.7,api-abuse,high,API abuse: 308 product pages scraped via rotating residential proxies
+A-0012,2026-10-12T02:14:13,185.220.44.7,ransomware,high,Mass file rename to .locked across the file server — ransomware signature
+A-0013,2026-10-12T02:14:36,185.220.44.7,lateral-movement,high,Lateral movement: pass-the-hash from a compromised workstation to 3 servers
+A-0014,2026-10-12T02:14:59,185.220.44.7,dns-tunneling,high,DNS tunneling: 510 TXT queries to evil-827.example from db-01
+A-0015,2026-10-12T02:15:22,185.220.44.7,crypto-miner,high,Crypto miner: xmrig process on app-02 with outbound to a mining pool
+A-0016,2026-10-12T02:15:45,185.220.44.7,card-testing,high,Stolen card testing: 600 declined payments with sequential card numbers
+A-0017,2026-10-12T02:16:08,185.220.44.7,rce-probe,high,Exploit attempt: WordPress plugin RCE probe against /wp-content
+A-0018,2026-10-12T02:16:31,185.220.44.7,ddos-botnet,high,DDoS botnet traffic: internal host sending 566 req/s to a victim IP
+A-0019,2026-10-12T02:16:54,185.220.44.7,supply-chain,high,Malicious dependency: typosquatted package flagged in the build pipeline
+A-0020,2026-10-12T02:17:17,185.220.44.7,brute-force,high,Brute force: 126 failed authentications against the admin console
+A-0021,2026-10-12T02:17:40,185.220.44.7,sql-injection,high,SQL injection attempt on /login — payload ' OR 1=1 -- blocked by WAF
+A-0022,2026-10-12T02:18:03,185.220.44.7,credential-stuffing,high,Credential stuffing: 510 failed logins across 30 accounts in 10 minutes
+A-0023,2026-10-12T02:18:26,185.220.44.7,beaconing,high,Beaconing: internal host contacts evil-692.example every 60 seconds
+A-0024,2026-10-12T02:18:49,185.220.44.7,password-spraying,high,Password spraying: single password tried against 843 VPN accounts
+A-0025,2026-10-12T02:19:12,185.220.44.7,web-shell,high,Web shell upload attempt: POST /uploads/shell.php with base64 payload
+A-0026,2026-10-12T02:19:35,185.220.44.7,log4shell,high,Log4Shell exploit attempt: JNDI lookup in User-Agent header
+A-0027,2026-10-12T02:19:58,185.220.44.7,session-hijack,high,Session hijacking: admin session token replayed from a new geo
+A-0028,2026-10-12T02:20:21,185.220.44.7,data-exfiltration,high,Data exfiltration: 784 GB outbound to an unknown host overnight
+A-0029,2026-10-12T02:20:44,185.220.44.7,ssh-brute-force,high,625 SSH auth failures for root within 20 minutes
+A-0030,2026-10-12T02:21:07,185.220.44.7,phishing-kit,high,Phishing kit clone of /login detected serving from this source
+A-0031,2026-10-12T02:21:30,185.220.44.7,api-abuse,high,API abuse: 378 product pages scraped via rotating residential proxies
+A-0032,2026-10-12T02:21:53,185.220.44.7,ransomware,high,Mass file rename to .locked across the file server — ransomware signature
+A-0033,2026-10-12T02:22:16,185.220.44.7,lateral-movement,high,Lateral movement: pass-the-hash from a compromised workstation to 3 servers
+A-0034,2026-10-12T02:22:39,185.220.44.7,dns-tunneling,high,DNS tunneling: 149 TXT queries to evil-763.example from db-01
+A-0035,2026-10-12T02:23:02,185.220.44.7,crypto-miner,high,Crypto miner: xmrig process on app-02 with outbound to a mining pool
+A-0036,2026-10-12T02:23:25,185.220.44.7,card-testing,high,Stolen card testing: 159 declined payments with sequential card numbers
+A-0037,2026-10-12T02:23:48,185.220.44.7,rce-probe,high,Exploit attempt: WordPress plugin RCE probe against /wp-content
+A-0038,2026-10-12T02:24:11,185.220.44.7,ddos-botnet,high,DDoS botnet traffic: internal host sending 387 req/s to a victim IP
+A-0039,2026-10-12T02:24:34,185.220.44.7,supply-chain,high,Malicious dependency: typosquatted package flagged in the build pipeline
+A-0040,2026-10-12T02:24:57,185.220.44.7,brute-force,high,Brute force: 823 failed authentications against the admin console
+A-0041,2026-10-12T02:25:20,185.220.44.7,sql-injection,high,SQL injection attempt on /login — payload ' OR 1=1 -- blocked by WAF
+A-0042,2026-10-12T02:25:43,185.220.44.7,credential-stuffing,high,Credential stuffing: 535 failed logins across 47 accounts in 10 minutes
+A-0043,2026-10-12T02:26:06,185.220.44.7,beaconing,high,Beaconing: internal host contacts evil-836.example every 60 seconds
+A-0044,2026-10-12T02:26:29,185.220.44.7,password-spraying,high,Password spraying: single password tried against 672 VPN accounts
+A-0045,2026-10-12T02:26:52,185.220.44.7,web-shell,high,Web shell upload attempt: POST /uploads/shell.php with base64 payload
+A-0046,2026-10-12T02:27:15,185.220.44.7,log4shell,high,Log4Shell exploit attempt: JNDI lookup in User-Agent header
+A-0047,2026-10-12T02:27:38,185.220.44.7,session-hijack,high,Session hijacking: admin session token replayed from a new geo
+A-0048,2026-10-12T02:28:01,185.220.44.7,data-exfiltration,high,Data exfiltration: 610 GB outbound to an unknown host overnight
+A-0049,2026-10-12T02:28:24,185.220.44.7,ssh-brute-force,high,216 SSH auth failures for root within 20 minutes
+A-0050,2026-10-12T02:28:47,185.220.44.7,phishing-kit,high,Phishing kit clone of /login detected serving from this source
+A-0051,2026-10-12T02:29:10,185.220.44.7,api-abuse,high,API abuse: 665 product pages scraped via rotating residential proxies
+A-0052,2026-10-12T02:29:33,185.220.44.7,ransomware,high,Mass file rename to .locked across the file server — ransomware signature
+A-0053,2026-10-12T02:29:56,185.220.44.7,lateral-movement,high,Lateral movement: pass-the-hash from a compromised workstation to 3 servers
+A-0054,2026-10-12T02:30:19,185.220.44.7,dns-tunneling,high,DNS tunneling: 141 TXT queries to evil-802.example from db-01
+A-0055,2026-10-12T02:30:42,185.220.44.7,crypto-miner,high,Crypto miner: xmrig process on app-02 with outbound to a mining pool
+A-0056,2026-10-12T02:31:05,185.220.44.7,card-testing,high,Stolen card testing: 84 declined payments with sequential card numbers
+A-0057,2026-10-12T02:31:28,185.220.44.7,rce-probe,high,Exploit attempt: WordPress plugin RCE probe against /wp-content
+A-0058,2026-10-12T02:31:51,185.220.44.7,ddos-botnet,high,DDoS botnet traffic: internal host sending 187 req/s to a victim IP
+A-0059,2026-10-12T02:32:14,185.220.44.7,supply-chain,high,Malicious dependency: typosquatted package flagged in the build pipeline
+A-0060,2026-10-12T02:32:37,185.220.44.7,brute-force,high,Brute force: 50 failed authentications against the admin console
+A-0061,2026-10-12T02:33:00,185.220.44.7,sql-injection,high,SQL injection attempt on /login — payload ' OR 1=1 -- blocked by WAF
+A-0062,2026-10-12T02:33:23,185.220.44.7,credential-stuffing,high,Credential stuffing: 500 failed logins across 37 accounts in 10 minutes
+A-0063,2026-10-12T02:33:46,185.220.44.7,beaconing,high,Beaconing: internal host contacts evil-277.example every 60 seconds
+A-0064,2026-10-12T02:34:09,185.220.44.7,password-spraying,high,Password spraying: single password tried against 273 VPN accounts
+A-0065,2026-10-12T02:34:32,185.220.44.7,web-shell,high,Web shell upload attempt: POST /uploads/shell.php with base64 payload
+A-0066,2026-10-12T02:34:55,185.220.44.7,log4shell,high,Log4Shell exploit attempt: JNDI lookup in User-Agent header
+A-0067,2026-10-12T02:35:18,185.220.44.7,session-hijack,high,Session hijacking: admin session token replayed from a new geo
+A-0068,2026-10-12T02:35:41,185.220.44.7,data-exfiltration,high,Data exfiltration: 323 GB outbound to an unknown host overnight
+A-0069,2026-10-12T02:36:04,185.220.44.7,ssh-brute-force,high,709 SSH auth failures for root within 20 minutes
+A-0070,2026-10-12T02:36:27,185.220.44.7,phishing-kit,high,Phishing kit clone of /login detected serving from this source
+A-0071,2026-10-12T02:36:50,185.220.44.7,api-abuse,high,API abuse: 847 product pages scraped via rotating residential proxies
+A-0072,2026-10-12T02:37:13,185.220.44.7,ransomware,high,Mass file rename to .locked across the file server — ransomware signature
+A-0073,2026-10-12T02:37:36,185.220.44.7,lateral-movement,high,Lateral movement: pass-the-hash from a compromised workstation to 3 servers
+A-0074,2026-10-12T02:37:59,185.220.44.7,dns-tunneling,high,DNS tunneling: 288 TXT queries to evil-169.example from db-01
+A-0075,2026-10-12T02:38:22,185.220.44.7,crypto-miner,high,Crypto miner: xmrig process on app-02 with outbound to a mining pool
+A-0076,2026-10-12T02:38:45,185.220.44.7,card-testing,high,Stolen card testing: 309 declined payments with sequential card numbers
+A-0077,2026-10-12T02:39:08,185.220.44.7,rce-probe,high,Exploit attempt: WordPress plugin RCE probe against /wp-content
+A-0078,2026-10-12T02:39:31,185.220.44.7,ddos-botnet,high,DDoS botnet traffic: internal host sending 251 req/s to a victim IP
+A-0079,2026-10-12T02:39:54,185.220.44.7,supply-chain,high,Malicious dependency: typosquatted package flagged in the build pipeline
+A-0080,2026-10-12T02:40:17,185.220.44.7,brute-force,high,Brute force: 539 failed authentications against the admin console
+A-0081,2026-10-12T02:40:40,185.220.44.7,sql-injection,high,SQL injection attempt on /login — payload ' OR 1=1 -- blocked by WAF
+A-0082,2026-10-12T02:41:03,185.220.44.7,credential-stuffing,high,Credential stuffing: 358 failed logins across 38 accounts in 10 minutes
+A-0083,2026-10-12T02:41:26,185.220.44.7,beaconing,high,Beaconing: internal host contacts evil-707.example every 60 seconds
+A-0084,2026-10-12T02:41:49,185.220.44.7,password-spraying,high,Password spraying: single password tried against 420 VPN accounts
+A-0085,2026-10-12T02:42:12,185.220.44.7,web-shell,high,Web shell upload attempt: POST /uploads/shell.php with base64 payload
+A-0086,2026-10-12T02:42:35,185.220.44.7,log4shell,high,Log4Shell exploit attempt: JNDI lookup in User-Agent header
+A-0087,2026-10-12T02:42:58,185.220.44.7,session-hijack,high,Session hijacking: admin session token replayed from a new geo
+A-0088,2026-10-12T02:43:21,185.220.44.7,data-exfiltration,high,Data exfiltration: 386 GB outbound to an unknown host overnight
+A-0089,2026-10-12T02:43:44,185.220.44.7,ssh-brute-force,high,424 SSH auth failures for root within 20 minutes
+A-0090,2026-10-12T02:44:07,185.220.44.7,phishing-kit,high,Phishing kit clone of /login detected serving from this source
+A-0091,2026-10-12T02:44:30,185.220.44.7,api-abuse,high,API abuse: 120 product pages scraped via rotating residential proxies
+A-0092,2026-10-12T02:44:53,185.220.44.7,ransomware,high,Mass file rename to .locked across the file server — ransomware signature
+A-0093,2026-10-12T02:45:16,185.220.44.7,lateral-movement,high,Lateral movement: pass-the-hash from a compromised workstation to 3 servers
+A-0094,2026-10-12T02:45:39,185.220.44.7,dns-tunneling,high,DNS tunneling: 212 TXT queries to evil-555.example from db-01
+A-0095,2026-10-12T02:46:02,185.220.44.7,crypto-miner,high,Crypto miner: xmrig process on app-02 with outbound to a mining pool
+A-0096,2026-10-12T02:46:25,185.220.44.7,card-testing,high,Stolen card testing: 386 declined payments with sequential card numbers
+A-0097,2026-10-12T02:46:48,185.220.44.7,rce-probe,high,Exploit attempt: WordPress plugin RCE probe against /wp-content
+A-0098,2026-10-12T02:47:11,185.220.44.7,ddos-botnet,high,DDoS botnet traffic: internal host sending 706 req/s to a victim IP
+A-0099,2026-10-12T02:47:34,185.220.44.7,supply-chain,high,Malicious dependency: typosquatted package flagged in the build pipeline
+A-0100,2026-10-12T02:47:57,185.220.44.7,brute-force,high,Brute force: 558 failed authentications against the admin console
+A-0101,2026-10-12T02:48:20,185.220.44.7,sql-injection,high,SQL injection attempt on /login — payload ' OR 1=1 -- blocked by WAF
+A-0102,2026-10-12T02:48:43,185.220.44.7,credential-stuffing,high,Credential stuffing: 323 failed logins across 18 accounts in 10 minutes
+A-0103,2026-10-12T02:49:06,185.220.44.7,beaconing,high,Beaconing: internal host contacts evil-171.example every 60 seconds
+A-0104,2026-10-12T02:49:29,185.220.44.7,password-spraying,high,Password spraying: single password tried against 290 VPN accounts
+A-0105,2026-10-12T02:49:52,185.220.44.7,web-shell,high,Web shell upload attempt: POST /uploads/shell.php with base64 payload
+A-0106,2026-10-12T02:50:15,185.220.44.7,log4shell,high,Log4Shell exploit attempt: JNDI lookup in User-Agent header
+A-0107,2026-10-12T02:50:38,185.220.44.7,session-hijack,high,Session hijacking: admin session token replayed from a new geo
+A-0108,2026-10-12T02:51:01,185.220.44.7,data-exfiltration,high,Data exfiltration: 594 GB outbound to an unknown host overnight
+A-0109,2026-10-12T02:51:24,185.220.44.7,ssh-brute-force,high,350 SSH auth failures for root within 20 minutes
+A-0110,2026-10-12T02:51:47,185.220.44.7,phishing-kit,high,Phishing kit clone of /login detected serving from this source
+A-0111,2026-10-12T02:52:10,185.220.44.7,api-abuse,high,API abuse: 688 product pages scraped via rotating residential proxies
+A-0112,2026-10-12T02:52:33,185.220.44.7,ransomware,high,Mass file rename to .locked across the file server — ransomware signature
+A-0113,2026-10-12T02:52:56,185.220.44.7,lateral-movement,high,Lateral movement: pass-the-hash from a compromised workstation to 3 servers
+A-0114,2026-10-12T02:53:19,185.220.44.7,dns-tunneling,high,DNS tunneling: 71 TXT queries to evil-654.example from db-01
+A-0115,2026-10-12T02:53:42,185.220.44.7,crypto-miner,high,Crypto miner: xmrig process on app-02 with outbound to a mining pool
+A-0116,2026-10-12T02:54:05,185.220.44.7,card-testing,high,Stolen card testing: 396 declined payments with sequential card numbers
+A-0117,2026-10-12T02:54:28,185.220.44.7,rce-probe,high,Exploit attempt: WordPress plugin RCE probe against /wp-content
+A-0118,2026-10-12T02:54:51,185.220.44.7,ddos-botnet,high,DDoS botnet traffic: internal host sending 700 req/s to a victim IP
+A-0119,2026-10-12T02:55:14,185.220.45.11,supply-chain,high,Malicious dependency: typosquatted package flagged in the build pipeline
+A-0120,2026-10-12T02:55:37,185.220.45.11,brute-force,high,Brute force: 81 failed authentications against the admin console
+A-0121,2026-10-12T02:56:00,185.220.45.11,sql-injection,high,SQL injection attempt on /login — payload ' OR 1=1 -- blocked by WAF
+A-0122,2026-10-12T02:56:23,185.220.45.11,credential-stuffing,high,Credential stuffing: 132 failed logins across 31 accounts in 10 minutes
+A-0123,2026-10-12T02:56:46,185.220.45.11,beaconing,high,Beaconing: internal host contacts evil-541.example every 60 seconds
+A-0124,2026-10-12T02:57:09,185.220.45.11,password-spraying,high,Password spraying: single password tried against 484 VPN accounts
+A-0125,2026-10-12T02:57:32,185.220.45.11,web-shell,high,Web shell upload attempt: POST /uploads/shell.php with base64 payload
+A-0126,2026-10-12T02:57:55,185.220.45.11,log4shell,high,Log4Shell exploit attempt: JNDI lookup in User-Agent header
+A-0127,2026-10-12T02:58:18,185.220.45.11,session-hijack,high,Session hijacking: admin session token replayed from a new geo
+A-0128,2026-10-12T02:58:41,185.220.45.11,data-exfiltration,high,Data exfiltration: 317 GB outbound to an unknown host overnight
+A-0129,2026-10-12T02:59:04,185.220.45.11,ssh-brute-force,high,686 SSH auth failures for root within 20 minutes
+A-0130,2026-10-12T02:59:27,185.220.45.11,phishing-kit,high,Phishing kit clone of /login detected serving from this source
+A-0131,2026-10-12T02:59:50,91.240.7.3,api-abuse,high,API abuse: 150 product pages scraped via rotating residential proxies
+A-0132,2026-10-12T03:00:13,91.240.7.3,ransomware,high,Mass file rename to .locked across the file server — ransomware signature
+A-0133,2026-10-12T03:00:36,91.240.7.3,lateral-movement,high,Lateral movement: pass-the-hash from a compromised workstation to 3 servers
+A-0134,2026-10-12T03:00:59,91.240.7.3,dns-tunneling,high,DNS tunneling: 881 TXT queries to evil-251.example from db-01
+A-0135,2026-10-12T03:01:22,91.240.7.3,crypto-miner,high,Crypto miner: xmrig process on app-02 with outbound to a mining pool
+A-0136,2026-10-12T03:01:45,91.240.7.3,card-testing,high,Stolen card testing: 450 declined payments with sequential card numbers
+A-0137,2026-10-12T02:14:00,185.220.44.7,traffic-spike,medium,Traffic spike to the checkout edge from this source — 40k req/s in 2 minutes
+A-0138,2026-10-12T02:22:00,185.220.44.7,outbound-transfer,medium,Nightly job transferred 800 MB to an external host from db-01
+A-0139,2026-10-12T02:41:00,185.220.44.7,anomalous-login,medium,Unusual login pattern for the admin account from a new geo at 03:00
+A-0140,2026-10-12T02:55:00,185.220.44.7,outbound-transfer,medium,Large outbound transfer to cloud storage from the build server overnight
+A-0141,2026-10-12T03:02:00,185.220.44.7,auth-failures,medium,Repeated failed logins for service account svc-backup from 2 IPs
+A-0142,2026-10-12T18:00:00,115.4.25.1,port-scan,medium,Port scan: probed 40 ports on the external firewall
+A-0143,2026-10-12T18:14:41,22.35.113.101,nmap,medium,Nmap OS fingerprinting of vpn-gateway
+A-0144,2026-10-12T18:29:22,23.87.117.143,vuln-probe,medium,Vulnerability probe for /wp-admin; /.env and /.git/ on web-01
+A-0145,2026-10-12T18:44:03,154.119.38.156,masscan,medium,Masscan sweep of 10.0.0.0/24
+A-0146,2026-10-12T18:58:44,150.161.223.30,banner-grab,medium,SSH banner grabbing across 200 hosts
+A-0147,2026-10-12T19:13:25,199.65.42.225,dir-brute-force,medium,Directory brute force: 2348 GET requests to /admin paths
+A-0148,2026-10-12T19:28:06,98.141.230.159,heartbleed,medium,Heartbleed probe against TLS endpoints
+A-0149,2026-10-12T19:42:47,27.149.48.23,smb-enum,medium,SMB enumeration with null sessions
+A-0150,2026-10-12T19:57:28,111.234.172.19,smtp-flood,medium,SMTP VRFY flood against the mail server
+A-0151,2026-10-12T20:12:09,85.17.2.75,icmp-sweep,medium,ICMP sweep of the DMZ
+A-0152,2026-10-12T20:26:50,200.64.207.83,ftp-anon,medium,Anonymous FTP login attempts
+A-0153,2026-10-12T20:41:31,156.78.210.120,docker-api,medium,Probe for exposed Docker API on port 2375
+A-0154,2026-10-12T20:56:12,192.38.150.213,wp-enum,medium,WordPress plugin enumeration on /wp-content/plugins
+A-0155,2026-10-12T21:10:53,139.20.205.134,rdp-scan,medium,RDP scan of port 3389 across 10.1.0.0/24
+A-0156,2026-10-12T21:25:34,76.40.115.82,snmp,medium,SNMP queries with public community string
+A-0157,2026-10-12T21:40:15,60.31.54.93,zone-transfer,medium,DNS zone transfer attempt against ns1
+A-0158,2026-10-12T21:54:56,121.20.244.48,k8s-api,medium,Kubernetes API server probe
+A-0159,2026-10-12T22:09:37,98.211.86.186,asn-crawl,medium,Crawl mapping our ASN: 2146 requests
+A-0160,2026-10-12T22:24:18,134.247.97.155,port-scan,medium,Port scan: probed 40 ports on the external firewall
+A-0161,2026-10-12T22:38:59,31.196.44.149,nmap,medium,Nmap OS fingerprinting of vpn-gateway
+A-0162,2026-10-12T22:53:40,141.46.14.83,vuln-probe,medium,Vulnerability probe for /wp-admin; /.env and /.git/ on web-01
+A-0163,2026-10-12T23:08:21,53.118.72.68,masscan,medium,Masscan sweep of 10.0.0.0/24
+A-0164,2026-10-12T23:23:02,131.232.131.7,banner-grab,medium,SSH banner grabbing across 200 hosts
+A-0165,2026-10-12T23:37:43,202.78.113.209,dir-brute-force,medium,Directory brute force: 1659 GET requests to /admin paths
+A-0166,2026-10-12T23:52:24,119.15.236.149,heartbleed,medium,Heartbleed probe against TLS endpoints
+A-0167,2026-10-13T00:07:05,14.118.58.205,smb-enum,medium,SMB enumeration with null sessions
+A-0168,2026-10-13T00:21:46,25.85.8.35,smtp-flood,medium,SMTP VRFY flood against the mail server
+A-0169,2026-10-13T00:36:27,61.208.92.128,icmp-sweep,medium,ICMP sweep of the DMZ
+A-0170,2026-10-13T00:51:08,13.101.158.45,ftp-anon,medium,Anonymous FTP login attempts
+A-0171,2026-10-13T01:05:49,199.116.218.65,docker-api,medium,Probe for exposed Docker API on port 2375
+A-0172,2026-10-13T01:20:30,105.229.75.251,wp-enum,medium,WordPress plugin enumeration on /wp-content/plugins
+A-0173,2026-10-13T01:35:11,154.175.0.25,rdp-scan,medium,RDP scan of port 3389 across 10.1.0.0/24
+A-0174,2026-10-13T01:49:52,62.8.106.205,snmp,medium,SNMP queries with public community string
+A-0175,2026-10-13T02:04:33,122.230.82.84,zone-transfer,medium,DNS zone transfer attempt against ns1
+A-0176,2026-10-13T02:19:14,157.209.235.231,k8s-api,medium,Kubernetes API server probe
+A-0177,2026-10-13T02:33:55,126.162.204.246,asn-crawl,medium,Crawl mapping our ASN: 1628 requests
+A-0178,2026-10-13T02:48:36,20.175.66.174,port-scan,medium,Port scan: probed 40 ports on the external firewall
+A-0179,2026-10-13T03:03:17,36.221.87.218,nmap,medium,Nmap OS fingerprinting of vpn-gateway
+A-0180,2026-10-13T03:17:58,70.239.10.191,vuln-probe,medium,Vulnerability probe for /wp-admin; /.env and /.git/ on web-01
+A-0181,2026-10-13T03:32:39,40.205.42.194,masscan,medium,Masscan sweep of 10.0.0.0/24
+A-0182,2026-10-13T03:47:20,113.99.50.24,banner-grab,medium,SSH banner grabbing across 200 hosts
+A-0183,2026-10-13T04:02:01,74.2.87.238,dir-brute-force,medium,Directory brute force: 1112 GET requests to /admin paths
+A-0184,2026-10-13T04:16:42,28.66.234.90,heartbleed,medium,Heartbleed probe against TLS endpoints
+A-0185,2026-10-13T04:31:23,169.252.17.129,smb-enum,medium,SMB enumeration with null sessions
+A-0186,2026-10-13T04:46:04,155.185.108.151,smtp-flood,medium,SMTP VRFY flood against the mail server
+A-0187,2026-10-13T05:00:45,187.7.190.106,icmp-sweep,medium,ICMP sweep of the DMZ
+A-0188,2026-10-13T05:15:26,154.8.142.188,ftp-anon,medium,Anonymous FTP login attempts
+A-0189,2026-10-13T05:30:07,142.226.28.250,docker-api,medium,Probe for exposed Docker API on port 2375
+A-0190,2026-10-13T05:44:48,97.83.172.147,wp-enum,medium,WordPress plugin enumeration on /wp-content/plugins
+A-0191,2026-10-11T19:00:00,10.2.3.4,backup-job,low,Scheduled backup job matched the data-exfiltration signature — 2 GB to NAS
+A-0192,2026-10-11T21:30:00,10.2.3.5,health-check,low,Load balancer health checks flagged as probing — 10k GET /health per hour
+A-0193,2026-10-11T23:00:00,203.0.113.9,approved-pentest,low,Approved pentest PT-2291: nmap from the vendor IP
+A-0194,2026-10-12T01:00:00,10.2.3.6,cron-job,low,Cron job curl to the weather API tripped the outbound-anomaly rule
+A-0195,2026-10-12T04:00:00,10.9.9.9,dev-nmap,low,Developer ran nmap on staging from the office IP
+A-0196,2026-10-11T20:15:00,198.51.100.7,synthetic-check,low,Synthetic monitoring checks to the payment provider flagged as beaconing
+A-0197,2026-10-12T02:30:00,10.2.3.7,batch-job,low,Month-end batch: 4k report downloads by finance flagged as scraping
+A-0198,2026-10-11T22:45:00,203.0.113.77,approved-scan,low,Approved vendor vulnerability scan
+A-0199,2026-10-12T05:10:00,10.2.3.8,ci-fetch,low,CI pipeline fetching 300 npm packages flagged as suspicious downloads
+A-0200,2026-10-12T00:20:00,10.2.3.9,dr-test,low,DR failover test: traffic spike flagged as DDoS

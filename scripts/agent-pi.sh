@@ -16,7 +16,11 @@
 #               coding   → mistral-large-4 / low   (fast implementation)
 #   GONDOLIN_PI  path to gondolin-pi.sh
 #     (default: <repo>/gondolin/gondolin-pi.sh — the vendored image config)
-#   MISTRAL_API_KEY  required by the ephemeral VM runtime (passed as host-secret)
+#   MISTRAL_API_KEY  the ephemeral VM runtime reads it (passed as host-secret).
+#     Unset: falls back to the Mistral subscription OAuth bearer token
+#     (pi auth print-bearer-token — no per-token charges), then to the
+#     stored API key (pi auth print-api-key). Set it explicitly in
+#     production for the pay-per-use API key.
 #   AGENT_RUNTIME  runtime selection:
 #     auto        (default) use the SDLC VM session if reachable, else ephemeral boot
 #     session     require the SDLC VM session; fail if none is reachable
@@ -85,12 +89,24 @@ elif [[ "$AGENT_RUNTIME" == "session" ]]; then
 else
   RUN_MODE="gondolin-pi"
   if [[ -z "${MISTRAL_API_KEY:-}" ]]; then
-    if _key="$(pi auth print-api-key --provider mistral 2>/dev/null)" \
+    # Local dev: prefer the Mistral subscription token — no per-token
+    # charges. The token is the long-lived API key the pi-mistral-
+    # subscription extension obtains via browser sign-in (stored in
+    # ~/.pi/agent/auth.json under "mistral-subscription"). It rides the
+    # host-secret mechanism: the guest sees a placeholder, the host
+    # proxy substitutes the real value into requests to api.mistral.ai.
+    # (Read directly from auth.json — pi auth doesn't recognise
+    # extension-registered providers by ID.)
+    if _token="$(python3 -c "import json,os; print(json.load(open(os.path.expanduser('~/.pi/agent/auth.json'))).get('mistral-subscription',{}).get('access',''))" 2>/dev/null)" \
+       && [[ -n "$_token" ]]; then
+      export MISTRAL_API_KEY="$_token"
+      info "using Mistral subscription token (from ~/.pi/agent/auth.json)"
+    elif _key="$(pi auth print-api-key --provider mistral 2>/dev/null)" \
        && [[ -n "$_key" && "$_key" != "null" ]]; then
       export MISTRAL_API_KEY="${_key//\"/}"
-      info "using stored mistral credential (pi auth)"
+      warn "no subscription credential — using Mistral API key (pay-per-use)"
     else
-      err "no SDLC VM session running and no API key available"
+      err "no SDLC VM session running and no credential available"
       err "preferred: run 'make vm-up' from your terminal (key stays host-side)"
       err "fallback: export MISTRAL_API_KEY in the shell that launches pi"
       exit 1

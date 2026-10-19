@@ -68,13 +68,27 @@ Schemas: `engine/schemas/*.schema.json`. Codegen: `engine/emit.py` →
    (`./scripts/vm-session.sh exec -- <cmd>` reads the recorded path from
    `.agentic/vm-session.json`). Full rationale: [ADR-0001](docs/adr/0001-session-execution-under-sandboxing.md).
 3. **Session lifecycle commands belong to the user's terminal.** `make
-   vm-up` boots the session in the foreground (it holds the real API key
+   vm-up` boots the session in the foreground (it holds the real credential
    host-side); `make vm-down` signals the host process — a sandboxed agent
    cannot do either. Agents attach via IPC only.
 4. **Secrets are host-side placeholders.** The guest and any sandboxed
    orchestrator only ever see `MISTRAL_API_KEY=<placeholder>`; the gondolin
    host proxy substitutes the real value into outbound requests. Never log,
    echo, or attempt to read API keys.
+   **Credential resolution** (`scripts/vm-session.sh` `resolve_key`,
+   `scripts/agent-pi.sh` ephemeral path): if `MISTRAL_API_KEY` is set
+   (production — explicit pay-per-use API key), it wins. Otherwise the
+   scripts prefer the **Mistral subscription token** — the long-lived API
+   key the pi-mistral-subscription extension obtains via browser sign-in,
+   stored in `~/.pi/agent/auth.json` under `"mistral-subscription"` — so
+   local dev runs on the subscription (no per-token overage). The token
+   rides the same host-secret mechanism: the guest sees a placeholder, the
+   host proxy substitutes the real value. Both auth styles use the same
+   `Authorization: Bearer <token>` header, so the `mistral` provider picks
+   it up unchanged. (Read `auth.json` directly — `pi auth` does not
+   recognise extension-registered providers by ID.) Fallback: the
+   pay-per-use API key (`pi auth print-api-key --provider mistral`), with
+   a warning.
 5. **`.agentic/audit.jsonl` is append-only.** Only `scripts/agent-pi.sh`
    writes entries (via `jq`). Never hand-edit or truncate it. Query with jq:
    `make audit-trail`.
@@ -193,6 +207,14 @@ Phase vocabularies differ by surface: the decision agent uses
   values); `eval "$(./facty env --exports)"` hoists the keys into the
   launching shell — gondolin reads them host-side (`--host-secret
   KEY@host` in gondolin-pi.sh; the guest only ever sees placeholders).
+  **Mistral credential bridge (local dev):** when `MISTRAL_API_KEY` is
+  unset, the VM scripts (`vm-session.sh`, `agent-pi.sh`) read the
+  subscription token directly from `~/.pi/agent/auth.json`
+  (`mistral-subscription.access` — the long-lived key from the
+  pi-mistral-subscription extension's browser sign-in) and pass it as
+  `MISTRAL_API_KEY` to gondolin's host-secret. Result: local dev agent
+  runs bill on the subscription, not the pay-per-use API key. Set
+  `MISTRAL_API_KEY` explicitly in production to force the API key.
   The pi agent also has the **strom skill** (from
   platform.uprelic.com/skill.md): installed for host pi sessions at
   `~/.pi/agent/skills/strom`, and vendored in this repo at

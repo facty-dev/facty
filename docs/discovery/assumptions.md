@@ -1,142 +1,70 @@
----
-# Discovery — Assumptions
----
+# Assumptions — Pack Studio, per solution, marked testable/untestable
 
-# Assumptions — per solution, marked testable/untestable
-
-**Status:** draft · **Version:** 0.1 · **Date:** 2026-10-15
-**Parent:** `solutions.md` (S1-a…S3-c)
+**Status:** draft · **Version:** 0.1 · **Date:** 2026-10-18
+**Parent:** `solutions.md` (S1-a…S4-b)
 
 Marks:
 - **testable** — has a concrete validation command/spike runnable now.
-- **untestable** — validated only by usage/judgment; state the fallback
-  evidence (dogfooding, interview).
+- **untestable** — validated only by usage/judgment; state the fallback evidence (dogfooding, interview).
 
 ---
 
-## S1-a: client manifests + make wrapper
+## S1-a: Pack Studio TUI
 
-- **ASM-1a-1 (testable):** every USE-CASES.md scenario (§1–§6) is
-  expressible as a flat manifest — fields: mount path, secret env names +
-  target hosts, allow-list, snapshot ref; no per-client branching logic.
-  - **How to test:** encode all six scenarios as manifests, render, diff
-    against the hand-typed commands in USE-CASES.md.
-  - **Risk if wrong:** schema needs conditionals/types → effort grows.
-- **ASM-1a-2 (testable):** a rendered invocation is flag-equivalent to the
-  proven manual one, so the ADR-0001 isolation guarantees transfer
-  unmodified.
-  - **How to test:** render + diff for the six use cases; boot one rendered
-    session and run `make vm-status`.
-  - **Risk if wrong:** new flag composition introduces untested isolation
-    paths.
-- **ASM-1a-3 (untestable):** operators will trust manifests + one-command
-  boots and will commit client manifests to their workflow.
-  - **Fallback evidence:** dogfood the manifest flow for one real client
-    week + one outside-user interview.
-  - **Risk if wrong:** tooling unused; manual rituals persist.
+- **ASM-1a-1 (testable):** the four surfaces (schema curator, rule editor, label config, test harness) can share one pack state object (the canonical JSON artifacts) without conflicting writes.
+  - **How to test:** build a minimal TUI with two panes editing the same `rules.json`; verify changes propagate and validate.
+  - **Risk if wrong:** need a state-management layer (e.g., a pack model with change events) → effort grows.
 
-## S1-b: tenant registry CLI
+- **ASM-1a-2 (testable):** Textual can render a split-pane layout (editor + agent chat + test output) at 80x24 without performance issues.
+  - **How to test:** prototype the layout in `engine/tui.py`; measure render time with a 100-rule pack.
+  - **Risk if wrong:** need a different layout (tabs instead of panes) or a lighter framework.
 
-- **ASM-1b-1 (testable):** concurrent per-client sessions keep isolated
-  registries (`.agentic/tenants/<client>.json`, no cross-talk) with 3+
-  clients running at once.
-  - **How to test:** boot 3 scratch clients concurrently; probe each socket
-    and mount from its own session.
-  - **Risk if wrong:** registry corruption → exec into the wrong session.
-- **ASM-1b-2 (untestable):** operators prefer a registry CLI over make
-  targets.
-  - **Fallback evidence:** A/B the two interfaces during dogfooding.
-  - **Risk if wrong:** dead tooling surface.
+- **ASM-1a-3 (untestable):** domain experts (non-engineers) will use a TUI for pack authoring.
+  - **Fallback evidence:** dogfood Pack Studio with 3 domain experts (fraud analyst, SRE, claims adjuster); measure time-to-first-pack.
+  - **Risk if wrong:** need a web UI or a guided wizard instead of a free-form TUI.
 
-## S1-c: runbooks only
+## S2-a: The meta-Facty loop (question-driven domain composition)
 
-- **ASM-1c-1 (untestable, presumed false):** runbooks prevent invocation
-  mistakes.
-  - **Risk if wrong (accepted):** wrong allow-list = egress hole. This is
-    why S1-c is not recommended.
+- **ASM-2a-1 (testable):** the engine's question-generation (`op: open`) can be repurposed to generate *elicitation* questions (what entities? what predicates? what rules?) — not just case questions (what evidence to collect?).
+  - **How to test:** extend `engine/engine.py` with an "elicitation mode" that opens questions about the pack schema (missing predicates, unproven hypotheses); run against a half-authored pack; verify the questions are relevant.
+  - **Risk if wrong:** the engine's question model is too case-specific; need a separate elicitation question generator.
 
-## S2-a: launchd-hosted detached sessions
+- **ASM-2a-2 (testable):** schema-guided extraction (`engine/sensing.py` `extract_structured`) can turn free-text domain descriptions into structured pack artifacts (rules, constraints, hypotheses) with the same judge-and-correct loop.
+  - **How to test:** feed a domain description ("I investigate insurance claims; entities are policyholder, vehicle, repair shop; rules flag inflated line items…") into `extract_structured` with the rule schema; verify the output validates and is useful.
+  - **Risk if wrong:** the extraction quality is too low for rule authoring; need a more structured prompt or a multi-turn loop.
 
-- **ASM-2a-1 (testable):** a launchd-owned session process survives
-  terminal/SSH death and user logout; the recorded socket path stays valid.
-  - **How to test:** install plist, boot, kill the hosting terminal,
-    `make vm-status`, exec one phase.
-  - **Risk if wrong:** detached hosting fundamentally broken on macOS →
-    unattended operation blocked; fall back to S2-b.
-- **ASM-2a-2 (testable):** gondolin session GC does not reap
-  launchd-hosted sessions (GC probes pids via `process.kill(pid, 0)`;
-  launchd-owned pids are alive and probeable from a normal shell —
-  contrast ADR-0001's sandboxed-probe failure mode).
-  - **How to test:** with a launchd-hosted session up, run `gondolin list`
-    from an unsandboxed shell; confirm registry files persist over 10 min.
-  - **Risk if wrong:** sessions orphaned/reaped → same class of sharp edge
-    as ADR-0001, host-side.
-- **ASM-2a-3 (untestable):** macOS-first hosting is acceptable; other hosts
-  adopt S2-b ephemeral boots instead.
-  - **Fallback evidence:** ADR-0001 context is a mac host; USE-CASES.md has
-    no non-mac scenario today.
-  - **Risk if wrong:** launchd work doesn't port; re-implement per OS.
+- **ASM-2a-3 (testable):** the elicitation loop converges — after N rounds of question → answer → generate → validate, the pack is complete (no unproven hypotheses, no dead rules, no missing constraints).
+  - **How to test:** run the loop on a known domain (insurance fraud); measure rounds-to-complete; verify the test harness shows no gaps.
+  - **Risk if wrong:** the loop doesn't converge (oscillates, asks the same questions); need a convergence criterion or a human gate.
 
-## S2-b: ephemeral per-run boots
+- **ASM-2a-4 (untestable):** domain experts will answer structured questions better than they can write rules from scratch.
+  - **Fallback evidence:** A/B test — one expert authors a pack via the meta-Facty loop, another via hand-editing JSON; compare pack quality (measured by test harness gap analysis) and time.
+  - **Risk if wrong:** experts prefer free-form description; the loop is just a guided editor.
 
-- **ASM-2b-1 (testable):** snapshot boot cost per run is acceptable for
-  unattended/batch use (session boot already proven ~76s end-to-end in
-  the 2026-10-15 discovery run).
-  - **How to test:** time N cold boots + one trivial phase each; set an
-    explicit budget (≤ 2 min wall per run).
-  - **Risk if wrong:** batch latency dominates; restrict ephemerality to CI
-    where wall time matters less.
-- **ASM-2b-2 (testable):** agent runs are stateless across boots — all
-  phase state lives in `/workspace` (repo + `.agentic/`) or git, never in
-  guest-only state.
-  - **How to test:** run discovery in boot 1, PRD in a fresh boot 2;
-    verify artifact continuity + audit chain.
-  - **Risk if wrong:** phases lose context → quality drop; need warm-state
-    snapshots per client.
+## S3-a: Embedded pi agent (pair programmer)
 
-## S3-a: GitHub Actions wiring
+- **ASM-3a-1 (testable):** the pi RPC transport (`pi --mode rpc`) can run as a persistent subprocess inside the TUI (one process per Pack Studio session), streaming responses to a chat pane.
+  - **How to test:** embed a pi RPC subprocess in a Textual app; send a prompt; verify the response streams to the pane; verify the process is reused across turns.
+  - **Risk if wrong:** need a different transport (HTTP API, or a pi session file); or the TUI event loop conflicts with the subprocess.
 
-- **ASM-3a-1 (testable):** GitHub-hosted ubuntu runners can execute
-  gondolin/QEMU micro-VMs (software virtualization) within usable time.
-  - **How to test:** spike workflow — boot the snapshot, run one trivial pi
-    phase, measure wall time.
-  - **Risk if wrong:** CI infeasible on hosted runners → self-hosted runner
-    or containerized fallback (highest-impact risk of this round).
-- **ASM-3a-2 (testable):** the qcow2 snapshot is cacheable/restorable in CI
-  within size/download limits.
-  - **How to test:** actions-cache spike; measure restore time + hit rate
-    across runs.
-  - **Risk if wrong:** per-run snapshot fetch dominates CI time.
-- **ASM-3a-3 (testable):** host-secret injection works in ephemeral CI
-  boots with the real key held only as a GitHub Actions secret (placeholder
-  in guest; host proxy substitution identical to local).
-  - **How to test:** e2e phase run in CI with a canary key value; grep the
-    audit log + guest env for the real value (must be absent).
-  - **Risk if wrong:** broken auth in CI or (worse) secret leakage.
-- **ASM-3a-4 (untestable):** reviewers will use PR labels/approvals as the
-  SDLC gates.
-  - **Fallback evidence:** operate one full spiral (ost→prd→bdd→impl) on a
-    real feature; observe gate usage.
-  - **Risk if wrong:** gates ignored → spiral bypassed; CI triggers become
-    noise.
+- **ASM-3a-2 (testable):** the agent can see the current pack state (schemas, rules, constraints, hypotheses, labels) and generate useful suggestions (draft a rule, suggest labels, review for gaps).
+  - **How to test:** give the agent a half-authored pack; ask "what rules am I missing?"; verify the suggestions are relevant and validate against the schema.
+  - **Risk if wrong:** the agent hallucinates rules; need a judge layer (same as sensing) to validate suggestions before showing them.
 
-## S3-b: local merge-triggered dispatcher
+- **ASM-3a-3 (untestable):** domain experts will use the agent as a pair programmer (asking for help, not just accepting suggestions).
+  - **Fallback evidence:** dogfood with 3 experts; measure how often they use the agent vs. hand-editing.
+  - **Risk if wrong:** the agent is a one-shot generator, not an interactive assistant.
 
-- **ASM-3b-1 (testable):** phase progression is detectable locally from git
-  (merge of `sdlc/<phase>/<slug>` into main) without a central service.
-  - **How to test:** prototype a post-merge hook dispatching the next make
-    target in a scratch repo; include a squash-merge case.
-  - **Risk if wrong:** hook state fragile under rebase/squash merges.
-- **ASM-3b-2 (untestable):** operators keep the human-in-terminal loop for
-  interactive work even after CI exists.
-  - **Fallback evidence:** dogfood both trigger paths for one feature.
-  - **Risk if wrong:** two competing triggers race on the same phase.
+## S4-a: Live test harness
 
----
+- **ASM-4a-1 (testable):** the engine can run in "authoring mode" — given a pack + a fact set, it produces a trace + gap analysis (unproven hypotheses, dead rules, missing constraints) in < 1s.
+  - **How to test:** extend `engine/engine.py` with a `diagnose` function; run against a pack with known gaps; verify the gap analysis is correct and fast.
+  - **Risk if wrong:** gap analysis is too slow or too noisy; need a simpler validation (schema-only, no engine run).
 
-## Validation priority
+- **ASM-4a-2 (testable):** the test harness can reuse the existing sensing pipeline (`engine/sensing.py`, `engine/label.py`) to go from sample evidence → facts → verdict, without a full case directory.
+  - **How to test:** build a "test" function that takes a pack + evidence files (in-memory or temp dir) → runs sense → derive → constrain → verdict; verify it matches a full case run.
+  - **Risk if wrong:** the sensing pipeline is too coupled to case directories; need a refactor.
 
-1. **ASM-3a-1/3a-2/3a-3** — CI feasibility spike; highest risk + blocks the
-   largest solution. Cheap spike, big decision value.
-2. **ASM-2a-1/2a-2** — launchd detachment; unlocks unattended operation.
-3. **ASM-1a-1/1a-2** — manifest schema; cheapest, unlocks P-1 immediately.
+- **ASM-4a-3 (untestable):** authors will use the test harness iteratively (write rule → test → refine) rather than batch-editing.
+  - **Fallback evidence:** dogfood with 3 authors; measure test runs per pack vs. hand-authoring.
+  - **Risk if wrong:** authors prefer to write the whole pack then test once.

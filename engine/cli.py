@@ -22,6 +22,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -36,6 +37,7 @@ import label           # noqa: E402  (the label sensor — small classifier)
 import strom           # noqa: E402  (the Strom decision tier — stdlib client)
 import dotenv          # noqa: E402  (the dotenv setup — machine-local secrets)
 import procs           # noqa: E402  (subprocess registry — no dangling processes)
+import pack            # noqa: E402  (the Pack Studio library — packs/<slug>/)
 
 CASES_DIR = ENGINE_DIR / "cases"
 
@@ -69,6 +71,16 @@ TAGS = {
     "fwd chain · deduction": "\033[34m",         # blue
     "constraint solver · deduction": "\033[33m", # yellow
     "bwd chain · deduction": "\033[35m",         # magenta
+    # the Pack Studio (the authoring half — packs/<slug>/)
+    "pack · list": "\033[36m",       # cyan
+    "pack · validate": "\033[35m",   # magenta
+    "pack · test": "\033[36m",       # cyan
+    # the Pack Studio LLM ops (the authoring pair programmer — induction only)
+    "pack · draft-rules": "\033[36m",       # cyan
+    "pack · suggest-labels": "\033[36m",    # cyan
+    "pack · draft-hypotheses": "\033[36m",  # cyan
+    "pack · draft-questions": "\033[36m",   # cyan
+    "pack · review": "\033[96m",            # bright cyan (prose)
 }
 
 HELP = ("  [Enter] next step · [a] auto-run the rest · [t] show the log so far · "
@@ -92,6 +104,17 @@ examples:
   ./facty sense alert-flood --op parser    generate the case's extract parser (LLM, judged)
   ./facty sense alert-flood --op decide    draft the Strom decision questions (LLM, judged)
   ./facty sense alert-flood --op facts --offline   offline mode (cache replay + local tier only)
+  ./facty pack list                   the packs under packs/ (artifact counts)
+  ./facty pack validate triage-alert-flood   validate a pack (schema + cross-artifact)
+  ./facty pack test triage-alert-flood --facts packs/triage-alert-flood/tests/facts-initial.json
+  ./facty pack test triage-alert-flood --tests packs/triage-alert-flood/tests
+  ./facty pack test triage-alert-flood --facts <file> --json    machine-readable verdict + trace + gaps
+  ./facty pack draft-rules triage-alert-flood --domain "invoice fraud: duplicates, round amounts"
+  ./facty pack draft-rules triage-alert-flood --domain "..." --write    accept the staged draft
+  ./facty pack suggest-labels triage-alert-flood --evidence packs/triage-alert-flood/evidence/alerts.csv
+  ./facty pack draft-hypotheses triage-alert-flood --domain "invoice fraud"
+  ./facty pack draft-questions triage-alert-flood    draft the Strom decision questions (LLM, judged)
+  ./facty pack review triage-alert-flood              advisory gap review (prose, never written)
   ./facty completion bash >> ~/.bash_completion
 """
 
@@ -1603,6 +1626,872 @@ def cmd_cases(args):
     return 0
 
 
+# ── Pack Studio (the authoring half — packs/<slug>/) ─────────────────
+
+def cmd_pack_list(args):
+    """`pack list` — the packs under packs/ with artifact counts (REQ-008)."""
+    packs = pack.list_packs()
+    if args.json:
+        print(json.dumps(packs, indent=2, sort_keys=True))
+        return 0
+    if not packs:
+        print("no packs yet — create one at packs/<slug>/ "
+              "(see docs/prd/PRD-007-pack-studio.md)")
+        return 0
+    rows = []
+    for p in packs:
+        c = p["counts"]
+        rows.append([p["slug"], str(c["rules"]), str(c["hypotheses"]),
+                     str(c["constraints"]), str(c["tests"]),
+                     "yes" if p["classify"] else "—",
+                     "yes" if p["decisions"] else "—"])
+    print(table(["PACK", "RULES", "HYPS", "CONSTR", "TESTS", "CLASSIFY", "DECISIONS"],
+                rows))
+    return 0
+
+
+def cmd_pack_validate(args):
+    """`pack validate <pack>` — schema + cross-artifact validation
+    (REQ-001/002): exit 0 with a clean report, exit 1 naming each
+    violation (file + message)."""
+    try:
+        pack_dir = pack.resolve_pack(args.pack)
+    except pack.PackError as exc:
+        print(f"facty: {exc}", file=sys.stderr)
+        return 1
+    report = pack.validate_pack(pack_dir)
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return 0 if report["ok"] else 1
+    ui = UI(auto=True)
+    tag = "pack · validate"
+    c = report["counts"]
+    ui.log(tag, f"pack: {report['pack']} — {c['rules']} rules · "
+                f"{c['hypotheses']} hypotheses · {c['constraints']} constraints · "
+                f"{c['tests']} tests")
+    if report["ok"]:
+        ui.log(tag, "valid ✓ (schema + cross-artifact checks pass)")
+        return 0
+    ui.log(tag, f"INVALID — {len(report['violations'])} violation(s):")
+    for v in report["violations"]:
+        ui.log(tag, f"  ✗ {v['file']}: {v['message']}")
+    return 1
+
+
+def _render_gaps(ui, gaps):
+    """The gap analysis (REQ-004) as run-log lines."""
+    tag = "pack · test"
+    ui.log(tag, "gap analysis:")
+    if gaps["dead_rules"]:
+        for r in gaps["dead_rules"]:
+            ui.log(tag, f"  dead rule (never fires): {r['id']}")
+    else:
+        ui.log(tag, "  dead rules: (none)")
+    if gaps["unraised_hypotheses"]:
+        for h in gaps["unraised_hypotheses"]:
+            ui.log(tag, f"  unraised hypothesis (no rule raises it): {h['id']} — "
+                        f"{h['statement'][:80]}")
+    else:
+        ui.log(tag, "  unraised hypotheses: (none)")
+    if gaps["pruned_hypotheses"]:
+        for p in gaps["pruned_hypotheses"]:
+            ui.log(tag, f"  pruned: {p['id']} — {p['constraint']}: {p['reason']}")
+    else:
+        ui.log(tag, "  pruned hypotheses: (none)")
+    if gaps["unanswered_questions"]:
+        for q in gaps["unanswered_questions"]:
+            ui.log(tag, f"  unanswered question: {q['id']} [{q['slot']}] — {q['text'][:80]}")
+    else:
+        ui.log(tag, "  unanswered questions: (none)")
+
+
+def cmd_pack_test(args):
+    """`pack test <pack> --facts <file>` (REQ-003/004/005) — run the
+    pack on a fact set: verdict + trace + gap analysis. Deterministic.
+    `pack test <pack> --tests <dir>` (REQ-006) — run every scenario;
+    exit 1 and name the failing scenario on mismatch."""
+    try:
+        pack_dir = pack.resolve_pack(args.pack)
+    except pack.PackError as exc:
+        print(f"facty: {exc}", file=sys.stderr)
+        return 1
+    if not args.facts and not args.tests:
+        print("facty: pack test needs --facts <file> or --tests <dir>",
+              file=sys.stderr)
+        return 1
+    ui = UI(auto=True, quiet=args.json)
+    tag = "pack · test"
+
+    if args.facts:
+        try:
+            facts = pack.load_facts_file(args.facts)
+        except pack.PackError as exc:
+            print(f"facty: {exc}", file=sys.stderr)
+            return 1
+        result = pack.run_pack_test(pack_dir, facts)
+        if args.json:
+            print(json.dumps({"verdict": result["verdict"],
+                              "trace": result["trace"],
+                              "gaps": result["gaps"]},
+                             indent=2, sort_keys=True))
+            return 0
+        ui.log(tag, f"pack: {result['pack']} · {len(facts)} facts · "
+                    "deterministic run (no LLM)")
+        print(render_report(result["trace"]))
+        print()
+        _render_gaps(ui, result["gaps"])
+        return 0
+
+    # --tests: run every scenario
+    try:
+        report = pack.run_scenarios(pack_dir, args.tests)
+    except pack.PackError as exc:
+        print(f"facty: {exc}", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return 0 if report["ok"] else 1
+    ui.log(tag, f"scenarios: {report['found']} in {report['dir']}")
+    for s in report["scenarios"]:
+        status = "✓ pass" if s["ok"] else "✗ FAIL"
+        verdict = s["verdict"] or "(no verdict)"
+        ui.log(tag, f"  {status} {s['name']} — verdict {verdict}")
+        if not s["ok"]:
+            for m in s["mismatches"]:
+                ui.log(tag, f"    mismatch: {m}")
+    if not report["ok"]:
+        failing = [s["name"] for s in report["scenarios"] if not s["ok"]]
+        ui.log(tag, f"FAILED: {', '.join(failing)}")
+        return 1
+    ui.log(tag, f"all {report['found']} scenario(s) pass ✓")
+    return 0
+
+
+# ── Pack Studio — the LLM authoring ops (REQ-010…016) ────────────────
+#
+# The one-shot draft ops — the "pair programmer" half of the MVP: the
+# LLM drafts an artifact (schema-guided, judged, streamed), the draft
+# is staged beside its target, and the HUMAN accepts it (--write). Like
+# the sensing ops they are induction only — never in the verdict path
+# (ADR-0003 §1). The prompts carry the author's domain description and
+# the pack's ontology (its hypotheses + term vocabulary) — never the
+# engine's conclusions (the anti-bias rule holds for authoring too; the
+# review op is the exception: it is advisory commentary ABOUT the pack,
+# fed the gap analysis because finding the gaps is its point).
+#
+# The plumbing (REQ-016): streamed output, the response cache
+# (.agentic/cache/sensing/, keyed by the pack + the prompt), replay
+# without the LLM via FACTY_SENSE=cache / --offline, and one pi session
+# per `pack` command (main() wraps the command in
+# sensing.session_scope() — the correction turns share the session, so
+# the provider's prompt cache hits across them). Fallback: none — when
+# the LLM is unreachable or the judge rejects, the op logs the failure
+# and exits with a clear error (the draft is the point; the human
+# re-runs when the LLM is back).
+
+def _pack_llm_mode(ui, offline):
+    """The pack LLM ops' mode (REQ-016) + the offline log line:
+    --offline / FACTY_OFFLINE=1 forces the response-cache replay (no
+    LLM call); FACTY_SENSE=cache too; live (the default) calls the LLM
+    and caches the raw response."""
+    if offline or os.environ.get("FACTY_OFFLINE") == "1":
+        ui.log("offline", "offline mode — the LLM op replays the response "
+                          "cache, no LLM call")
+        return "cache"
+    return os.environ.get("FACTY_SENSE", "live")
+
+
+def _llm_stream():
+    """The live LLM stream writer (the sense ops' `  ▸ line` output —
+    the LLM's response streams live, like `sense`)."""
+    arrow = f"{TAGS['llm']}▸{NC} " if USE_COLOR else "▸ "
+
+    def stream(line):
+        sys.stdout.write(f"  {arrow}{line}\n")
+        sys.stdout.flush()
+
+    return stream
+
+
+def _cache_summary(ui, tag):
+    """The run's provider-cache summary (one line at the end of a pack
+    LLM op — like the walkthrough's sensing summary; empty when the run
+    made fewer than 2 LLM calls, e.g. a cache replay)."""
+    sess = sensing.current_session()
+    if sess is None:
+        return
+    summary = sess.summary()
+    if summary:
+        ui.log(tag, summary)
+
+
+def _load_pack_array_tolerant(pack_dir, name, schema_name):
+    """Load a pack artifact tolerantly: a missing or unparseable
+    artifact reads as [] (a pack mid-authoring still gets its draft
+    op). engine.load_array raises SystemExit on a schema violation,
+    which `except Exception` would not catch — hence the explicit
+    tuple."""
+    path = Path(pack_dir) / "pack" / name
+    try:
+        return engine.load_array(path, schema_name)
+    except (SystemExit, ValueError, OSError):
+        return []
+
+
+def _pack_terms(pack_dir):
+    """The pack's term vocabulary — (predicates, subjects): every
+    predicate and subject the pack's rules, constraints, and
+    hypotheses speak (the same idea as pack_vocabulary for the facts
+    task, tolerant so a pack mid-authoring still drafts)."""
+    preds, subs = set(), set()
+    for name, schema in (("rules.json", "rule.schema.json"),
+                         ("constraints.json", "constraint.schema.json"),
+                         ("hypotheses.json", "hypothesis.schema.json")):
+        for item in _load_pack_array_tolerant(pack_dir, name, schema):
+            preds.update(_terms(item, "predicate"))
+            subs.update(_terms(item, "subject"))
+    return sorted(preds), sorted(subs)
+
+
+def _draft_summary(doc, noun):
+    """One line: what the draft holds (the ids for an array; the label
+    set + threshold for a classify config; the question names for a
+    decisions doc)."""
+    if isinstance(doc, list):
+        ids = ", ".join(str(i.get("id", "?")) for i in doc)
+        return f"{len(doc)} {noun}: {ids}"
+    if isinstance(doc, dict) and "labels" in doc:
+        return (f"the label-sensor config — {len(doc['labels'])} labels "
+                f"({', '.join(str(l) for l in doc['labels'])}), threshold "
+                f"{doc.get('threshold', '?')}, file {doc.get('file', '?')}")
+    if isinstance(doc, dict) and "questions" in doc:
+        return (f"the decision questions — {len(doc['questions'])} "
+                f"questions ({', '.join(doc['questions'])})")
+    return sensing.describe(doc, noun)
+
+
+def _stage_pack_draft(ui, tag, pack_dir, rel_target, doc, write, noun):
+    """Stage the draft beside its target and print the summary (REQ-015):
+    the default stages <artifact>.draft.json and leaves the target
+    untouched; --write accepts (the draft replaces the target, the
+    staged file is consumed). The human always accepts — the LLM never
+    writes the pack. Returns the result dict."""
+    staged = pack.stage_draft(pack_dir, rel_target, doc)
+    target = Path(pack_dir) / rel_target
+    accepted = False
+    ui.log(tag, f"judge layer accepted ✓ ({_draft_summary(doc, noun)})")
+    if write:
+        pack.accept_draft(pack_dir, rel_target)
+        accepted = True
+        ui.log(tag, f"draft accepted — {target} (--write; the staged draft "
+                    "is consumed)")
+    else:
+        ui.log(tag, f"draft staged — {staged}")
+        ui.log(tag, f"target untouched — {target}")
+        ui.log(tag, "accept with --write (the human always accepts; the LLM "
+                    "never writes the pack)")
+    return {"doc": doc, "staged": staged, "target": target,
+            "accepted": accepted}
+
+
+def _pack_extract_draft(ui, tag, pack_dir, op_label, rel_target, schema,
+                        task, judge, write, runner=None, stream=None,
+                        offline=False, noun="rules", cache_files=None,
+                        cache_context=None):
+    """The shared extract-structured draft op (REQ-010/011/012 + the
+    REQ-015/016 plumbing): the LLM drafts the artifact (schema-guided,
+    judged, streamed), the draft is staged beside its target, and
+    --write accepts it. Returns the result dict, or None on failure (a
+    clear error is logged — no fallback: the draft is the point)."""
+    mode = _pack_llm_mode(ui, offline)
+    cache_file = _cache_file(f"pack-{pack_dir.name}", op_label,
+                             files=cache_files, task=None if cache_files else task,
+                             context=cache_context)
+    if mode == "cache":
+        if not cache_file.exists():
+            ui.log(tag, f"{op_label} — no cached response ({cache_file.name}); "
+                        "run live to populate the cache")
+            return None
+        raw = json.loads(cache_file.read_text())["response"]
+        ui.log(tag, f"{op_label} — response cache hit, no LLM call "
+                    f"({cache_file.name})")
+        try:
+            doc = sensing.parse_and_validate(raw, schema)
+        except ValueError as exc:
+            ui.log(tag, f"{op_label} — the cached response failed "
+                        f"validation ({exc})")
+            return None
+        errs = judge(doc) if judge else []
+        if errs:
+            ui.log(tag, f"{op_label} — the cached response failed the judge: "
+                        + "; ".join(errs[:3]))
+            return None
+    else:
+        ui.log(tag, f"{op_label} — calling Mistral Large 4 "
+                    f"({sensing.PROVIDER}), streaming …")
+        holder = []
+        try:
+            doc = sensing.extract_structured(
+                schema, task, stream=stream,
+                label=op_label.replace(" ", "-"), judge=judge,
+                note=lambda m: ui.log(tag, m), debug=DEBUG,
+                on_response=holder.append, runner=runner)
+        except Exception as exc:  # unreachable LLM (fail fast), or the judge exhausted its turns
+            ui.log(tag, f"{op_label} — LLM call failed ({exc})")
+            if DEBUG:
+                raise SystemExit(2)
+            return None
+        raw = holder[0] if holder else None
+        if raw is not None:
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            cache_file.write_text(json.dumps({
+                "pack": pack_dir.name, "op": op_label,
+                "model": sensing.MODEL, "response": raw,
+                "cached_at": time.time()}, indent=2))
+            ui.log(tag, f"response cached ({cache_file.name}) — "
+                        "FACTY_SENSE=cache replays it without the LLM")
+    result = _stage_pack_draft(ui, tag, pack_dir, rel_target, doc, write, noun)
+    _cache_summary(ui, tag)
+    return result
+
+
+def _draft_rules_task(pack_dir, domain):
+    """The draft-rules prompt (REQ-010): the author's plain-language
+    domain + the pack's existing hypotheses (the valid raise targets)
+    + the pack's term vocabulary. The rule schema rides with the prompt
+    (extract_structured appends it)."""
+    pack_dir = Path(pack_dir)
+    hyps = _load_pack_array_tolerant(pack_dir, "hypotheses.json",
+                                     "hypothesis.schema.json")
+    if hyps:
+        hyp_block = ("The pack's existing hypotheses — rules may raise "
+                     "THESE ids (verbatim; do not invent new hypothesis ids):\n"
+                     + "\n".join(f"- {h.get('id')}: {h.get('statement', '')}"
+                                 for h in hyps))
+    else:
+        hyp_block = ("The pack has no hypotheses yet — rules may derive "
+                     "facts and open questions, but cannot raise "
+                     "hypotheses (run `pack draft-hypotheses` first).")
+    preds, subs = _pack_terms(pack_dir)
+    return f"""Draft the forward-chaining rules for this knowledge pack, as a
+JSON array of rule objects.
+
+The domain (plain language, from the pack's author):
+{domain}
+
+The pack's slug (set every rule's "pack" field to exactly this): {pack_dir.name}
+
+{hyp_block}
+
+The pack's term vocabulary — the predicates and subjects its rules,
+constraints, and hypotheses already speak. Prefer these terms in
+conditions and derived facts so the rules chain with the rest of the
+pack; invent new terms only when the domain demands it:
+subjects: {", ".join(subs) if subs else "(none)"}
+predicates: {", ".join(preds) if preds else "(none)"}
+
+The engine's contract:
+- "when": conditions over facts — subject / predicate / value triples
+  (literals match exactly; every condition must hold).
+- "then": actions — derive a fact (a full fact object: id, type
+  "derived", subject, predicate, value, confidence, source
+  "rule:<rule id>"), raise hypotheses (existing ids only), open a
+  question (id, text, slot, mandatory, priority, discriminates).
+- every rule: a unique id (R1, R2, …), "version": "1", and the "pack"
+  field set to the slug above.
+
+Draft 3-8 rules that carry the domain: what the evidence shows → what
+it implies (derived facts), which hypotheses it raises, and which
+question it opens when more evidence is needed. A rule that can never
+fire is dead weight — every condition must be satisfiable.
+
+Respond with ONLY the JSON array of rules."""
+
+
+def pack_draft_rules(ui, pack_dir, domain, write=False, runner=None,
+                     stream=None, offline=False):
+    """REQ-010 — `pack draft-rules`: the LLM drafts pack/rules.json
+    from a plain-language domain description (schema-guided, judged by
+    the pack's cross-artifact checks, streamed); the draft is staged
+    (--write accepts)."""
+    return _pack_extract_draft(
+        ui, "pack · draft-rules", pack_dir,
+        f"draft the rules for {pack_dir.name}", "pack/rules.json",
+        pack.array_schema("rule.schema.json"),
+        _draft_rules_task(pack_dir, domain),
+        pack.rules_judge(pack_dir), write, runner=runner, stream=stream,
+        offline=offline, noun="rules")
+
+
+def _suggest_labels_task(pack_dir, evidence):
+    """The suggest-labels prompt (REQ-011): the sample evidence (the
+    file's header + first 50 rows) + the pack-relative path. The
+    classify.json schema rides with the prompt (extract_structured
+    appends it). The classifier is never run — the op drafts the
+    config only."""
+    evidence = Path(evidence)
+    if not evidence.is_file():
+        raise pack.PackError(f"the evidence file does not exist: {evidence}")
+    lines = evidence.read_text().splitlines()
+    header = lines[0] if lines else ""
+    sample = "\n".join(lines[:51])  # the header + the first 50 rows
+    try:
+        rel = str(evidence.resolve().relative_to(Path(pack_dir).resolve()))
+    except ValueError:
+        rel = str(evidence)  # outside the pack — cite it as given
+    return f"""Draft the label-sensor config (classify.json) for this knowledge
+pack from the sample evidence below. The sensor scores every evidence
+row against the label set — one fact per row, confidence-gated.
+
+The pack: {Path(pack_dir).name}
+The evidence file (pack-relative): {rel}
+Columns (the header row): {header}
+
+Sample evidence (the header + the first 50 rows):
+{sample}
+
+The config:
+- "file": the pack-relative evidence path ("{rel}")
+- "textColumn": the column whose text gets classified
+- "idColumn" / "sourceColumn" / "timeColumn": the identifying columns
+  (omit the ones the file lacks)
+- "labels": 2-4 short, mutually exclusive noun phrases — the
+  classification axis (the pack's rules and hypotheses reference
+  these labels)
+- "template": one {{}} where the label goes (a hypothesis sentence)
+- "threshold": the confidence gate, 0-1 (0.6-0.8 typical)
+- "scoring": "margin" (calibrated confidences) or "entail"
+- "model" / "precision" / "prep" / "backend": the sensor-ladder knobs
+  (sensible defaults)
+
+Respond with ONLY the JSON object."""
+
+
+def pack_suggest_labels(ui, pack_dir, evidence, write=False, runner=None,
+                        stream=None, offline=False):
+    """REQ-011 — `pack suggest-labels`: the LLM drafts classify.json
+    (labels, columns, threshold, template) from sample evidence
+    (schema-guided, judged by the classify structural checks,
+    streamed); the draft is staged (--write accepts)."""
+    task = _suggest_labels_task(pack_dir, evidence)
+    return _pack_extract_draft(
+        ui, "pack · suggest-labels", pack_dir,
+        f"suggest the labels for {pack_dir.name}", "classify.json",
+        pack.CLASSIFY_SCHEMA, task, pack.classify_judge, write,
+        runner=runner, stream=stream, offline=offline,
+        noun="label-sensor config",
+        cache_files=[Path(evidence)],
+        cache_context={"file": str(Path(evidence).resolve())})
+
+
+def _draft_hypotheses_task(pack_dir, domain):
+    """The draft-hypotheses prompt (REQ-012): the author's
+    plain-language domain + the pack's term vocabulary (the claims
+    must speak it so the backward chain can prove them). The
+    hypothesis schema rides with the prompt."""
+    pack_dir = Path(pack_dir)
+    preds, subs = _pack_terms(pack_dir)
+    return f"""Draft the hypothesis space for this knowledge pack, as a JSON
+array of hypothesis objects.
+
+The domain (plain language, from the pack's author):
+{domain}
+
+The pack's slug: {pack_dir.name}
+
+The pack's term vocabulary — the predicates and subjects its rules and
+constraints speak. The hypotheses' claims must use these terms so the
+backward chain can prove them:
+subjects: {", ".join(subs) if subs else "(none)"}
+predicates: {", ".join(preds) if preds else "(none)"}
+
+Each hypothesis: a unique id (H1, H2, …), a one-sentence statement
+(the explanation), "status": "open", a "prior" (0-1 — the plausibility
+before evidence; the smallest term in the engine's score), and
+"claims": the fact triples (subject / predicate / value) that must be
+provable for the hypothesis to stand.
+
+Draft 3-6 hypotheses covering the plausible explanations of the
+domain — including the boring one (benign activity / noise / false
+positives): the constraint layer needs rivals to prune.
+
+Respond with ONLY the JSON array of hypotheses."""
+
+
+def pack_draft_hypotheses(ui, pack_dir, domain, write=False, runner=None,
+                          stream=None, offline=False):
+    """REQ-012 — `pack draft-hypotheses`: the LLM drafts
+    pack/hypotheses.json (statements, priors, claims) from a
+    plain-language domain description (schema-guided, judged for
+    unique ids, streamed); the draft is staged (--write accepts)."""
+    return _pack_extract_draft(
+        ui, "pack · draft-hypotheses", pack_dir,
+        f"draft the hypotheses for {pack_dir.name}", "pack/hypotheses.json",
+        pack.array_schema("hypothesis.schema.json"),
+        _draft_hypotheses_task(pack_dir, domain),
+        pack.hypotheses_judge(), write, runner=runner, stream=stream,
+        offline=offline, noun="hypotheses")
+
+
+def pack_draft_questions(ui, pack_dir, write=False, runner=None, client=None,
+                         stream=None, offline=False):
+    """REQ-013 — `pack draft-questions`: the LLM drafts the pack's
+    Strom decision questions (sensor/decisions.json), mirroring
+    `sense --op decide`: the decision-question judge checks the draft
+    (schema + label coverage + a dry run against Strom on a row
+    sample). The draft is staged (--write accepts). The pack needs a
+    classify.json — the questions classify the label sensor's pile."""
+    tag = "pack · draft-questions"
+    pack_dir = Path(pack_dir)
+    mode = _pack_llm_mode(ui, offline)
+    op_label = f"draft the decision questions for {pack_dir.name}"
+    try:
+        cfg = label.load_config(pack_dir)
+    except label.LabelError as exc:
+        ui.log(tag, f"no label-sensor task ({exc}) — the decision questions "
+                    "classify the label sensor's pile; run `pack suggest-labels` "
+                    "first")
+        return None
+    evidence = pack_dir / cfg["file"]
+    cache_file = _cache_file(f"pack-{pack_dir.name}", op_label,
+                             files=[evidence],
+                             context={"labels": cfg["labels"]})
+    if mode == "cache":
+        if not cache_file.exists():
+            ui.log(tag, f"{op_label} — no cached response ({cache_file.name}); "
+                        "run live to populate the cache")
+            return None
+        raw = json.loads(cache_file.read_text())["response"]
+        ui.log(tag, f"{op_label} — response cache hit, no LLM call "
+                    f"({cache_file.name})")
+        try:
+            doc = sensing.parse_and_validate(raw, label.DECISIONS_DOC_SCHEMA)
+        except ValueError as exc:
+            ui.log(tag, f"{op_label} — the cached response failed "
+                        f"validation ({exc})")
+            return None
+        # structure + label coverage (the dry run needs the API — skipped on replay)
+        errs = label.check_decisions(doc, cfg)
+        if errs:
+            ui.log(tag, f"{op_label} — the cached response failed the judge: "
+                        + "; ".join(errs[:3]))
+            return None
+    else:
+        ui.log(tag, f"{op_label} — calling Mistral Large 4 "
+                    f"({sensing.PROVIDER}), streaming …")
+        ui.log("decider · induction",
+               f"the judge dry-runs the drafted questions against Strom "
+               f"({strom.DEFAULT_MODEL}) on a row sample")
+        try:
+            if client is None:
+                client = strom.from_env()
+            doc = label.generate_questions(
+                pack_dir, cfg, runner=runner, client=client, stream=stream,
+                note=lambda m: ui.log(tag, m))
+        except (label.LabelError, strom.StromError, RuntimeError,
+                ValueError) as exc:
+            ui.log(tag, f"{op_label} — drafting failed ({exc})")
+            if DEBUG:
+                raise SystemExit(2)
+            return None
+        raw = json.dumps(doc, indent=2)
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        cache_file.write_text(json.dumps({
+            "pack": pack_dir.name, "op": op_label, "model": sensing.MODEL,
+            "response": raw, "cached_at": time.time()}, indent=2))
+        ui.log(tag, f"response cached ({cache_file.name}) — FACTY_SENSE=cache "
+                    "replays it without the LLM")
+    result = _stage_pack_draft(ui, tag, pack_dir, "sensor/decisions.json",
+                               doc, write, "decision questions")
+    _cache_summary(ui, tag)
+    return result
+
+
+def _pack_gap_blocks(pack_dir):
+    """The gap analysis (REQ-004) over the pack's test scenarios, as
+    prompt blocks — one per scenario (the deterministic engine run on
+    its fact set). No scenarios → a note (the gap analysis needs a fact
+    set)."""
+    pack_dir = Path(pack_dir)
+    tests = pack_dir / "tests"
+    files = pack.scenario_files(tests) if tests.is_dir() else []
+    if not files:
+        return ["(no test scenarios — add tests/facts-*.json fact sets; "
+                "the gap analysis needs one)"]
+    blocks = []
+    for path in files:
+        try:
+            facts = pack.load_facts_file(path)
+            gaps = pack.diagnose(pack_dir, facts)
+        except pack.PackError as exc:
+            blocks.append(f"scenario {path.name}: unreadable — {exc}")
+            continue
+        lines = [f"scenario {path.name} ({len(facts)} facts):"]
+        if gaps["dead_rules"]:
+            lines.append("  dead rules (never fire): "
+                         + ", ".join(r["id"] for r in gaps["dead_rules"]))
+        else:
+            lines.append("  dead rules: (none)")
+        if gaps["unraised_hypotheses"]:
+            lines.append("  unraised hypotheses: "
+                         + ", ".join(h["id"]
+                                     for h in gaps["unraised_hypotheses"]))
+        else:
+            lines.append("  unraised hypotheses: (none)")
+        for p in gaps["pruned_hypotheses"]:
+            lines.append(f"  pruned: {p['id']} — {p['constraint']}: "
+                         f"{p['reason']}")
+        for q in gaps["unanswered_questions"]:
+            lines.append(f"  unanswered question: {q['id']} [{q['slot']}] — "
+                         f"{q['text']}")
+        blocks.append("\n".join(lines))
+    return blocks
+
+
+def _pack_review_task(pack_dir):
+    """The review prompt (REQ-014): the pack's artifacts + the gap
+    analysis over its test scenarios (deterministic, via pack.diagnose).
+    The review is advisory commentary about the pack (like `explain` is
+    about a run) — it is fed the engine's gap analysis because finding
+    the gaps is the point."""
+    pack_dir = Path(pack_dir)
+
+    def dump(rel):
+        path = pack_dir / rel
+        if not path.exists():
+            return "(absent)"
+        try:
+            return json.dumps(json.loads(path.read_text()), indent=2)
+        except ValueError:
+            return f"(unparseable: {path})"
+
+    return f"""Review this knowledge pack for gaps — you are the pack author's
+pair programmer. The pack's artifacts and the engine's gap analysis
+follow. Read them, then write an advisory review in prose (markdown is
+fine).
+
+Look for:
+- dead rules — never fire on the test scenarios
+- unraised hypotheses — no rule ever raises them (unreachable
+  explanations)
+- missing constraints — rival hypotheses that should be prunable but
+  are not
+- unanswered questions — the test fact sets leave them open
+- sensor gaps — a missing classify.json (the label sensor) or
+  sensor/decisions.json (the Strom question set)
+- schema smells — empty when/then blocks, priors at the extremes,
+  duplicate ids
+
+Be concrete (name the rule / hypothesis / question ids), rank the
+findings most-important-first, and suggest the next authoring step for
+each (which `pack` op to run). Advisory only — do not rewrite the
+artifacts; the human decides.
+
+THE PACK ({pack_dir.name}):
+rules.json:
+{dump("pack/rules.json")}
+
+constraints.json:
+{dump("pack/constraints.json")}
+
+hypotheses.json:
+{dump("pack/hypotheses.json")}
+
+classify.json:
+{dump("classify.json")}
+
+sensor/decisions.json:
+{dump("sensor/decisions.json")}
+
+GAP ANALYSIS (the deterministic engine, run on each test scenario):
+{chr(10).join(_pack_gap_blocks(pack_dir))}"""
+
+
+def pack_review(ui, pack_dir, runner=None, stream=None, offline=False):
+    """REQ-014 — `pack review`: the LLM reads the pack's artifacts +
+    the gap analysis over its test scenarios and returns a prose
+    review. Advisory only — the pack directory is byte-identical before
+    and after (the op never writes to it). Returns the prose, or None
+    on failure (a clear error is logged — no fallback)."""
+    tag = "pack · review"
+    pack_dir = Path(pack_dir)
+    mode = _pack_llm_mode(ui, offline)
+    op_label = f"review the pack {pack_dir.name}"
+    task = _pack_review_task(pack_dir)
+    cache_file = _cache_file(f"pack-{pack_dir.name}", op_label, task=task)
+    if mode == "cache":
+        if not cache_file.exists():
+            ui.log(tag, f"{op_label} — no cached response ({cache_file.name}); "
+                        "run live to populate the cache")
+            return None
+        raw = json.loads(cache_file.read_text())["response"]
+        ui.log(tag, f"{op_label} — response cache hit, no LLM call "
+                    f"({cache_file.name})")
+    else:
+        ui.log(tag, f"{op_label} — calling Mistral Large 4 "
+                    f"({sensing.PROVIDER}), streaming …")
+        try:
+            raw = sensing.llm_text(task, stream=stream,
+                                   label=op_label.replace(" ", "-"),
+                                   runner=runner)
+        except Exception as exc:  # unreachable LLM — fail fast, no fallback
+            ui.log(tag, f"{op_label} — LLM call failed ({exc})")
+            if DEBUG:
+                raise SystemExit(2)
+            return None
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        cache_file.write_text(json.dumps({
+            "pack": pack_dir.name, "op": op_label, "model": sensing.MODEL,
+            "response": raw, "cached_at": time.time()}, indent=2))
+        ui.log(tag, f"response cached ({cache_file.name}) — FACTY_SENSE=cache "
+                    "replays it without the LLM")
+    _cache_summary(ui, tag)
+    return raw
+
+
+def _resolve_pack_arg(args):
+    """Resolve the pack arg (a slug or a path); prints the error and
+    returns None when the pack does not exist (the pack cmds' style)."""
+    try:
+        return pack.resolve_pack(args.pack)
+    except pack.PackError as exc:
+        print(f"facty: {exc}", file=sys.stderr)
+        return None
+
+
+def _pack_draft_exit(op, result):
+    """The draft ops' failure exit: the op logged the reason; this adds
+    the one-line stderr error. (The draft is the point — no silent
+    fallback to recorded artifacts.)"""
+    if result is None:
+        print(f"facty: pack {op} failed — no draft staged (the LLM call or "
+              "the judge rejected; re-run when the LLM is back)",
+              file=sys.stderr)
+        return 1
+    return None
+
+
+def cmd_pack_draft_rules(args):
+    """`pack draft-rules <pack> --domain "<text>" [--write]` (REQ-010)."""
+    global DEBUG
+    DEBUG = args.debug or os.environ.get("FACTY_DEBUG") == "1"
+    pack_dir = _resolve_pack_arg(args)
+    if pack_dir is None:
+        return 1
+    ui = UI(auto=True, quiet=args.json)
+    result = pack_draft_rules(ui, pack_dir, args.domain, write=args.write,
+                              stream=None if args.json else _llm_stream(),
+                              offline=args.offline)
+    failed = _pack_draft_exit("draft-rules", result)
+    if failed:
+        return failed
+    if args.json:
+        print(json.dumps({"pack": pack_dir.name, "op": "draft-rules",
+                          "staged": str(result["staged"]),
+                          "target": str(result["target"]),
+                          "accepted": result["accepted"],
+                          "draft": result["doc"]},
+                         indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_pack_suggest_labels(args):
+    """`pack suggest-labels <pack> --evidence <file> [--write]` (REQ-011)."""
+    global DEBUG
+    DEBUG = args.debug or os.environ.get("FACTY_DEBUG") == "1"
+    pack_dir = _resolve_pack_arg(args)
+    if pack_dir is None:
+        return 1
+    ui = UI(auto=True, quiet=args.json)
+    try:
+        result = pack_suggest_labels(ui, pack_dir, args.evidence,
+                                     write=args.write,
+                                     stream=None if args.json else _llm_stream(),
+                                     offline=args.offline)
+    except pack.PackError as exc:
+        print(f"facty: {exc}", file=sys.stderr)
+        return 1
+    failed = _pack_draft_exit("suggest-labels", result)
+    if failed:
+        return failed
+    if args.json:
+        print(json.dumps({"pack": pack_dir.name, "op": "suggest-labels",
+                          "staged": str(result["staged"]),
+                          "target": str(result["target"]),
+                          "accepted": result["accepted"],
+                          "draft": result["doc"]},
+                         indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_pack_draft_hypotheses(args):
+    """`pack draft-hypotheses <pack> --domain "<text>" [--write]` (REQ-012)."""
+    global DEBUG
+    DEBUG = args.debug or os.environ.get("FACTY_DEBUG") == "1"
+    pack_dir = _resolve_pack_arg(args)
+    if pack_dir is None:
+        return 1
+    ui = UI(auto=True, quiet=args.json)
+    result = pack_draft_hypotheses(ui, pack_dir, args.domain,
+                                   write=args.write,
+                                   stream=None if args.json else _llm_stream(),
+                                   offline=args.offline)
+    failed = _pack_draft_exit("draft-hypotheses", result)
+    if failed:
+        return failed
+    if args.json:
+        print(json.dumps({"pack": pack_dir.name, "op": "draft-hypotheses",
+                          "staged": str(result["staged"]),
+                          "target": str(result["target"]),
+                          "accepted": result["accepted"],
+                          "draft": result["doc"]},
+                         indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_pack_draft_questions(args):
+    """`pack draft-questions <pack> [--write]` (REQ-013)."""
+    global DEBUG
+    DEBUG = args.debug or os.environ.get("FACTY_DEBUG") == "1"
+    pack_dir = _resolve_pack_arg(args)
+    if pack_dir is None:
+        return 1
+    ui = UI(auto=True, quiet=args.json)
+    result = pack_draft_questions(ui, pack_dir, write=args.write,
+                                  stream=None if args.json else _llm_stream(),
+                                  offline=args.offline)
+    failed = _pack_draft_exit("draft-questions", result)
+    if failed:
+        return failed
+    if args.json:
+        print(json.dumps({"pack": pack_dir.name, "op": "draft-questions",
+                          "staged": str(result["staged"]),
+                          "target": str(result["target"]),
+                          "accepted": result["accepted"],
+                          "draft": result["doc"]},
+                         indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_pack_review(args):
+    """`pack review <pack>` (REQ-014) — advisory prose, never written."""
+    global DEBUG
+    DEBUG = args.debug or os.environ.get("FACTY_DEBUG") == "1"
+    pack_dir = _resolve_pack_arg(args)
+    if pack_dir is None:
+        return 1
+    ui = UI(auto=True)
+    text = pack_review(ui, pack_dir, stream=_llm_stream(),
+                       offline=args.offline)
+    if text is None:
+        print("facty: pack review failed — no review (the LLM call failed; "
+              "re-run when the LLM is back)", file=sys.stderr)
+        return 1
+    print()
+    print(text)
+    return 0
+
+
 def cmd_selftest(args):
     return engine.cmd_selftest(args)
 
@@ -1613,7 +2502,8 @@ def cmd_test(args):
         return rc
     for script in ("test_retry.py", "test_tui.py", "test_cache.py",
                    "test_auth.py", "test_explain.py", "test_label.py",
-                   "test_strom.py", "test_dotenv.py", "test_session.py"):
+                   "test_strom.py", "test_dotenv.py", "test_session.py",
+                   "test_pack.py"):
         r = subprocess.run([sys.executable, str(ENGINE_DIR / script)])
         if r.returncode:
             return r.returncode
@@ -1772,7 +2662,7 @@ _facty() {
     local cur prev
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    local commands="run cases selftest test sense walkthrough tui emit completion version"
+    local commands="run cases selftest test sense walkthrough tui emit pack completion version"
     if [ "$COMP_CWORD" -eq 1 ]; then
         COMPREPLY=($(compgen -W "$commands" -- "$cur"))
         return 0
@@ -1788,6 +2678,16 @@ _facty() {
             COMPREPLY=($(compgen -W "$cases" -- "$cur"))
             return 0
             ;;
+        pack)
+            if [ "$COMP_CWORD" -eq 2 ]; then
+                COMPREPLY=($(compgen -W "list validate test draft-rules suggest-labels draft-hypotheses draft-questions review" -- "$cur"))
+            else
+                local packs
+                packs=$(ls packs 2>/dev/null)
+                COMPREPLY=($(compgen -W "$packs" -- "$cur"))
+            fi
+            return 0
+            ;;
         completion)
             COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
             return 0
@@ -1795,7 +2695,7 @@ _facty() {
     esac
     case "$cur" in
         --*)
-            COMPREPLY=($(compgen -W "--json --add-facts --auto --debug --op --offline" -- "$cur"))
+            COMPREPLY=($(compgen -W "--json --add-facts --auto --debug --op --offline --write --domain --evidence --facts --tests" -- "$cur"))
             return 0
             ;;
     esac
@@ -1816,6 +2716,7 @@ _facty() {
         'walkthrough:interactive step-through (terminal UI)'
         'tui:the Textual workbench (the primary interface)'
         'emit:codegen projections'
+        'pack:the Pack Studio (validate, test, author packs)'
         'completion:print a shell completion script'
         'version:print the version'
     )
@@ -1828,6 +2729,17 @@ _facty() {
             local -a cases
             cases=(${(f)"$(ls engine/cases 2>/dev/null)"})
             _describe -t cases 'case' cases
+            ;;
+        pack)
+            if (( CURRENT == 3 )); then
+                local -a ops
+                ops=('list:list the packs' 'validate:validate a pack' 'test:run a pack test' 'draft-rules:draft rules.json from a domain description (LLM)' 'suggest-labels:draft classify.json from sample evidence (LLM)' 'draft-hypotheses:draft hypotheses.json (LLM)' 'draft-questions:draft the Strom decision questions (LLM)' 'review:advisory gap review (LLM, prose)')
+                _describe -t ops 'pack op' ops
+            else
+                local -a packs
+                packs=(${(f)"$(ls packs 2>/dev/null)"})
+                _describe -t packs 'pack' packs
+            fi
             ;;
         sense)
             if [[ "$prev" == "--op" ]]; then
@@ -1843,12 +2755,22 @@ _facty "$@"
 """,
     "fish": """\
 # fish completion for facty — drop in ~/.config/fish/completions/facty.fish
-complete -c facty -f -a 'run cases selftest test sense walkthrough tui emit completion version'
+complete -c facty -f -a 'run cases selftest test sense walkthrough tui emit pack completion version'
 complete -c facty -f -n '__fish_seen_subcommand_from run walkthrough tui sense' -a '(ls engine/cases 2>/dev/null)' -d 'case'
 complete -c facty -f -n '__fish_seen_subcommand_from sense' -l op -a 'classify entities facts drop label parser'
 complete -c facty -f -n '__fish_seen_subcommand_from run' -l add-facts -d 'phase-2 facts drop'
 complete -c facty -f -n '__fish_seen_subcommand_from run cases' -l json -d 'machine-readable output'
 complete -c facty -f -n '__fish_seen_subcommand_from walkthrough tui' -l auto -d 'no prompting'
+complete -c facty -f -n '__fish_seen_subcommand_from pack' -a 'list validate test draft-rules suggest-labels draft-hypotheses draft-questions review' -d 'pack op'
+complete -c facty -f -n '__fish_seen_subcommand_from pack' -a '(ls packs 2>/dev/null)' -d 'pack'
+complete -c facty -f -n '__fish_seen_subcommand_from pack' -l facts -d 'fact set file'
+complete -c facty -f -n '__fish_seen_subcommand_from pack' -l tests -d 'tests directory'
+complete -c facty -f -n '__fish_seen_subcommand_from pack' -l json -d 'machine-readable output'
+complete -c facty -f -n '__fish_seen_subcommand_from pack' -l domain -d 'domain description (draft-rules/draft-hypotheses)'
+complete -c facty -f -n '__fish_seen_subcommand_from pack' -l evidence -d 'sample evidence file (suggest-labels)'
+complete -c facty -f -n '__fish_seen_subcommand_from pack' -l write -d 'accept the staged draft'
+complete -c facty -f -n '__fish_seen_subcommand_from pack' -l offline -d 'replay the response cache, no LLM call'
+complete -c facty -f -n '__fish_seen_subcommand_from pack' -l debug -d 'loud failures'
 """,
 }
 
@@ -1878,6 +2800,96 @@ def main(argv=None):
     p = sub.add_parser("cases", help="list the demo cases (type · pack · phase-2 drop)")
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.set_defaults(func=cmd_cases)
+
+    p = sub.add_parser("pack", help="the Pack Studio: validate, test, and author "
+                                     "knowledge packs (packs/<slug>/)",
+                       description="The Pack Studio (PRD-007): validate, test, and "
+                                   "author the knowledge packs under packs/<slug>/. "
+                                   "The draft ops (draft-rules, suggest-labels, "
+                                   "draft-hypotheses, draft-questions) stage "
+                                   "<artifact>.draft.json beside the target and print "
+                                   "a summary — the human accepts with --write; the "
+                                   "LLM never writes the pack. review prints advisory "
+                                   "prose and never writes.")
+    pack_sub = p.add_subparsers(dest="pack_op", metavar="op")
+
+    p_list = pack_sub.add_parser("list", help="list the packs under packs/ (artifact counts)")
+    p_list.add_argument("--json", action="store_true", help="machine-readable output")
+    p_list.set_defaults(func=cmd_pack_list)
+
+    p_val = pack_sub.add_parser("validate", help="validate a pack (schema + cross-artifact checks)")
+    p_val.add_argument("pack", help="pack slug (e.g. triage-alert-flood) or path")
+    p_val.add_argument("--json", action="store_true", help="machine-readable output")
+    p_val.set_defaults(func=cmd_pack_validate)
+
+    p_test = pack_sub.add_parser("test", help="run a pack on a fact set (--facts) "
+                                              "or every scenario (--tests)")
+    p_test.add_argument("pack", help="pack slug or path")
+    p_test.add_argument("--facts", metavar="FILE",
+                        help="a fact set file to run the pack on")
+    p_test.add_argument("--tests", metavar="DIR",
+                        help="a tests directory (every facts-*.json scenario, "
+                             "asserted against facts-*.expected.json)")
+    p_test.add_argument("--json", action="store_true",
+                        help="machine-readable output (verdict + trace + gaps)")
+    p_test.set_defaults(func=cmd_pack_test)
+
+    def add_draft_op(name, help_text, with_domain=False, with_evidence=False,
+                     with_json=True):
+        """One LLM draft-op sub-subparser (the REQ-015/016 plumbing is
+        identical across the ops: --write accepts the staged draft,
+        --offline replays the response cache, --json is machine-readable)."""
+        sp = pack_sub.add_parser(name, help=help_text)
+        sp.add_argument("pack", help="pack slug or path")
+        if with_domain:
+            sp.add_argument("--domain", required=True,
+                            help="the domain in plain language")
+        if with_evidence:
+            sp.add_argument("--evidence", required=True, metavar="FILE",
+                            help="a sample evidence file (e.g. a CSV pile)")
+        sp.add_argument("--write", action="store_true",
+                        help="accept the staged draft (overwrite the target)")
+        if with_json:
+            sp.add_argument("--json", action="store_true",
+                            help="machine-readable output (the staged draft)")
+        sp.add_argument("--offline", action="store_true",
+                        help="offline mode: replay the response cache, no LLM call")
+        sp.add_argument("--debug", action="store_true",
+                        help="debug mode: loud failures (no fallback)")
+        return sp
+
+    add_draft_op(
+        "draft-rules",
+        "draft pack/rules.json from a plain-language domain description "
+        "(LLM, judged, staged — accept with --write)",
+        with_domain=True).set_defaults(func=cmd_pack_draft_rules)
+    add_draft_op(
+        "suggest-labels",
+        "draft classify.json (labels, columns, threshold, template) from "
+        "sample evidence (LLM, judged, staged — accept with --write)",
+        with_evidence=True).set_defaults(func=cmd_pack_suggest_labels)
+    add_draft_op(
+        "draft-hypotheses",
+        "draft pack/hypotheses.json (statements, priors, claims) from a "
+        "plain-language domain description (LLM, judged, staged — accept "
+        "with --write)",
+        with_domain=True).set_defaults(func=cmd_pack_draft_hypotheses)
+    add_draft_op(
+        "draft-questions",
+        "draft sensor/decisions.json (the Strom question set) for the "
+        "pack's label sensor (LLM, judged, staged — accept with --write)"
+    ).set_defaults(func=cmd_pack_draft_questions)
+
+    p_rev = pack_sub.add_parser(
+        "review", help="advisory LLM review of the pack for gaps (dead "
+                       "rules, unproven hypotheses, missing constraints) — "
+                       "prose, never written to the pack")
+    p_rev.add_argument("pack", help="pack slug or path")
+    p_rev.add_argument("--offline", action="store_true",
+                       help="offline mode: replay the response cache, no LLM call")
+    p_rev.add_argument("--debug", action="store_true",
+                       help="debug mode: loud failures (no fallback)")
+    p_rev.set_defaults(func=cmd_pack_review)
 
     p = sub.add_parser("selftest", help="acceptance test — every case, asserted")
     p.set_defaults(func=cmd_selftest)
@@ -1945,6 +2957,13 @@ def main(argv=None):
         if args.command is None:
             # bare `facty` → the primary interface: the Textual workbench
             return cmd_tui(argparse.Namespace(case=None, auto=False))
+        if args.command == "pack":
+            # REQ-016: one pi session for the whole pack command — the LLM
+            # ops (and their correction turns) share one process and one
+            # conversation prefix, so the provider's prompt cache hits
+            # across them. The deterministic ops spawn nothing.
+            with sensing.session_scope():
+                return args.func(args)
         return args.func(args)
     finally:
         # quitting (q / ctrl+c / ctrl+q) leaves no LLM/auth subprocess behind

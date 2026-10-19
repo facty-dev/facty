@@ -61,6 +61,14 @@ help:
 	@echo "  make run-agent AGENT=<decision|coding> [PHASE=...] [TASK=...] [BDD=...]"
 	@echo "  make sdlc-start         SDLC quickstart help"
 	@echo ""
+	@echo "═══ Pack factory (author a pack) ═══"
+	@echo "  make pack-factory       Author a pack with pi + ask_questions (the meta-Facty loop)"
+	@echo "  ./facty pack list       List the packs under packs/"
+	@echo "  ./facty pack validate   Validate a pack (schema + cross-artifact)"
+	@echo "  ./facty pack test       Run a pack on a fact set or every scenario"
+	@echo "  ./facty pack draft-*    One-shot LLM drafts (rules, labels, hypotheses, questions)"
+	@echo "  ./facty pack review     Advisory LLM review for gaps"
+	@echo ""
 	@echo "═══ Agentic runtime ═══"
 	@echo "  make asset-init         Initialize asset graph (assets/graph.json)"
 	@echo "  make asset-status       Show asset graph status"
@@ -249,6 +257,39 @@ sdlc-start:
 	@echo "6. Review:      make agent-decision PHASE=review TASK='Review code and record ADRs'"
 	@echo ""
 	@echo "Or in CI/CD: label a PR with 'sdlc'"
+
+# ── Pack factory (the meta-Facty loop) ─────────────────────────────────────
+# Author a pack (a domain's knowledge engine) with pi + ask_questions.
+# The engine generates questions; the user answers; pi generates the
+# symbolic representations; the engine validates. See the pack-factory skill.
+
+.PHONY: pack-factory
+pack-factory:
+	@echo "Pack Factory — the meta-Facty loop (author a pack with pi + ask_questions)"
+	@echo ""
+	@./scripts/vm-session.sh status 2>/dev/null | grep -q "^status: up" || { \
+		echo "error: the VM session is not running."; \
+		echo "       boot it from your terminal: make vm-up"; \
+		exit 1; }
+	@echo "The VM session is up. Inside the VM, run:"
+	@echo ""
+	@echo "  pi --skill pack-factory"
+	@echo ""
+	@echo "Then describe your domain. Pi uses ask_questions to elicit your"
+	@echo "knowledge, generates the pack (rules, constraints, hypotheses,"
+	@echo "labels), and validates it. The pack lands at packs/<slug>/"
+	@echo ""
+	@echo "To enter the VM from your terminal:"
+	@echo "  gondolin attach $$(./scripts/vm-session.sh status | awk '/^session:/ {print $$2}')"
+	@echo ""
+	@echo "Validate a pack:"
+	@echo "  ./facty pack validate <slug>"
+	@echo "  ./facty pack test <slug> --tests packs/<slug>/tests"
+	@echo ""
+	@echo "One-shot LLM drafts (no elicitation loop):"
+	@echo "  ./facty pack draft-rules <slug> --domain \"invoice fraud\""
+	@echo "  ./facty pack suggest-labels <slug> --evidence <file>"
+	@echo "  ./facty pack review <slug>"
 
 # Show SDLC status: see the sdlc-status target in the git-native section below.
 

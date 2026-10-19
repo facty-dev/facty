@@ -1,346 +1,173 @@
----
-# Opportunity Solution Tree (OST)
-# Continuous Discovery — Design Thinking
----
+# Opportunity Solution Tree — Pack Studio (the knowledge authoring workbench)
 
-# Opportunity Solution Tree — Facty
-
-**Date:** 2026-10-15
-**Facilitator:** decision agent (facty SDLC discovery run, zai-glm-5-3)
-**Status:** approved <!-- draft | in-review | approved -->
+**Date:** 2026-10-18
+**Facilitator:** PO session (chart) + coding agent, collaborative discovery
+**Status:** draft <!-- draft | in-review | approved -->
 **Version:** 0.1
 
 ---
 
 ## Desired Outcome
 
-A single operator runs the full agentic SDLC for multiple concurrent clients
-on one machine — isolation by construction, zero secret exposure — with
-one-command client onboarding, unattended (detached or CI) phase runs, and
-merge-triggered phase progression, by 2027-01-31.
+A domain expert (fraud analyst, SRE, claims adjuster — not a Facty engineer) can create a complete, tested, deterministic knowledge engine (a **pack**) on Facty in a single sitting — by describing their domain and answering questions — with the LLM as their pair programmer and the symbolic engine as the validator. By 2026-12-31.
 
 ---
 
 ## Opportunities (Problems)
 
-What problems do our users/stakeholders face? (From continuous discovery)
+### OPP-001: Pack authoring is hand-coded JSON — the knowledge acquisition bottleneck
+- **Description:** every pack today is hand-edited JSON (rules, constraints, hypotheses, labels). This is the exact bottleneck that caused the 1980s AI winter — expert systems needed human knowledge engineers and didn't scale. The Facty team is the bottleneck for every new vertical.
+- **Evidence:** `engine/cases/*/pack/` (all hand-authored); no pack-authoring UI in `engine/tui.py`; the pack factory (`scripts/agent-pi.sh`) is internal-only.
+- **Impact:** every potential Facty user who is not a Facty engineer. The "domains are packs" thesis is unproven at the user level.
+- **Frequency:** every new domain, every pack iteration.
+- **Source:** PO session 2026-10-18; AI-winter literature; `docs/discovery/verticals.md`.
 
-### OPP-001: Multi-client session management is a hand-typed CLI ritual
-- **Description:** every USE-CASES.md scenario (§1–§6) requires hand-composing
-  a long `gondolin bash` invocation — mount, host-secrets, allow-list — per
-  client, per project. No client registry; errors are silent policy holes.
-- **Evidence:** `docs/USE-CASES.md` §1–§6 (all manual); README roadmap bullet
-  1; ARCHITECTURE.md "Naming conventions (future multi-tenant layer)" —
-  conventions named, no tooling implements them.
-- **Impact:** every multi-client user; isolation mistakes are security holes
-  (wrong allow-list = egress leak, wrong secret = credential misuse).
-- **Frequency:** every session boot, per client, per project.
-- **Source:** README.md roadmap + USE-CASES.md gap analysis, discovery run
-  2026-10-15.
+### OPP-002: No structured way to elicit domain expertise — the "interview" is ad-hoc
+- **Description:** there is no question-driven process for extracting a domain expert's knowledge. Pack authors guess what entities, predicates, rules, and hypotheses matter. Gaps surface only when a case fails.
+- **Evidence:** `docs/discovery/detective-dss-poc.md` (hand-written, no elicitation protocol); the SDLC discovery phase is open-ended, not question-driven.
+- **Impact:** pack quality depends on the author's domain knowledge, not the expert's. The expert is not in the loop.
+- **Frequency:** every new pack, every pack refinement.
+- **Source:** PO session 2026-10-18.
 
-### OPP-002: Sessions die with the hosting terminal — no unattended operation
-- **Description:** the VM session lives exactly as long as the terminal
-  running `make vm-up`; a closed terminal or dropped SSH kills every agent
-  run in flight. No overnight runs, no scheduled phases, no CI-shared
-  session.
-- **Evidence:** README "Known sharp edges" #3 + roadmap bullet 2
-  ("launchd-hosted persistent sessions"); ARCHITECTURE.md "Session
-  lifecycle" step 1; ADR-0001 Option A (ephemeral per-run boots) named but
-  never built for unattended use.
-- **Impact:** the solo operator on every disconnect/unattended window; hard
-  blocker for CI flows.
-- **Frequency:** constant constraint.
-- **Source:** README.md sharp edges + roadmap, ADR-0001.
+### OPP-003: No LLM-assisted authoring — the LLM is sensing-only
+- **Description:** the LLM in Facty only senses (reads evidence into facts). It never helps author the pack — never drafts a rule, suggests a label set, or reviews constraints for gaps.
+- **Evidence:** `engine/sensing.py` (extraction only); `engine/label.py` (hand-written config); `engine/strom.py` (one-shot `--op decide`, not interactive).
+- **Impact:** rule authoring is slow and error-prone. Authors miss edge cases.
+- **Frequency:** every rule, every label set, every schema.
+- **Source:** PO session 2026-10-18.
 
-### OPP-003: Nothing triggers the next SDLC phase — merges don't materialize downstream work
-- **Description:** the git-native pipeline is designed as "merges are
-  materializations" (GIT-NATIVE-PIPELINE.md, PRD-006; gates in
-  GITHUB-GATES.md), but today every phase is a manual
-  `make agent-decision PHASE=…`. Gates have no enforcement point.
-- **Evidence:** README quick start (all phases hand-invoked) vs roadmap
-  bullet 3 ("GitHub Actions wiring: CI runs agents in ephemeral gondolin
-  VMs"); GITHUB-GATES.md pipeline (design) vs Makefile (reality).
-- **Impact:** operator + reviewers; pipeline reliability collapses to human
-  memory.
-- **Frequency:** once per phase per feature.
-- **Source:** README.md roadmap, docs/GIT-NATIVE-PIPELINE.md +
-  docs/GITHUB-GATES.md vs implementation gap.
+### OPP-004: No test harness during authoring — blind iteration
+- **Description:** there is no way to test a pack incrementally. You write rules, run a full case, and hope. No "what fires on this fact set" preview, no gap analysis.
+- **Evidence:** `engine/engine.py` (`run_case` is all-or-nothing); `./facty run <case>` runs the full pipeline; no authoring mode.
+- **Impact:** pack authors iterate blind. Pack quality is low; authoring is frustrating.
+- **Frequency:** every rule change, every constraint change.
+- **Source:** PO session 2026-10-18.
 
 ---
 
 ## Solutions
 
-For each opportunity, what are potential solutions?
+### For OPP-001: hand-coded JSON pack authoring
 
-### For OPP-001: Multi-client session management is a hand-typed CLI ritual
+#### SOL-001-A: Pack Studio TUI — the knowledge authoring workbench *(recommended)*
+- **Description:** a new section in the Textual workbench with four surfaces: schema curator, rule editor, label sensor config, test harness. JSON-backed, with live schema validation.
+- **How it addresses the problem:** pack authoring becomes a first-class UI, not a JSON-editing exercise.
+- **Effort:** L · **Confidence:** high
 
-#### SOL-001-A: Declarative client manifests + make wrapper
-- **Description:** `clients/<client>.yaml` (mount, secret env names + target
-  hosts, allow-list, snapshot ref); `make client-up CLIENT=acme` renders the
-  gondolin invocation and records session metadata to
-  `.agentic/tenants/<client>.json` (socket-path pattern per ADR-0001).
-- **How it addresses the problem:** every use case becomes one command;
-  policy becomes reviewable versioned data instead of a typed command line.
-- **Effort:** M
-- **Confidence:** high
+#### SOL-001-B: CLI-first pack authoring
+- **Description:** `./facty pack new|edit|test` — terminal-only workflow. Faster to build, less polished.
+- **Effort:** M · **Confidence:** medium
 
-**Assumptions:**
-- **ASM-001-A-1:** *(testable)* all six USE-CASES.md scenarios are
-  expressible as flat manifests — no per-client branching logic.
-  - How to test: encode all six scenarios, render, diff against the
-    hand-typed commands in USE-CASES.md.
-  - Risk if wrong: schema needs conditionals/types → effort grows.
-- **ASM-001-A-2:** *(testable)* a rendered invocation is flag-equivalent to
-  the proven manual one, so ADR-0001 isolation guarantees transfer
-  unmodified.
-  - How to test: render + diff for the six use cases; boot one rendered
-    session and run `make vm-status`.
-  - Risk if wrong: new flag composition introduces untested isolation paths.
-- **ASM-001-A-3:** *(untestable)* operators will trust manifests +
-  one-command boots and commit client manifests to their workflow.
-  - How to test: untestable directly — dogfood one real client week + one
-    outside-user interview.
-  - Risk if wrong: tooling unused; manual rituals persist.
+#### SOL-001-C: External editor + validation only (status quo + tooling)
+- **Description:** keep hand-editing JSON, add `./facty pack validate`. Doesn't help author.
+- **Effort:** S · **Confidence:** low
 
-#### SOL-001-B: Tenant registry CLI
-- **Description:** `scripts/tenant.sh add|list|status|down` keeps per-client
-  state in `.agentic/tenants/`, wrapping the same gondolin calls.
-- **How it addresses the problem:** adds lifecycle management beyond boot,
-  at the cost of a second interface to learn and maintain.
-- **Effort:** M–L
-- **Confidence:** medium
+### For OPP-002: no structured domain elicitation
 
-**Assumptions:**
-- **ASM-001-B-1:** *(testable)* 3+ concurrent per-client sessions keep
-  isolated registries with no cross-talk.
-  - How to test: boot 3 scratch clients concurrently; probe each socket and
-    mount from its own session.
-  - Risk if wrong: registry corruption → exec into the wrong session.
-- **ASM-001-B-2:** *(untestable)* operators prefer a registry CLI over make
-  targets.
-  - How to test: untestable directly — A/B the two interfaces during
-    dogfooding.
-  - Risk if wrong: dead tooling surface.
+#### SOL-002-A: The meta-Facty loop — question-driven domain composition *(recommended, the key innovation)*
+- **Description:** Pack Studio's embedded agent runs a structured interview with the user. The engine generates questions (what entities? what predicates? what rules?), the user answers, the agent generates symbolic representations (schemas, rules, constraints, hypotheses, labels), the test harness validates, and the loop iterates until the user is satisfied.
+- **How it addresses the problem:** the domain expert's knowledge is systematically extracted, not guessed. The pack is complete by construction.
+- **Key insight:** this is **literally using Facty to compose a domain** — the same question-generation and sensing machinery that investigates a case is used to investigate the user's domain knowledge.
+- **Question UI:** [`@adeilo/pi-ask-questions`](https://github.com/felipeadeildo/pi-harness/tree/main/packages/ask-questions) (chosen 2026-10-19 — see decision log). The extension renders engine-generated questions as a questionnaire dialog in pi's TUI: options with previews, **notes on options** (domain expertise is nuanced — notes capture context), free-text answers, multi-select, and a **review tab** before submitting. Over RPC, questions go one at a time through the host's select/input dialogs. Chosen over `@zhushanwen/pi-ask-user` (decision-making philosophy, no notes, no review tab) and the skill-based options (`@rmrdeveloper/sideroom-pi`, `@geminixiang/pi-jev`). Installed in the gondolin VM snapshot (`gondolin/build-snapshot.sh`); the `pack-factory` skill (`gondolin/skills/pack-factory/`) instructs the agent to use it.
+- **Docassemble model:** questions are data, not code; the engine generates them dynamically (gap analysis drives the next question); conditions are the engine's gap analysis; the output is the pack. See `gondolin/skills/pack-factory/SKILL.md` for the full mapping.
+- **Effort:** L · **Confidence:** high (the machinery exists; it's a re-application)
 
-### For OPP-002: Sessions die with the hosting terminal — no unattended operation
+#### SOL-002-B: Template-based pack scaffolding
+- **Description:** `./facty pack new <domain>` scaffolds from a template. User fills in blanks.
+- **Effort:** M · **Confidence:** medium
 
-#### SOL-002-A: launchd-hosted detached sessions (macOS-first)
-- **Description:** ship a LaunchAgent plist template; `make vm-up
-  --detached` installs and loads it. The session process is owned by
-  launchd and survives terminal/SSH death. `vm-status`/`vm-down` keep using
-  the recorded socket path.
-- **How it addresses the problem:** unattended windows no longer kill runs;
-  no daemon beyond the OS-native one.
-- **Effort:** M
-- **Confidence:** medium-high
+#### SOL-002-C: Free-form agent interview (no engine-driven questions)
+- **Description:** the agent asks free-form questions. No structured elicitation.
+- **Effort:** M · **Confidence:** low
 
-**Assumptions:**
-- **ASM-002-A-1:** *(testable)* a launchd-owned session survives
-  terminal/SSH death and logout; the recorded socket path stays valid.
-  - How to test: install plist, boot, kill the hosting terminal,
-    `make vm-status`, exec one phase.
-  - Risk if wrong: detached hosting broken on macOS → fall back to
-    SOL-002-B.
-- **ASM-002-A-2:** *(testable)* gondolin session GC does not reap
-  launchd-hosted sessions (GC probes pids; launchd-owned pids are alive and
-  probeable from a normal shell — contrast ADR-0001's sandboxed-probe
-  failure mode).
-  - How to test: with a launchd-hosted session up, run `gondolin list` from
-    an unsandboxed shell; confirm registry files persist over 10 min.
-  - Risk if wrong: sessions orphaned/reaped — same sharp-edge class as
-    ADR-0001, host-side.
+### For OPP-003: no LLM-assisted authoring
 
-#### SOL-002-B: Ephemeral per-run boots
-- **Description:** for unattended work, every agent run boots a fresh VM
-  from the snapshot (`--resume`), runs one phase, writes artifacts to
-  `/workspace`, exits — ADR-0001 Option A restricted to unattended/CI
-  contexts.
-- **How it addresses the problem:** nothing to keep alive; session lifetime
-  becomes a non-issue for batch runs. Shares machinery with SOL-003-A.
-- **Effort:** M
-- **Confidence:** medium
+#### SOL-003-A: Embedded pi agent — the knowledge engineer's pair programmer *(recommended)*
+- **Description:** a persistent chat pane in Pack Studio. The agent drafts rules, suggests labels, reviews for gaps, drafts Strom questions, explains engine behavior. Same pi RPC transport as sensing.
+- **How it addresses the problem:** the LLM becomes the authoring assistant. The human is the knowledge engineer; the LLM is their pair programmer.
+- **Effort:** M · **Confidence:** high
 
-**Assumptions:**
-- **ASM-002-B-1:** *(testable)* snapshot boot cost per run is acceptable for
-  unattended/batch use (session boot already proven ~76s end-to-end,
-  2026-10-15 discovery run).
-  - How to test: time N cold boots + one trivial phase each; budget ≤ 2 min
-    wall per run.
-  - Risk if wrong: batch latency dominates; restrict ephemerality to CI.
-- **ASM-002-B-2:** *(testable)* agent runs are stateless across boots — all
-  phase state lives in `/workspace` (repo + `.agentic/`) or git.
-  - How to test: run discovery in boot 1, PRD in a fresh boot 2; verify
-    artifact continuity + audit chain.
-  - Risk if wrong: phases lose context → need per-client warm-state
-    snapshots.
+#### SOL-003-B: One-shot LLM ops (status quo extended)
+- **Description:** `./facty pack draft-rules`, `./facty pack suggest-labels` — one-shot CLI ops.
+- **Effort:** M · **Confidence:** medium
 
-### For OPP-003: Nothing triggers the next SDLC phase — merges don't materialize downstream work
+### For OPP-004: no test harness during authoring
 
-#### SOL-003-A: GitHub Actions wiring — ephemeral VMs in CI
-- **Description:** label-triggered workflows (`sdlc:discov|prd|bdd|impl`)
-  boot an ephemeral gondolin VM from a cached snapshot, exec the right agent
-  role, open a phase PR. Human gates = PR approvals (GITHUB-GATES.md).
-  Allow-list + host-secret injection reproduce the local isolation model
-  in the runner.
-- **How it addresses the problem:** merging a phase PR actually materializes
-  the asset and triggers the downstream phase; gates become enforced.
-- **Effort:** L
-- **Confidence:** medium
+#### SOL-004-A: Live test harness in Pack Studio *(recommended)*
+- **Description:** a "Test" tab: drop sample evidence → run engine → see verdict + trace + gap analysis (unproven hypotheses, dead rules, missing constraints). Tight authoring loop.
+- **Effort:** M · **Confidence:** high
 
-**Assumptions:**
-- **ASM-003-A-1:** *(testable)* GitHub-hosted ubuntu runners can execute
-  gondolin/QEMU micro-VMs (software virtualization) within usable time.
-  - How to test: spike workflow — boot the snapshot, run one trivial pi
-    phase, measure wall time.
-  - Risk if wrong: CI infeasible on hosted runners → self-hosted runner or
-    container fallback (highest-impact risk this round).
-- **ASM-003-A-2:** *(testable)* the qcow2 snapshot is cacheable/restorable
-  in CI within size/download limits.
-  - How to test: actions-cache spike; measure restore time + hit rate
-    across runs.
-  - Risk if wrong: per-run snapshot fetch dominates CI time.
-- **ASM-003-A-3:** *(testable)* host-secret injection works in ephemeral CI
-  boots with the real key held only as a GitHub Actions secret (placeholder
-  in guest; proxy substitution identical to local).
-  - How to test: e2e phase run in CI with a canary key value; grep audit log
-    + guest env for the real value (must be absent).
-  - Risk if wrong: broken auth in CI or secret leakage.
-- **ASM-003-A-4:** *(untestable)* reviewers will use PR labels/approvals as
-  the SDLC gates.
-  - How to test: untestable directly — operate one full spiral
-    (ost→prd→bdd→impl) on a real feature; observe gate usage.
-  - Risk if wrong: gates ignored → spiral bypassed; CI triggers become
-    noise.
-
-#### SOL-003-B: Local merge-triggered dispatcher
-- **Description:** a post-merge hook / watcher on `sdlc/<phase>/*` merges
-  launches the next phase locally via existing make targets + session.
-- **How it addresses the problem:** merge-triggered progression without a
-  CI dependency; humans stay in the terminal loop.
-- **Effort:** M
-- **Confidence:** medium
-
-**Assumptions:**
-- **ASM-003-B-1:** *(testable)* phase progression is detectable locally from
-  git (merge of `sdlc/<phase>/<slug>` into main) without a central service.
-  - How to test: prototype a post-merge hook dispatching the next make
-    target in a scratch repo; include a squash-merge case.
-  - Risk if wrong: hook state fragile under rebase/squash merges.
-- **ASM-003-B-2:** *(untestable)* operators keep the human-in-terminal loop
-  for interactive work even after CI exists.
-  - How to test: untestable directly — dogfood both trigger paths for one
-    feature.
-  - Risk if wrong: two competing triggers race on the same phase.
+#### SOL-004-B: CLI test mode
+- **Description:** `./facty pack test <name> --facts <file>` — terminal-only.
+- **Effort:** S · **Confidence:** medium
 
 ---
 
-## OST Visualization
+## Recommended path
+
+**SOL-001-A + SOL-002-A + SOL-003-A + SOL-004-A** — the full Pack Studio.
+
+**Build order (smallest slices first):**
+1. **SOL-004-B** (CLI test mode) — proves the test harness; smallest slice
+2. **SOL-003-B** (one-shot LLM ops) — proves the LLM authoring path
+3. **SOL-001-A** (TUI surfaces) — the workbench
+4. **SOL-003-A** (embedded agent pane) — the pair programmer
+5. **SOL-002-A** (meta-Facty loop) — the full elicitation loop; ties everything together
+
+**Then:** build the insurance fraud pack *using* Pack Studio (dogfood).
+
+---
+
+## The meta-Facty loop (central design)
 
 ```
-                    ┌──────────────────────────────────────┐
-                    │           DESIRED OUTCOME            │
-                    │ multi-client agentic SDLC, zero     │
-                    │ secret exposure, unattended + CI    │
-                    └──────────────────┬───────────────────┘
-                                       │
-         ┌─────────────────────────────┼─────────────────────────────┐
-         ▼                             ▼                             ▼
-  ┌──────────────────┐        ┌──────────────────┐        ┌──────────────────┐
-  │     OPP-001      │        │     OPP-002      │        │     OPP-003      │
-  │ client sessions  │        │ sessions die     │        │ merges trigger   │
-  │ are hand-typed   │        │ with terminal    │        │ nothing          │
-  └────────┬─────────┘        └────────┬─────────┘        └────────┬─────────┘
-           │                            │                            │
-      ┌────┴────┐                   ┌───┴────┐                   ┌───┴────┐
-      ▼         ▼                   ▼        ▼                   ▼        ▼
-  ┌────────┐ ┌────────┐        ┌────────┐ ┌────────┐        ┌────────┐ ┌────────┐
-  │SOL-    │ │SOL-    │        │SOL-    │ │SOL-    │        │SOL-    │ │SOL-    │
-  │001-A   │ │001-B   │        │002-A   │ │002-B   │        │003-A   │ │003-B   │
-  │client  │ │tenant  │        │launchd │ │ephemer.│        │GH      │ │local   │
-  │manif.  │ │CLI     │        │detach  │ │boots   │        │Actions │ │dispatch│
-  │+A1..A3 │ │+B1,B2  │        │+A1,A2  │ │+B1,B2  │        │+A1..A4 │ │+B1,B2  │
-  └────▲───┘ └────────┘        └────▲───┘ └────────┘        └────▲───┘ └────────┘
-       │                            │                            │
-       └── Selected path (draft): SOL-001-A · SOL-002-A (+002-B for CI)
-                                   · SOL-003-A — pending human gate
+┌─────────────────────────────────────────────────────────────────────────┐
+│  THE META-FACTY LOOP (domain composition)                               │
+│                                                                         │
+│  User describes their domain (free text, examples, sample evidence)     │
+│       │                                                                 │
+│       ▼                                                                 │
+│  Engine generates QUESTIONS (what entities? what predicates? what       │
+│  rules? what hypotheses? what labels?) — driven by the pack schema      │
+│       │                                                                 │
+│       ▼                                                                 │
+│  User answers (the "evidence" is the conversation)                       │
+│       │                                                                 │
+│       ▼                                                                 │
+│  Agent generates SYMBOLIC REPRESENTATIONS (schemas, rules, constraints,  │
+│  hypotheses, labels) — schema-guided extraction from the answers        │
+│       │                                                                 │
+│       ▼                                                                 │
+│  Validate (run the engine on sample scenarios, check for gaps)          │
+│       │                                                                 │
+│       ▼                                                                 │
+│  User reviews and refines — iterate until satisfied                     │
+│       │                                                                 │
+│       ▼                                                                 │
+│  Pack is complete (exportable, testable, versioned in git)              │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
----
-
-## Selected Path
-
-*Draft selection — pending human review gate (status: draft).*
-
-| Field | Value |
-|-------|-------|
-| **Opportunity** | OPP-001: multi-client session management is a hand-typed CLI ritual |
-| **Solution** | SOL-001-A: declarative client manifests + make wrapper |
-| **Rationale** | Cheapest unlock with highest confidence; produces the per-client session/policy substrate that OPP-002 and OPP-003 wiring build on; every USE-CASES.md scenario depends on it. |
-| **Key Assumptions** | ASM-001-A-1, ASM-001-A-2 (both testable, cheap) |
-| **Confidence** | high |
-| **Effort** | M |
-
-| Field | Value |
-|-------|-------|
-| **Opportunity** | OPP-002: sessions die with the hosting terminal |
-| **Solution** | SOL-002-A: launchd-hosted detached sessions, with SOL-002-B ephemeral boots for CI contexts |
-| **Rationale** | Keeps the proven long-lived-session model (ADR-0001 Option B) and makes it unattended; ephemeral boots are the natural CI companion and share machinery with SOL-003-A. |
-| **Key Assumptions** | ASM-002-A-1, ASM-002-A-2, ASM-002-B-1, ASM-002-B-2 (all testable) |
-| **Confidence** | medium-high |
-| **Effort** | M |
-
-| Field | Value |
-|-------|-------|
-| **Opportunity** | OPP-003: merges don't trigger the next phase |
-| **Solution** | SOL-003-A: GitHub Actions wiring with ephemeral gondolin VMs |
-| **Rationale** | Implements the already-designed gates (GITHUB-GATES.md) and roadmap bullet 3; makes the spiral self-driving. Highest effort/risk — gate on the CI feasibility spike before committing. |
-| **Key Assumptions** | ASM-003-A-1, ASM-003-A-2, ASM-003-A-3 (testable — spike first), ASM-003-A-4 (untestable) |
-| **Confidence** | medium |
-| **Effort** | L |
-
-**Sequencing:** OPP-001 (substrate) → OPP-002 (unattended) → OPP-003 (CI),
-with the ASM-3a-1/2/3 CI feasibility spike run early and in parallel.
+| Case loop (Facty today) | Meta-Facty loop (Pack Studio) |
+|---|---|
+| Evidence (messy files) | User's answers (conversation) |
+| Facts (sensed by LLM) | Domain concepts (entities, predicates) |
+| Rules (chain facts) | Rules (authored from concepts) |
+| Hypotheses (explanations) | Hypotheses (the explanation space) |
+| Constraints (prune) | Constraints (prune invalid packs) |
+| Open questions (engine asks) | Open questions (engine asks the user) |
+| Verdict (deterministic) | Validated pack (deterministic, testable) |
 
 ---
 
-## Assumptions Log (All)
+## Decision log
 
-| ID | Assumption | Solution | How to Test | Risk if Wrong | Status |
-|----|-----------|----------|-------------|---------------|--------|
-| ASM-001-A-1 | Six use cases fit flat manifests | SOL-001-A | Render + diff vs USE-CASES.md commands | Schema complexity grows | unvalidated (testable) |
-| ASM-001-A-2 | Rendered invocation flag-equivalent to proven manual one | SOL-001-A | Render + diff; boot rendered session | Untested isolation paths | unvalidated (testable) |
-| ASM-001-A-3 | Operators trust + commit manifests | SOL-001-A | Dogfood week + interview | Tooling unused | unvalidated (untestable) |
-| ASM-001-B-1 | 3+ concurrent clients, isolated registries | SOL-001-B | Boot 3 scratch clients, probe sockets/mounts | Exec into wrong session | unvalidated (testable) |
-| ASM-001-B-2 | Operators prefer CLI over make | SOL-001-B | A/B during dogfooding | Dead tooling surface | unvalidated (untestable) |
-| ASM-002-A-1 | launchd session survives terminal/SSH death | SOL-002-A | Kill hosting terminal, vm-status, exec phase | Fall back to ephemeral boots | unvalidated (testable) |
-| ASM-002-A-2 | GC doesn't reap launchd-hosted sessions | SOL-002-A | `gondolin list` from unsandboxed shell, 10 min watch | Host-side orphan/reap sharp edge | unvalidated (testable) |
-| ASM-002-B-1 | Per-run boot cost acceptable (≤ 2 min budget) | SOL-002-B | Time N cold boots + phase | Batch latency dominates | unvalidated (testable) |
-| ASM-002-B-2 | Agent runs stateless across boots | SOL-002-B | Discovery in boot 1, PRD in boot 2, check continuity | Need warm-state snapshots | unvalidated (testable) |
-| ASM-003-A-1 | GH ubuntu runners can run gondolin/QEMU VMs | SOL-003-A | CI spike: boot snapshot + trivial phase | CI infeasible → self-hosted/container | unvalidated (testable) |
-| ASM-003-A-2 | Snapshot cacheable within CI limits | SOL-003-A | actions-cache spike, measure restore | Snapshot fetch dominates CI | unvalidated (testable) |
-| ASM-003-A-3 | Host-secret injection safe + functional in CI | SOL-003-A | E2E with canary key; grep audit + guest env | Broken auth or secret leakage | unvalidated (testable) |
-| ASM-003-A-4 | Reviewers use PR gates as designed | SOL-003-A | One full spiral on a real feature | Gates ignored, triggers = noise | unvalidated (untestable) |
-| ASM-003-B-1 | Merges detectable locally without central service | SOL-003-B | Post-merge hook prototype incl. squash case | Fragile hook state | unvalidated (testable) |
-| ASM-003-B-2 | Terminal loop stays preferred interactively | SOL-003-B | Dogfood both trigger paths | Competing triggers race | unvalidated (untestable) |
-
----
-
-## Stakeholder Sign-off
-
-| Role | Name | Date | Signature |
-|------|------|------|-----------|
-| Product Owner | chart (per ADR-0001 deciders) | 2026-10-15 | approved in dev session — proceed with selected path (SOL-001-A client session manifests first); decider-model layer and self-improvement loop tracked as roadmap PRDs |
-| Tech Lead | — | — | — |
-| Design Lead | — | — | — |
-
----
-
-## Next Steps
-
-1. → Human gate: review this draft OST; approve/adjust the selected path
-2. → Validate top assumptions (CI feasibility spike ASM-3a-1/2/3; launchd
-   detachment ASM-002-A-1/2; manifest schema ASM-001-A-1/2)
-3. → Generate **PRD** from the approved path (decision agent) — PRD-007
-   onward, one PRD per opportunity in sequence
-4. → Generate **BDD specs** from PRD (decision agent) → **Implement**
-   (coding agent)
+| Date | Decision | Decider | Rationale |
+|---|---|---|---|
+| 2026-10-18 | Scope Pack Studio as a new discovery round; archive the 2026-10-15 OST (multi-client session management) | PO (chart) | The pack authoring workbench is the highest-value next step; it closes the knowledge acquisition bottleneck and makes "domains are packs" real for users. |
+| 2026-10-18 | The meta-Facty loop (SOL-002-A) is the central design — re-apply Facty's question-generation and sensing machinery to domain composition | PO (chart) | "Literally use facty itself to help composing a domain by generating and asking questions until the user has fully explained their expertise." The machinery exists; it's a re-application, not a new build. |
+| 2026-10-18 | Build order: CLI test mode → one-shot LLM ops → TUI surfaces → embedded agent → meta-Facty loop | PO (chart) | Smallest slices first; each step proves a capability before the next builds on it. |
+| 2026-10-18 | Dogfood: build the insurance fraud pack using Pack Studio | PO (chart) | Proves the platform works; gives us the flagship demo. |
+| 2026-10-19 | Question UI for the meta-Facty loop: `@adeildo/pi-ask-questions` | PO (chart) | Notes on options + review tab fit domain elicitation (nuanced expertise); questionnaire philosophy ("ask instead of guessing") matches the use case. `@zhushanwen/pi-ask-user` is decision-making-focused (no notes, no review). Installed in the VM snapshot; the `pack-factory` skill wraps it. |
+| 2026-10-19 | Pack Studio MVP complete: CLI test mode (task 004) + one-shot LLM ops (task 005) | PO (chart) | `./facty pack list/validate/test/draft-*/review` all work; `test_pack.py` 71/71; `./facty selftest` 69/69. The deterministic half + the LLM half of the MVP are done. Follow-up: TUI surfaces, embedded agent pane, meta-Facty loop integration. |
+| 2026-10-19 | Mistral credential bridge: local dev uses the subscription token (no per-token overage) | PO (chart) | `vm-session.sh` / `agent-pi.sh` read the `mistral-subscription` token from `~/.pi/agent/auth.json` and pass it as `MISTRAL_API_KEY` to gondolin's host-secret. Production: set `MISTRAL_API_KEY` explicitly. Documented in AGENTS.md. |
