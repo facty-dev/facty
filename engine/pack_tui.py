@@ -234,11 +234,13 @@ class PackStudioScreen(Screen):
                         # token into requests to api.mistral.ai) and set
                         # PI_CODING_AGENT_DIR (the mistral-subscription
                         # extension lives at /opt/pi-agent in the VM).
+                        # Explicit --model mistral-large-4 (the default model).
                         _cmd = ["gondolin", "attach", _sid, "--",
                                 "bash", "-c",
                                 "source /root/.session-env/mistral.sh 2>/dev/null; "
                                 "export PI_CODING_AGENT_DIR=/opt/pi-agent; "
-                                "exec pi --skill /root/.agents/skills/pack-factory"]
+                                "exec pi --model mistral-large-4 "
+                                "--skill /root/.agents/skills/pack-factory"]
                     except Exception:
                         _cmd = None
                 else:

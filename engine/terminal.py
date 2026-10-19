@@ -39,6 +39,10 @@ class TerminalPane(Static):
       with the subprocess — e.g., the ask_questions questionnaire dialog).
     """
 
+    BINDINGS = [
+        ("ctrl+shift+c", "copy_selection", "Copy selection"),
+    ]
+
     # Map Textual key names to terminal bytes
     KEY_MAP = {
         "enter": b"\r",
@@ -89,6 +93,11 @@ class TerminalPane(Static):
         self._reader = None
         self._lock = threading.Lock()
         self.can_focus = True  # receive keyboard input
+        # Text selection (mouse drag + Ctrl+Shift+C to copy)
+        self._select_start = None   # (row, col)
+        self._select_end = None     # (row, col)
+        self._selecting = False
+        self._selected_text = ""
 
     def on_mount(self):
         # Delay the spawn until after the first layout pass — the
@@ -189,7 +198,9 @@ class TerminalPane(Static):
         message entry bar (at the bottom) is always visible.
 
         Clips to the widget's actual size (in case the terminal is
-        briefly larger during the initial render before the resize)."""
+        briefly larger during the initial render before the resize).
+
+        Highlights the text selection (reverse video)."""
         with self._lock:
             # Clip to the widget's actual size
             try:
@@ -197,15 +208,102 @@ class TerminalPane(Static):
                 render_cols = min(self.cols, max(1, self.size.width))
             except Exception:
                 render_rows, render_cols = self.rows, self.cols
+            # Selection range (normalized: start before end)
+            sel = self._selection_range(render_rows, render_cols)
             lines = []
             for y in range(render_rows):
                 line = Text()
                 for x in range(render_cols):
                     char = self.term.buffer[y][x]
                     style = self._char_style(char)
+                    # Highlight if in the selection
+                    if sel and self._in_selection(y, x, sel):
+                        style = (style + " reverse").strip() if style else "reverse"
                     line.append(char.data, style=style or None)
                 lines.append(line)
             return Text("\n").join(lines)
+
+    def _selection_range(self, max_rows, max_cols):
+        """Normalize the selection to (start, end) with start <= end."""
+        if self._select_start is None:
+            return None
+        sr, sc = self._select_start
+        er, ec = self._select_end or self._select_start
+        if (sr, sc) > (er, ec):
+            sr, sc, er, ec = er, ec, sr, sc
+        sr = max(0, min(sr, max_rows - 1))
+        er = max(0, min(er, max_rows - 1))
+        sc = max(0, min(sc, max_cols - 1))
+        ec = max(0, min(ec, max_cols - 1))
+        return ((sr, sc), (er, ec))
+
+    def _in_selection(self, row, col, sel):
+        """Check if (row, col) is in the selection range."""
+        (sr, sc), (er, ec) = sel
+        if row < sr or row > er:
+            return False
+        if row == sr and row == er:
+            return sc <= col <= ec
+        if row == sr:
+            return col >= sc
+        if row == er:
+            return col <= ec
+        return True
+
+    # ── Mouse selection + clipboard ────────────────────────────────
+
+    def on_mouse_down(self, event):
+        """Start text selection (and focus the terminal)."""
+        self.focus()
+        self._select_start = (event.y, event.x)
+        self._select_end = None
+        self._selecting = True
+        self._update_selection()
+        self.refresh()
+        event.stop()
+
+    def on_mouse_move(self, event):
+        """Extend the selection while the mouse button is held."""
+        if self._selecting:
+            self._select_end = (event.y, event.x)
+            self._update_selection()
+            self.refresh()
+            event.stop()
+
+    def on_mouse_up(self, event):
+        """End the selection."""
+        if self._selecting:
+            self._selecting = False
+            self._update_selection()
+            event.stop()
+
+    def _update_selection(self):
+        """Extract the selected text from the pyte screen buffer."""
+        sel = self._selection_range(self.rows, self.cols)
+        if sel is None:
+            self._selected_text = ""
+            return
+        (sr, sc), (er, ec) = sel
+        lines = []
+        with self._lock:
+            for row in range(sr, er + 1):
+                line = ""
+                col_start = sc if row == sr else 0
+                col_end = ec if row == er else self.cols - 1
+                for col in range(col_start, col_end + 1):
+                    line += self.term.buffer[row][col].data
+                lines.append(line.rstrip())
+        self._selected_text = "\n".join(lines)
+
+    def action_copy_selection(self):
+        """Copy the selected text to the clipboard (Ctrl+Shift+C)."""
+        if self._selected_text:
+            self.app.copy_to_clipboard(self._selected_text)
+            n = len(self._selected_text)
+            self.app.notify(f"Copied {n} chars to clipboard", timeout=2)
+        else:
+            self.app.notify("No selection — drag to select text first",
+                            timeout=2)
 
     def _char_style(self, char):
         """Map a pyte character's attributes to a Rich style string."""
