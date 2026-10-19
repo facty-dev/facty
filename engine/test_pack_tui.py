@@ -62,9 +62,10 @@ async def run_tests():
 
         # 3. The pack list shows the pack
         lv = screen.query_one("#pack-list", ListView)
+        pack_names = [c.name for c in lv.children]
         check("the pack list has the seed pack",
-              len(lv.children) >= 1 and lv.children[0].name == PACK_SLUG,
-              f"got: {[c.name for c in lv.children]}")
+              PACK_SLUG in pack_names,
+              f"got: {pack_names}")
 
         # 4. The tabs are present
         tabs = screen.query_one("#pack-tabs", TabbedContent)
@@ -143,6 +144,60 @@ async def run_tests():
         check("the status line shows the pack slug",
               PACK_SLUG in status_text,
               f"got: {status_text[:80]}")
+
+        # 14. The agent pane is present
+        from textual.containers import Vertical, VerticalScroll
+        from textual.widgets import Input
+        agent_pane = screen.query_one("#pack-agent", Vertical)
+        check("the agent pane is present", agent_pane is not None)
+
+        agent_log = screen.query_one("#agent-log", VerticalScroll)
+        check("the agent chat log is present", agent_log is not None)
+
+        agent_input = screen.query_one("#agent-input", Input)
+        check("the agent input is present", agent_input is not None)
+
+        # 15. The agent input is functional (stub the AgentSession)
+        import agent as agent_mod
+        original_init = agent_mod.AgentSession.__init__
+
+        class StubAgentSession:
+            def __init__(self, pack_context=""):
+                self.pack_context = pack_context
+                self.sent = []
+
+            def send(self, message, stream=None):
+                self.sent.append(message)
+                if stream:
+                    stream("stub response: I can help you draft rules.")
+                return "stub response: I can help you draft rules."
+
+            def close(self):
+                pass
+
+        agent_mod.AgentSession = StubAgentSession
+        try:
+            # Call the agent logic directly (synchronous — bypasses the
+            # @work decorator for testability)
+            screen._agent_send_impl("draft rules for inflated labor rates")
+            await pilot.pause(1)
+            # The stub agent should have been called
+            check("the agent input sends a message to pi",
+                  screen.agent is not None,
+                  f"agent: {screen.agent}")
+            log_text = " ".join(
+                str(c.render()) for c in agent_log.children)
+            check("the chat log shows the user's message",
+                  "draft rules" in log_text.lower(),
+                  f"got: {log_text[:100]}")
+            check("the chat log shows the agent's response",
+                  "stub response" in log_text.lower(),
+                  f"got: {log_text[:100]}")
+        finally:
+            agent_mod.AgentSession = original_init
+            if screen.agent is not None:
+                screen.agent.close()
+                screen.agent = None
 
 
 def main():

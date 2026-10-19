@@ -38,6 +38,8 @@ from textual.screen import Screen
 from textual.widgets import (Button, Footer, Header, Input, Label, ListItem,
                              ListView, Static, TabbedContent, TabPane, TextArea)
 
+import agent  # noqa: E402  (the embedded agent — pi RPC)
+
 ENGINE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(ENGINE_DIR))
 import engine  # noqa: E402
@@ -69,14 +71,20 @@ class PackStudioScreen(Screen):
     ]
 
     CSS = """
-    #pack-left { width: 32; }
+    #pack-left { width: 28; }
     #pack-right { width: 1fr; }
+    #pack-agent { width: 42; border-left: solid $primary; }
     #pack-list { height: 1fr; }
     #pack-tabs { height: 1fr; }
     .editor { height: 1fr; }
     #test-log { height: 1fr; border: solid green; }
     #validate-result { height: auto; padding: 0 1; }
     #pack-status { height: auto; padding: 0 1; color: $text-muted; }
+    #agent-log { height: 1fr; border: solid $accent; padding: 0 1; }
+    #agent-input { dock: bottom; }
+    .agent-user { color: $text-accent; text-style: bold; }
+    .agent-msg { color: $text; }
+    .agent-error { color: $text-error; }
     """
 
     def __init__(self, pack_slug=None):
@@ -84,6 +92,7 @@ class PackStudioScreen(Screen):
         self.pack_slug = pack_slug
         self.pack_dir = None
         self._saving = False
+        self.agent = None  # the AgentSession (lazy-spawned on first message)
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -120,6 +129,11 @@ class PackStudioScreen(Screen):
                         yield VerticalScroll(id="test-log")
                 yield Static("", id="validate-result")
                 yield Static("", id="pack-status")
+            with Vertical(id="pack-agent"):
+                yield Label("Agent (pi) — your pair programmer", classes="title")
+                yield VerticalScroll(id="agent-log")
+                yield Input(placeholder="Ask the agent to draft, review, explain…",
+                            id="agent-input")
         yield Footer()
 
     def on_mount(self):
@@ -364,6 +378,82 @@ class PackStudioScreen(Screen):
         self.app.call_from_thread(
             self._set_status,
             f"review: run `./facty pack review {self.pack_slug}` in the terminal")
+
+    # ── Agent chat pane ────────────────────────────────────────────
+
+    def on_input_submitted(self, event):
+        """The agent input: send the message to pi, stream the response."""
+        if event.input.id != "agent-input":
+            return
+        message = event.input.value.strip()
+        if not message:
+            return
+        event.input.value = ""
+        self.agent_worker = self._agent_send(message)
+
+    def _agent_log(self, text, cls="agent-msg"):
+        """Append a line to the agent chat log."""
+        log = self.query_one("#agent-log", VerticalScroll)
+        log.mount(Static(text, classes=cls))
+        # Scroll to the bottom
+        log.scroll_end(animate=False)
+
+    @work(thread=True)
+    def _agent_send(self, message):
+        """Send a message to the embedded agent (pi RPC), stream the
+        response into the chat log. Runs in a worker thread."""
+        self._agent_send_impl(message)
+
+    def _ui_call(self, fn, *args):
+        """Call a UI function — thread-safe: direct in the app thread,
+        via call_from_thread in a worker thread."""
+        import threading
+        if threading.current_thread() is not threading.main_thread():
+            self.app.call_from_thread(fn, *args)
+        else:
+            fn(*args)
+
+    def _agent_send_impl(self, message):
+        """The agent send logic (synchronous — the @work wrapper calls
+        this in a thread; tests call this directly)."""
+        self._ui_call(self._agent_log, f"you: {message}", "agent-user")
+        if self.agent is None:
+            ctx = ""
+            if self.pack_dir is not None:
+                try:
+                    ctx = agent.pack_context(self.pack_dir)
+                except Exception:
+                    ctx = f"pack: {self.pack_slug}"
+            try:
+                self.agent = agent.AgentSession(pack_context=ctx)
+            except Exception as exc:
+                self._ui_call(self._agent_log,
+                              f"agent: failed to start: {exc}", "agent-error")
+                return
+        try:
+            response_lines = []
+
+            def stream(line):
+                response_lines.append(line)
+                self._ui_call(self._agent_log, f"agent: {line}", "agent-msg")
+
+            self.agent.send(message, stream=stream)
+        except RuntimeError as exc:
+            self.agent = None  # respawn on the next message
+            self._ui_call(self._agent_log,
+                          f"agent: error: {exc}", "agent-error")
+        except Exception as exc:
+            self._ui_call(self._agent_log,
+                          f"agent: error: {exc}", "agent-error")
+
+    def on_unmount(self):
+        """Shut down the agent's pi process when the screen closes."""
+        if self.agent is not None:
+            try:
+                self.agent.close()
+            except Exception:
+                pass
+            self.agent = None
 
     # ── Navigation ─────────────────────────────────────────────────
 
