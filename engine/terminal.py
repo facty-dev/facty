@@ -116,20 +116,36 @@ class TerminalPane(Static):
 
         Waits for pi to render its TUI (a simple delay — pi takes a few
         seconds to load skills and render), then sends a message that
-        makes pi introduce itself and surface the pack-factory
-        functionality (the skill's content is in pi's context — the
-        message just prompts pi to surface it).
+        immediately surfaces the pack-authoring workflow — this is a
+        purpose-built agent for authoring knowledge packs, not a generic
+        chatbot.
 
-        The message: "Introduce yourself and what you can help me
-        with." — pi responds with a welcome that lists the pack-factory
-        capabilities (draft rules, suggest labels, review gaps, explain
-        engine behavior, elicit domain knowledge via ask_questions)."""
+        The message tells pi to start the meta-Facty loop: ask what
+        domain to build a pack for, then use ask_questions to interview
+        the user (entities, predicates, hypotheses, rules, labels,
+        constraints), generate the pack artifacts, and let the user
+        validate. pi responds by starting the elicitation — the
+        ask_questions questionnaire dialog appears immediately."""
         import time as _time
+        _msg = (
+            "You are the pack factory — help me author a knowledge pack. "
+            "Start by asking me what domain I want to build a pack for. "
+            "Then use ask_questions to interview me about the domain: "
+            "ask about the entities, the predicates (what facts can say), "
+            "the competing explanations (hypotheses), the rules (when X, "
+            "then Y), the labels (for the sensor), and the constraints "
+            "(what eliminates or supports a hypothesis). "
+            "Batch related questions (up to 4 per ask_questions call). "
+            "After the answers, generate the pack artifacts "
+            "(pack/rules.json, pack/constraints.json, pack/hypotheses.json, "
+            "classify.json) and tell me what you wrote — I will validate "
+            "them with the engine.\n"
+        )
         def send():
             _time.sleep(10)  # wait for pi to load skills + render TUI
             if self.master_fd is None:
                 return  # unmounted before the delay elapsed
-            self.write(b"Introduce yourself and what you can help me with.\n")
+            self.write(_msg.encode())
         threading.Thread(target=send, daemon=True).start()
 
     def on_resize(self, event):
