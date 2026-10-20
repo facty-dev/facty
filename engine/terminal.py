@@ -151,7 +151,11 @@ class TerminalPane(Static):
         self.refresh()
 
     def _spawn(self):
-        """Spawn the subprocess in a PTY."""
+        """Spawn the subprocess in a PTY.
+
+        The child gets a new session + the PTY slave as its controlling
+        terminal (TIOCSCTTY) — pi's TUI checks for a controlling TTY and
+        hangs without one (no output, no rendering)."""
         import fcntl
         import struct
         import termios
@@ -159,16 +163,67 @@ class TerminalPane(Static):
         # Set the PTY window size
         winsize = struct.pack("HHHH", self.rows, self.cols, 0, 0)
         fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, winsize)
+
+        def _setup_tty():
+            """Run in the child before exec: new session + controlling TTY."""
+            os.setsid()
+            # fd 0 is the PTY slave (stdin) — make it the controlling TTY
+            fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
         self.master_fd = master_fd
         self.proc = subprocess.Popen(
             self.command,
             stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
             close_fds=True,
-            start_new_session=True,
+            preexec_fn=_setup_tty,
             env={**os.environ, "TERM": "xterm-256color",
                  "COLUMNS": str(self.cols), "LINES": str(self.rows)},
         )
         os.close(slave_fd)
+
+    def _respond_to_queries(self, data):
+        """Respond to terminal queries (pi's TUI sends OSC color queries
+        and DSR/DA queries and waits for responses — without responses
+        it hangs with no visible output).
+
+        Queries and responses:
+        - OSC 10 (foreground): ]10;? → ]10;rgb:ffff/ffff/ffff
+        - OSC 11 (background): ]11;? → ]11;rgb:0000/0000/0000
+        - OSC 4 (palette): ]4;<n>;? → ]4;<n>;rgb:RR/GG/BB
+        - DSR (cursor position): \\x1b[6n → \\x1b[<row>;<col>R
+        - DA (device attributes): \\x1b[c → \\x1b[?1;2c
+        """
+        if not self.master_fd:
+            return
+        # OSC 10 (foreground color)
+        if b']10;?' in data:
+            self.write(b'\x1b]10;rgb:ffff/ffff/ffff\x1b\\')
+        # OSC 11 (background color)
+        if b']11;?' in data:
+            self.write(b'\x1b]11;rgb:0000/0000/0000\x1b\\')
+        # OSC 4 (color palette) — respond with a default palette
+        import re as _re
+        for m in _re.finditer(rb'\x1b\]4;(\d+);\?', data):
+            idx = int(m.group(1))
+            # Default xterm palette (approximate)
+            palette = {
+                0: "000000", 1: "cd0000", 2: "00cd00", 3: "cdcd00",
+                4: "0000ee", 5: "cd00cd", 6: "00cdcd", 7: "e5e5e5",
+                8: "7f7f7f", 9: "ff0000", 10: "00ff00", 11: "ffff00",
+                12: "5c5cff", 13: "ff00ff", 14: "00ffff", 15: "ffffff",
+            }
+            hex_color = palette.get(idx, "000000")
+            r, g, b = hex_color[0:2], hex_color[2:4], hex_color[4:6]
+            self.write(f'\x1b]4;{idx};rgb:{r}/{g}/{b}\x1b\\'.encode())
+        # DSR (Device Status Report — cursor position)
+        if b'\x1b[6n' in data:
+            self.write(b'\x1b[1;1R')
+        # DA (Primary Device Attributes)
+        if b'\x1b[c' in data:
+            self.write(b'\x1b[?1;2c')
+        # DA (Secondary Device Attributes)
+        if b'\x1b[>c' in data:
+            self.write(b'\x1b[>0;276;0c')
 
     def _start_reader(self):
         """Start a background thread to read the PTY output.
@@ -176,6 +231,9 @@ class TerminalPane(Static):
         Reads until EOF (the subprocess exits and closes the slave fd),
         NOT until the process exits — the PTY may still have buffered
         data after the process exits (e.g., a fast command like echo).
+
+        Also responds to terminal queries (OSC color queries, DSR, DA)
+        so pi's TUI doesn't hang waiting for responses.
         """
         def reader():
             while self.master_fd is not None:
@@ -183,6 +241,9 @@ class TerminalPane(Static):
                     data = os.read(self.master_fd, 65536)
                     if not data:
                         break  # EOF — the subprocess exited
+                    # Respond to terminal queries (pi's TUI hangs without
+                    # responses to its OSC color queries)
+                    self._respond_to_queries(data)
                     with self._lock:
                         self.stream.feed(data)
                     # Trigger a refresh on the app thread — if there's
