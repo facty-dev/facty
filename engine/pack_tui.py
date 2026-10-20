@@ -160,14 +160,15 @@ class PackStudioScreen(Screen):
     CSS = """
     #pack-left { width: 28; }
     #pack-right { width: 1fr; }
-    #pack-agent { width: 60; border-left: solid $primary; }
+    #pack-agent { width: 80; border-left: solid $primary; }
     #pack-list { height: 1fr; }
     #pack-tabs { height: 1fr; }
     .editor { height: 1fr; }
     #test-log { height: 1fr; border: solid green; }
     #validate-result { height: auto; padding: 0 1; }
     #pack-status { height: auto; padding: 0 1; color: $text-muted; }
-    .agent-terminal { height: 1fr; border: solid $accent; }
+    #agent-scroll { height: 1fr; border: solid $accent; }
+    .agent-terminal { height: auto; }
     """
 
     def __init__(self, pack_slug=None):
@@ -223,6 +224,11 @@ class PackStudioScreen(Screen):
                 # baked in, authenticates via the host-secret proxy (the
                 # subscription token), and is hypervisor-isolated.
                 # Fallback: run pi on the host if no VM session is up.
+                #
+                # Scrollable: the TerminalPane renders the terminal's
+                # scrollback history + visible screen, wrapped in a
+                # VerticalScroll — the user can scroll through the agent's
+                # full output (chat history).
                 import json as _json
                 from pathlib import Path as _Path
                 _session_file = _Path(".agentic/vm-session.json")
@@ -249,11 +255,13 @@ class PackStudioScreen(Screen):
                     # Fallback: pi on the host
                     _skill = _Path.home() / ".agents" / "skills" / "pack-factory"
                     _cmd = ["pi", "--skill", str(_skill)]
-                yield TerminalPane(
-                    _cmd,
-                    id="agent-terminal",
-                    classes="agent-terminal",
-                )
+                from textual.containers import VerticalScroll
+                with VerticalScroll(id="agent-scroll"):
+                    yield TerminalPane(
+                        _cmd,
+                        id="agent-terminal",
+                        classes="agent-terminal",
+                    )
         yield Footer()
 
     def on_mount(self):

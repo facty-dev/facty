@@ -79,14 +79,17 @@ class TerminalPane(Static):
         "default": "",
     }
 
-    def __init__(self, command, cols=80, rows=24, **kwargs):
+    def __init__(self, command, cols=80, rows=24, history=1000, **kwargs):
         super().__init__("", **kwargs)
         self.command = command
         self.cols = cols
         self.rows = rows
         # NOTE: `screen` is a Textual property (the widget's parent
         # screen) — name the pyte terminal `term` instead.
-        self.term = pyte.Screen(cols, rows)
+        # HistoryScreen maintains a scrollback buffer (the lines that
+        # scrolled off the top) so the widget can render the full
+        # history and the user can scroll through it.
+        self.term = pyte.HistoryScreen(cols, rows, history=history)
         self.stream = pyte.ByteStream(self.term)
         self.master_fd = None
         self.proc = None
@@ -258,21 +261,44 @@ class TerminalPane(Static):
         self._reader = threading.Thread(target=reader, daemon=True)
         self._reader.start()
 
+    def _history_lines(self):
+        """Render the scrollback history (lines that scrolled off the top)
+        as a list of Rich Text objects."""
+        lines = []
+        if not hasattr(self.term, 'history') or not self.term.history.top:
+            return lines
+        for hist_line in self.term.history.top:
+            line = Text()
+            for x in range(self.cols):
+                # hist_line is a StaticDefaultDict of Char objects
+                char = hist_line[x] if x in hist_line else None
+                if char is None:
+                    line.append(" ")
+                else:
+                    style = self._char_style(char)
+                    line.append(char.data, style=style or None)
+            lines.append(line)
+        return lines
+
     def render(self):
-        """Render the terminal screen as a Rich Text object.
+        """Render the terminal scrollback history + visible screen as a
+        Rich Text object.
+
+        The history (lines that scrolled off the top) is rendered above
+        the visible screen, so the widget's content grows as the agent
+        outputs more. Wrapped in a VerticalScroll (in pack_tui.py), the
+        user can scroll through the full history.
 
         The terminal size matches the widget's size (dynamic resize),
-        so the full screen is visible — no cut-off content, and the
-        message entry bar (at the bottom) is always visible.
-
-        Clips to the widget's actual size (in case the terminal is
-        briefly larger during the initial render before the resize).
+        so the visible screen fits — no cut-off content, and the
+        message entry bar (at the bottom of the visible screen) is at
+        the bottom of the rendered content.
 
         Highlights the text selection (reverse video)."""
         with self._lock:
-            # Clip to the widget's actual size — but if the size is 0×0
-            # (not laid out yet), render the full terminal (otherwise the
-            # pane shows a single blank cell).
+            # Clip the visible screen to the widget's actual size — but
+            # if the size is 0×0 (not laid out yet), render the full
+            # terminal (otherwise the pane shows a single blank cell).
             try:
                 w, h = self.size.width, self.size.height
                 if w > 0 and h > 0:
@@ -282,15 +308,19 @@ class TerminalPane(Static):
                     render_rows, render_cols = self.rows, self.cols
             except Exception:
                 render_rows, render_cols = self.rows, self.cols
-            # Selection range (normalized: start before end)
+            # History lines (scrollback)
+            lines = self._history_lines()
+            history_count = len(lines)
+            # Selection range (normalized: start before end) — in
+            # visible-screen coordinates (offset by history_count)
             sel = self._selection_range(render_rows, render_cols)
-            lines = []
+            # Visible screen
             for y in range(render_rows):
                 line = Text()
                 for x in range(render_cols):
                     char = self.term.buffer[y][x]
                     style = self._char_style(char)
-                    # Highlight if in the selection
+                    # Highlight if in the selection (offset by history)
                     if sel and self._in_selection(y, x, sel):
                         style = (style + " reverse").strip() if style else "reverse"
                     line.append(char.data, style=style or None)
