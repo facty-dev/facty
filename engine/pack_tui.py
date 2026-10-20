@@ -167,8 +167,7 @@ class PackStudioScreen(Screen):
     #test-log { height: 1fr; border: solid green; }
     #validate-result { height: auto; padding: 0 1; }
     #pack-status { height: auto; padding: 0 1; color: $text-muted; }
-    #agent-scroll { height: 1fr; border: solid $accent; }
-    .agent-terminal { height: auto; }
+    .agent-terminal { height: 1fr; border: solid $accent; }
     """
 
     def __init__(self, pack_slug=None):
@@ -224,11 +223,6 @@ class PackStudioScreen(Screen):
                 # baked in, authenticates via the host-secret proxy (the
                 # subscription token), and is hypervisor-isolated.
                 # Fallback: run pi on the host if no VM session is up.
-                #
-                # Scrollable: the TerminalPane renders the terminal's
-                # scrollback history + visible screen, wrapped in a
-                # VerticalScroll — the user can scroll through the agent's
-                # full output (chat history).
                 import json as _json
                 from pathlib import Path as _Path
                 _session_file = _Path(".agentic/vm-session.json")
@@ -255,13 +249,11 @@ class PackStudioScreen(Screen):
                     # Fallback: pi on the host
                     _skill = _Path.home() / ".agents" / "skills" / "pack-factory"
                     _cmd = ["pi", "--skill", str(_skill)]
-                from textual.containers import VerticalScroll
-                with VerticalScroll(id="agent-scroll"):
-                    yield TerminalPane(
-                        _cmd,
-                        id="agent-terminal",
-                        classes="agent-terminal",
-                    )
+                yield TerminalPane(
+                    _cmd,
+                    id="agent-terminal",
+                    classes="agent-terminal",
+                )
         yield Footer()
 
     def on_mount(self):
