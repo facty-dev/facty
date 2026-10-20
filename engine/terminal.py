@@ -109,6 +109,28 @@ class TerminalPane(Static):
         self._resize_to_widget()
         self._spawn()
         self._start_reader()
+        self._send_initial_message()
+
+    def _send_initial_message(self):
+        """Send an initial message to the subprocess after it starts.
+
+        Waits for pi to render its TUI (a simple delay — pi takes a few
+        seconds to load skills and render), then sends a message that
+        makes pi introduce itself and surface the pack-factory
+        functionality (the skill's content is in pi's context — the
+        message just prompts pi to surface it).
+
+        The message: "Introduce yourself and what you can help me
+        with." — pi responds with a welcome that lists the pack-factory
+        capabilities (draft rules, suggest labels, review gaps, explain
+        engine behavior, elicit domain knowledge via ask_questions)."""
+        import time as _time
+        def send():
+            _time.sleep(10)  # wait for pi to load skills + render TUI
+            if self.master_fd is None:
+                return  # unmounted before the delay elapsed
+            self.write(b"Introduce yourself and what you can help me with.\n")
+        threading.Thread(target=send, daemon=True).start()
 
     def on_resize(self, event):
         """Resize the terminal when the widget is resized."""
