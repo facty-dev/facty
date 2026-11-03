@@ -2,7 +2,11 @@
 # Architecture Decision Record (ADR)
 ---
 
-# ADR-0001: Session-based agent execution under host-side sandboxing
+# ADR-0001
+
+> **Superseded by ADR-0005 (2026-10-30):** the gondolin runtime this ADR
+> governs is deleted; isolation is now SmolVM (see docs/ARCHITECTURE.md).
+> Retained for history.: Session-based agent execution under host-side sandboxing
 
 **Date:** 2026-10-15
 **Status:** accepted

@@ -1,16 +1,12 @@
 #!/bin/sh
-# facty — the Facty CLI (the primary interface). Thin launcher: the CLI
-# lives in engine/cli.py. Prefers the project venv when present AND
-# runnable (created by `make deps` — the Textual workbench needs it);
-# falls back to the system python3 (the engine core + control plane are
-# dependency-free). The runnable-check matters inside the gondolin VM:
-# the mounted project may carry a host venv whose binaries don't run in
-# the guest — the system python3 (textual is baked into the VM image)
-# takes over.
+# facty — the Facty CLI (the primary interface). Thin launcher: the package
+# lives in src/facty (standard src layout, root pyproject.toml). Prefers the
+# project venv when present AND runnable (created by `make deps`); falls back
+# to the system python3 — the engine core + control plane are dependency-free.
 set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 PY="python3"
 if [ -x "$DIR/.venv/bin/python" ] && "$DIR/.venv/bin/python" -c "import sys" >/dev/null 2>&1; then
     PY="$DIR/.venv/bin/python"
 fi
-exec "$PY" "$DIR/engine/cli.py" "$@"
+PYTHONPATH="$DIR/src${PYTHONPATH:+:$PYTHONPATH}" exec "$PY" -m facty "$@"

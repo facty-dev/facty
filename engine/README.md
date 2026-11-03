@@ -1,4 +1,11 @@
-# engine — the Facty symbolic engine
+# engine — the PoC symbolic engine (golden oracle)
+
+> **ADR-0005 (2026-10-30): the primary implementation is the cleanroom stack in
+> [``](../docs/IMPLEMENTATION.md)** — TerminusDB-backed, `./facty` runs
+> it. This directory is the retired PoC, kept as the **golden oracle** for
+> migration: its selftest's expectations are transcribed into
+> `./facty selftest` (cleanroom), which must stay green before this directory is
+> deleted. Invoke directly: `python3 engine/engine.py run --case <case>`.
 
 The deterministic half of the neurosymbolic split
 ([ADR-0003](../docs/adr/0003-detective-dss-neurosymbolic-core.md)):

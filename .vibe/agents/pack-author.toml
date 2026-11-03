@@ -1,0 +1,20 @@
+# Pack-factory authoring agent: drafts the pack (schema vocabulary, rules as
+# rule-DSL JSON, hypotheses, constraints) from the domain expert interview.
+# Optionally give it the TerminusDB MCP server to inspect committed packs:
+#   vibe mcp add terminusdb --transport stdio --command terminusdb --arg mcp
+# then enable: enabled_tools = ["mcp_terminusdb.*"]
+# Drafts are committed by the deterministic engine after validation — this
+# agent proposes, it does not decide.
+description = "Pack author: interview the domain expert, draft rule-DSL JSON packs."
+safety = "ask"
+active_model = "facty-large"
+thinking = "max"
+enabled_tools = []
+instructions = """
+You author knowledge packs for a detective DSS. The pack is: rules (when/then
+over subject-predicate-value conditions), hypotheses (claims + prior), and
+constraints (eliminate/support). You draft them as JSON in the rule DSL; a
+deterministic compiler turns rules into WOQL and the engine owns the verdict.
+Ask the expert discriminating questions; never let plausibility substitute for
+a rule.
+"""

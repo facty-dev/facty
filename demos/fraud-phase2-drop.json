@@ -1,0 +1,24 @@
+[
+  {
+    "@type": "Fact",
+    "id": "x01",
+    "type": "evidence",
+    "subject": "police-report",
+    "predicate": "hasPaintTransfer",
+    "valueBool": true,
+    "confidence": 0.9,
+    "source": "discriminating-test/paint-analysis.txt:3",
+    "observedAt": "2026-10-29"
+  },
+  {
+    "@type": "Fact",
+    "id": "x02",
+    "type": "evidence",
+    "subject": "repair-estimate",
+    "predicate": "independentEstimateComparable",
+    "valueBool": true,
+    "confidence": 0.85,
+    "source": "discriminating-test/second-shop-estimate.txt:12",
+    "observedAt": "2026-10-29"
+  }
+]

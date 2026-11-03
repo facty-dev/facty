@@ -1,96 +1,55 @@
-# Architecture — Facty on Gondolin micro-VMs
+# Architecture — Facty on SmolVM (ADR-0005)
 
-> Key operational decision: [ADR-0001 — session execution under host-side
-> sandboxing](./adr/0001-session-execution-under-sandboxing.md).
+> The gondolin/pi isolation model this page used to describe is retired
+> (ADR-0005, 2026-10-30): `gondolin/`, `scripts/vm-session.sh`, and
+> `scripts/agent-pi.sh` are deleted. ADR-0001's socket-path-only rule is
+> superseded accordingly. The pack-factory agents port to Vibe-in-SmolVM (T9,
+> docs/CLEANROOM-METHOD.md).
 
 ## The model
 
 ```
-┌────────────────────────────── HOST ───────────────────────────────┐
+┌────────────────────────────── HOST ──────────────────────────────┐
 │                                                                    │
-│  User's terminal                Sandboxed pi session (orchestrator)│
-│  ┌────────────────────┐        ┌────────────────────────────────┐ │
-│  │ make vm-up         │        │ pi + pi-sandbox (Seatbelt)     │ │
-│  │ └─ gondolin bash   │        │ └─ scripts/agent-pi.sh         │ │
-│  │    (foreground;    │        │    └─ gondolin exec --sock      │ │
-│  │     hosts session) │        │       <SOCKET PATH>            │ │
-│  │                    │        │       (bypasses session GC;   │ │
-│  │ env: real API key  │        │        never id-based)         │ │
-│  │  (or `pi auth`)    │        └───────────────┬────────────────┘ │
-│  └─────────┬──────────┘                        │ unix socket      │
-│            │                                   ▼                  │
-│            │            ┌──────────────────────────────────────┐  │
-│            └───────────►│ GONDOLIN VM SESSION                  │  │
-│                         │ (booted from pi-sandbox snapshot)     │  │
-│            boot-time    │                                      │  │
-│            injection ──►│  rootfs: Alpine + pi + 34 skills      │  │
-│            --host-secret│  (gondolin/ vendored image)          │  │
-│                         │                                      │  │
-│                         │  /workspace  = Facty repo (rw)  │  │
-│                         │  guest env:  MISTRAL_API_KEY =        │  │
-│                         │      <random-placeholder>             │  │
-│                         │  egress: api.mistral.ai,              │  │
-│                         │      registry.npmjs.org,              │  │
-│                         │      api.uprelic.com                  │  │
-│                         │  (no web search — sensitive data)     │  │
-│                         └──────────────────────────────────────┘  │
-│                                                                    │
-│  Host-side secret flow:                                            │
-│  agent → "Authorization: Bearer <placeholder>" → gondolin host      │
-│  proxy → substitutes REAL key → api.mistral.ai (only)               │
-│                                                                    │
-│  Never mounted into the VM: ~/.ssh, ~/.aws, other projects,         │
-│  keychains, ~/.pi/agent/auth.json                                   │
+│  User's terminal            SmolVM machine (one OCI image)        │
+│  ┌────────────────────┐    ┌──────────────────────────────────┐  │
+│  │ docker build -t    │    │ rootfs: Alpine + python3.14 +    │  │
+│  │   facty .          │───►│   facty (src/facty) + vibe CLI   │  │
+│  │ docker save facty  │    │ + terminusdb-server (in-VM)      │  │
+│  │   | smolvm machine │    │                                  │  │
+│  │   run --net --image│    │ /workspace = repo (rw, mounted)  │  │
+│  │   - -- bash        │    │ guest env: MISTRAL_API_KEY =     │  │
+│  └────────────────────┘    │   <placeholder> (host-secret —   │  │
+│                             │   OPEN ITEM, see ADR-0005)       │  │
+│  real MISTRAL_API_KEY       │ egress: api.mistral.ai,          │  │
+│  (host-side only) ─────────►│   registry.npmjs.org,            │  │
+│                             │   api.uprelic.com (allow-list;   │  │
+│                             │   no web search — sensitive data)│  │
+│                             └──────────────────────────────────┘  │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-## Isolation guarantees
+- **One SmolVM machine per workspace**, booted from the root `Dockerfile`;
+  persistent machines via `smolvm machine create --net --name facty` +
+  `smolvm machine start` + `smolvm machine exec --name facty -- <cmd>`;
+  one-off: `docker save facty | smolvm machine run --net --image - -- bash`.
+  Branchable/checkpointed micro-VMs replace gondolin sessions.
+- **TerminusDB runs inside the VM** (started by `entrypoint.sh`, storage at
+  `/app/terminusdb/storage`); `compose.yaml` runs the same two processes as
+  plain Docker services for host-side iteration.
+- **Secrets**: host-side placeholder + host proxy substitution (the SmolVM
+  host-secret flag mapping is the open item in ADR-0005). Never log, echo, or
+  read API keys; local dev exports the subscription token from
+  `~/.pi/agent/auth.json` (see AGENTS.md).
+- **Egress allow-list** unchanged: api.mistral.ai + registry.npmjs.org +
+  api.uprelic.com. No web-search tooling — cases handle sensitive data.
+- Engine + CLI: `./facty` → `src/facty` (stdlib-only core; pydantic-ai sensing;
+  Vibe CLI for human-in-the-loop). Persistence/audit = TerminusDB commits
+  (git-for-data), not files.
 
-| Guarantee | Mechanism | Enforcement |
-|---|---|---|
-| **Secrets** | `--host-secret NAME@HOST` at session boot | Guest env holds a placeholder only; host proxy substitutes the real value into outbound headers, scoped to allowed hosts |
-| **Project** | `--mount-hostfs <dir>:/workspace` | Unmounted host paths do not exist in the guest |
-| **Network** | Programmable TCP stack + synthetic DNS | Explicit `--allow-host` list; denied hosts are unreachable |
-| **Process** | Hypervisor (QEMU micro-VM; krun optional) | No shared kernel with the host |
-| **Guest agent sandboxing** | none needed — the hypervisor is the boundary | pi runs unsandboxed inside the VM: the egress allow-list, host-secret injection, and ephemeral disk are the isolation. `pi-sandbox` is for host-side pi sessions only |
-| **State** | Snapshot boot (`--resume pi-sandbox.qcow2`) | Fresh, deterministic guest per session; nothing persists unless written to `/workspace` |
-| **Host orchestration** | pi-sandbox on the driving session + socket-path-only IPC | The orchestrating agent cannot signal foreign processes (session GC safe), cannot read host secrets, can only exec into the VM |
+## Why socket-path-only mattered (historical, ADR-0001)
 
-## Components
-
-| Component | Role |
-|---|---|
-| `scripts/vm-session.sh` | Session lifecycle: `up` (foreground boot + metadata watcher), `status` (socket liveness probe — sandbox-safe), `exec` (socket-path IPC), `down` |
-| `scripts/agent-pi.sh` | Role runner: composes role prompt + assignment (`templates/sdlc/agents/`), execs pi in the VM, appends audit entries to `.agentic/audit.jsonl` |
-| `.agentic/vm-session.json` | Session record `{id, pid, socketPath}` written at boot by a user-side watcher; the ONLY sanctioned discovery mechanism from sandboxed sessions |
-| `/root/.session-env/` (guest) | Placeholder env stashed at boot; exec'd agents source it (exec commands don't inherit boot env) |
-| `gondolin/` | VM template (vendored in-repo): snapshot builder + the facty-optimized skill set — see [gondolin/README.md](../gondolin/README.md) |
-
-## Session lifecycle
-
-1. **Boot** — user runs `make vm-up` in a dedicated terminal (the session lives
-   as long as that process). Key resolved from their env or `pi auth`
-   (stored credential). Watcher records session metadata to
-   `.agentic/vm-session.json`.
-2. **Use** — any session (including sandboxed agents) execs phases via
-   `make agent-decision` / `make agent-coding` → socket-path IPC.
-3. **Stop** — `make vm-down` from the user's terminal (sandboxed sessions
-   cannot signal the host process).
-
-CI/remote: host sessions via launchd or run agents in ephemeral
-`--resume` boots (roadmap, ADR-0001).
-
-## Why socket-path-only discovery (the GC interaction)
-
-Gondolin's session GC probes liveness with `process.kill(pid, 0)`. From a
-Seatbelt-sandboxed process, signaling a foreign process is **denied**, so a
-live user-hosted session reads as "stale" and its registry files
-(`<id>.json`, `<id>.sock`) get deleted — orphaning a running session. Passing
-the **socket path** to `exec` returns before the GC runs, and our own liveness
-probe is a direct unix-socket connect. Hence: never `gondolin list` or
-id-based `exec` from sandboxed sessions. Full write-up: ADR-0001.
-
-## Naming conventions (future multi-tenant layer)
-
-- Sessions: `pi-<client>-<provider>`
-- Host-secrets (credentials): `<client>-<provider>-<credential>`
+Under gondolin's pid-based session GC, sandbox signal failures could delete
+live sessions' registry files; socket-path IPC avoided it. SmolVM machines are
+addressable by name, so the issue does not arise; the rule's spirit (never
+signal foreign processes from a sandbox) still applies.

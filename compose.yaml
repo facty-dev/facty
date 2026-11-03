@@ -1,0 +1,28 @@
+# Plain-Docker dev alternative to the SmolVM image (faster iteration on the host).
+#   docker compose -f compose.yaml up -d
+#   make deps && python -m facty init-db
+services:
+  terminusdb:
+    image: terminusdb/terminusdb-server:v12
+    ports:
+      - "6363:6363"
+    environment:
+      TERMINUSDB_ADMIN_PASS: root
+      TERMINUSDB_SERVER_DB_PATH: /app/terminusdb/storage
+    volumes:
+      - terminusdb-data:/app/terminusdb/storage
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - terminusdb
+    environment:
+      TERMINUSDB_URL: http://terminusdb:6363
+      TERMINUSDB_PASS: root
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:?set MISTRAL_API_KEY in the env or ~/.facty/.env}
+    volumes:
+      - ./:/app
+    command: tail -f /dev/null
+volumes:
+  terminusdb-data:

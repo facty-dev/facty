@@ -2,6 +2,21 @@
 
 *Evidence in, verdict out.*
 
+> **Implementation note (ADR-0005):** the primary implementation is the
+> **cleanroom stack** in [``]() — TerminusDB as store/schema/
+> rule engine (WOQL), SmolVM for isolation, pydantic-ai + Vibe CLI for the LLM
+> half, `./facty` as the headless CLI. The original PoC under `engine/` is kept
+> as the golden oracle during migration. See [ADR-0005](docs/adr/0005-cleanroom-stack-replaces-poc.md),
+> [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), and the methodology mapping +
+> triage in [docs/CLEANROOM-METHOD.md](docs/CLEANROOM-METHOD.md).
+>
+> ```bash
+> # quickstart (TerminusDB on :6363 — see compose.yaml)
+> ./facty selftest                                        # golden acceptance, all cases
+> TERMINUSDB_DB=facty-e2e bash scripts/e2e.sh   # end-to-end demo (offline)
+> TERMINUSDB_DB=facty-e2e bash scripts/e2e.sh --live   # with live LLM sensing
+> ```
+
 **ELI5:** Someone has a mystery and a pile of messy evidence — logs, tickets,
 chat messages, receipts. **Facty** turns the evidence into clean facts,
 thinks about *who or what could explain the facts*, throws out the

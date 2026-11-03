@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "facty"
+version = "0.2.0"
+description = "Facty — detective DSS: TerminusDB + SmolVM + Vibe CLI (mistral-large-4), no LLM in the verdict path"
+requires-python = ">=3.14"
+# Engine core (src/facty/{client,engine,rules,woql}) is stdlib-only and runs
+# anywhere; pydantic-ai is the programmatic LLM backend for sensing
+# (machine-driven workflows) — the mistral extra provides the `mistralai`
+# package (pydantic.dev/docs/ai/models/mistral); the vibe CLI backend is the
+# no-dependency fallback and the human-facing surface.
+dependencies = [
+    "pydantic-ai[mistral]>=1.0",
+    "textual", "pyte",  # PoC oracle workbench (engine/tui.py), until the PoC is retired
+]
+
+[tool.uv]
+package = true  # uv sync installs the project itself into .venv
+
+[tool.setuptools.packages.find]
+where = ["src"]

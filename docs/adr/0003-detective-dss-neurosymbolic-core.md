@@ -83,6 +83,13 @@ envelope (confidence, source, provenance). **Decision: object form** —
 an SPO triple with an envelope. A triple projection (and JSONB rows) is
 trivial later. No triple store.
 
+> **ADR-0005 (2026-10-30) supersedes the runtime/storage options below** (graph
+> database is now TerminusDB; runtime is SmolVM + Vibe CLI + pydantic-ai). The
+> invariants in §Decision stand unchanged. See
+> [ADR-0005](0005-cleanroom-stack-replaces-poc.md) and
+> [docs/CLEANROOM-METHOD.md](../CLEANROOM-METHOD.md) for the methodology mapping
+> and the triage of not-yet-native reasoning patterns.
+
 ### Option 2: graph database — rejected for the PoC
 
 No graph DB. Artifacts are JSON files in the asset graph (diffable,

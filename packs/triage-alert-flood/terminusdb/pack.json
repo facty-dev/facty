@@ -1,0 +1,298 @@
+[
+  {
+    "@type": "Rule",
+    "id": "R0",
+    "version": "1",
+    "pack": "triage-alert-flood",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "classifiedCount",
+        "valueNum": 200
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "raise",
+        "hypotheses": [
+          "H1",
+          "H2",
+          "H3"
+        ]
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R1",
+    "version": "1",
+    "pack": "triage-alert-flood",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "targetedAttackCount",
+        "valueNum": 122
+      },
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "targetedAttackTopSourceCount",
+        "valueNum": 98
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d1",
+          "type": "derived",
+          "subject": "alerts",
+          "predicate": "coordinatedAttackLikely",
+          "valueBool": true,
+          "confidence": 0.9
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q1",
+          "text": "Are the top alert sources known-bad? Pull the threat intel on 185.220.44.7 and the other attack sources.",
+          "slot": "threat-intel",
+          "mandatory": true,
+          "priority": 1,
+          "status": "open",
+          "raisedBy": "rule:R1",
+          "discriminates": [
+            "H1",
+            "H2"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R2",
+    "version": "1",
+    "pack": "triage-alert-flood",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "targetedAttackCount",
+        "valueNum": 122
+      },
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "probingScanCount",
+        "valueNum": 66
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d2",
+          "type": "derived",
+          "subject": "alerts",
+          "predicate": "mostlyFalsePositives",
+          "valueBool": false,
+          "confidence": 0.9
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d2b",
+          "type": "derived",
+          "subject": "alerts",
+          "predicate": "scanDominates",
+          "valueBool": false,
+          "confidence": 0.9
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R3",
+    "version": "1",
+    "pack": "triage-alert-flood",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "topSourceIsKnownBad",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d3",
+          "type": "derived",
+          "subject": "alerts",
+          "predicate": "attackConfirmed",
+          "valueBool": true,
+          "confidence": 0.95
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H1",
+    "statement": "Targeted attack \u2014 a coordinated source set drove the attack-classified alerts (80% from one source); route P1 to incident response and hand off to attribution to identify the operator.",
+    "status": "open",
+    "prior": 0.4,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "coordinatedAttackLikely",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "targetedAttackCount",
+        "valueNum": 122
+      },
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "targetedAttackTopSourceCount",
+        "valueNum": 98
+      },
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "attackConfirmed",
+        "valueBool": true
+      }
+    ],
+    "mechanism": "attack",
+    "evidenceFor": [
+      "ag-targetedattackcount",
+      "ag-targetedattacktopsourcecount"
+    ],
+    "evidenceAgainst": [],
+    "discriminatingTests": [
+      "Correlate the top source with threat intel (q1)"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H2",
+    "statement": "Background scanning noise \u2014 the flood is internet background radiation; route P3 to the tier-1 suppression queue.",
+    "status": "open",
+    "prior": 0.2,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "probingScanCount",
+        "valueNum": 66
+      },
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "noAttackClassified",
+        "valueBool": true
+      }
+    ],
+    "mechanism": "scan",
+    "evidenceFor": [
+      "ag-probingscancount"
+    ],
+    "evidenceAgainst": [
+      "d2b",
+      "ag-targetedattackcount"
+    ],
+    "discriminatingTests": [
+      "Check whether the top source is known-bad (q1)"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H3",
+    "statement": "Detector false-positive flood \u2014 the SIEM is crying wolf; route P2 to detection engineering for signature tuning.",
+    "status": "open",
+    "prior": 0.2,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "mostlyFalsePositives",
+        "valueBool": true
+      }
+    ],
+    "mechanism": "fp",
+    "evidenceFor": [],
+    "evidenceAgainst": [
+      "d2"
+    ],
+    "discriminatingTests": []
+  },
+  {
+    "@type": "Constraint",
+    "id": "C1",
+    "type": "eliminate",
+    "hypothesis": "H3",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "mostlyFalsePositives",
+        "valueBool": false
+      }
+    ],
+    "reason": "188 of 200 rows classified as attacks or scans \u2014 the SIEM is not crying wolf; this is not a false-positive flood"
+  },
+  {
+    "@type": "Constraint",
+    "id": "C2",
+    "type": "eliminate",
+    "hypothesis": "H2",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "topSourceIsKnownBad",
+        "valueBool": true
+      }
+    ],
+    "reason": "the top source (185.220.44.7 \u2014 98 of 122 attack-classified alerts) is a known bulletproof-hosting range; this is not background noise"
+  },
+  {
+    "@type": "Constraint",
+    "id": "C3",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "alerts",
+        "predicate": "attackConfirmed",
+        "valueBool": true
+      }
+    ],
+    "field": "mechanism",
+    "valueString": "attack"
+  }
+]

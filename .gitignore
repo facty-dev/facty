@@ -23,6 +23,7 @@ Thumbs.db
 # (audit trail, message queues, session state, the LLM response cache)
 .agentic/
 .gondolin-pi/
+.firecrawl
 
 # The vendored gondolin VM image — the built snapshot is a build artifact
 gondolin/snapshots/
@@ -33,3 +34,9 @@ gondolin/snapshots/
 # Python bytecode (engine runs create these)
 __pycache__/
 *.pyc
+
+# cleanroom local state
+.cache/
+
+# setuptools build artifacts (uv sync)
+*.egg-info/

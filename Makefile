@@ -1,151 +1,74 @@
 # Facty — the detective DSS (symbolic engine + LLM sensing)
 #
-# The product: a domain-agnostic abductive decision-support engine
-# (engine/) — evidence in, ranked hypotheses out, full reasoning trace.
-# Domains are packs (engine/cases/).
+# The product: a domain-agnostic abductive decision-support engine —
+# evidence in, ranked hypotheses out, full reasoning trace. Domains are
+# packs (engine/cases/, packs/).
 #
-# The machinery: two AI agents (decision + coding) run inside isolated
-# gondolin micro-VMs as the pack factory — a gated SDLC: discovery → PRD →
-# BDD → implementation → review. Every agent run is audited to
-# .agentic/audit.jsonl.
+# Implementation (ADR-0005): TerminusDB-backed engine in src/facty, SmolVM
+# image (Dockerfile), Vibe CLI + pydantic-ai for the LLM half. The PoC under
+# engine/ stays as the golden oracle (make poc-oracle).
 #
 # ── Quick start ──────────────────────────────────────────────────────────────
 #
-#   ./facty                   # The workbench (Textual TUI — the primary interface)
-#   ./facty cases             # The demo cases (type · pack · phase-2 drop)
-#   ./facty run phantom-invoice   # Run a case (phase 1; --add-facts <drop> = phase 2)
-#   ./facty selftest          # Acceptance test — every case, asserted
-#   ./facty test              # All tests: selftest + retry loop + the TUI (headless)
-#   ./facty walkthrough silver-blaze   # Terminal step-through (VMs, no-TTY)
-#   make deps                 # Install the optional deps (Textual — the workbench)
+#   make deps                              # uv sync (Python 3.14, .python-version)
+#   docker compose -f compose.yaml up -d   # TerminusDB on :6363
+#   make selftest                          # golden acceptance — every case
+#   make e2e                               # end-to-end demo (offline)
+#   make e2e-live                          # with live LLM sensing
 #
-# The dss-* targets below are thin wrappers over ./facty, kept for muscle
-# memory. See `./facty --help` and engine/README.md.
-#
-#   make vm-image             # Build the gondolin VM image (from gondolin/, one-time)
-#   make vm-up                # Boot the pack-factory VM session (from YOUR terminal)
-#   make agent-decision PHASE=discovery TASK="..."
-#   make agent-coding TASK=<task-file>
-#   make vm-status            # Session state (safe from sandboxed sessions)
-#   make vm-down              # Stop the session (from YOUR terminal)
-#
-# Runtime: gondolin micro-VMs + pi (image config vendored in-repo: gondolin/;
-# build the snapshot with `make vm-image`).
-# Secrets: host-side placeholder substitution — never guest-readable.
+# See docs/IMPLEMENTATION.md and docs/CLEANROOM-METHOD.md.
 
 # ── Help ─────────────────────────────────────────────────────────────────────
-.PHONY: help info
+.PHONY: help info cases selftest e2e e2e-live poc-oracle
 
 help:
-	@echo "Facty — the detective DSS (symbolic engine + LLM sensing)"
+	@echo "Facty — the detective DSS"
 	@echo ""
-	@echo "═══ Facty engine (the product) ═══"
-	@echo "  ./facty                 The workbench (Textual TUI — primary interface)"
-	@echo "  ./facty cases           List the demo cases (type · pack · drop)"
-	@echo "  ./facty run <case>      Run a case (--add-facts <drop> = phase 2)"
-	@echo "  ./facty selftest        Acceptance test — every case, asserted"
-	@echo "  ./facty test            All tests: selftest + retry loop + the TUI (headless)"
-	@echo "  ./facty walkthrough <case>   Terminal step-through (VMs, no-TTY)"
-	@echo "  make deps               Install the optional deps (Textual — the workbench)"
-	@echo "  make dss-*              Thin wrappers over ./facty (kept for muscle memory)"
+	@echo "═══ Engine (the product; ADR-0005 stack) ═══"
+	@echo "  make deps               uv sync (Python from .python-version)"
+	@echo "  make cases              ./facty cases — migrated cases/packs"
+	@echo "  make selftest           ./facty selftest — golden acceptance, all cases"
+	@echo "  make e2e / e2e-live     scripts/e2e.sh [--live] — end-to-end demo"
+	@echo "  make poc-oracle         python3 engine/engine.py selftest (PoC oracle)"
+	@echo "  make deps-sensors       optional label-sensor deps (host/CI only)"
 	@echo ""
-	@echo "═══ Pack-factory VM session ═══"
-	@echo "  make vm-image           Build the gondolin VM image (gondolin/, one-time)"
-	@echo "  make vm-up              Boot the SDLC VM session (from your terminal)"
-	@echo "  make vm-status          Show session state"
-	@echo "  make vm-down            Stop the session (from your terminal)"
-	@echo ""
-	@echo "═══ SDLC agents ═══"
-	@echo "  make agent-decision PHASE=<discovery|prd|bdd|review> [TASK=\"<task>\"]"
-	@echo "  make agent-coding TASK=<task-file> [BDD=<feature-file>]"
-	@echo "  make run-agent AGENT=<decision|coding> [PHASE=...] [TASK=...] [BDD=...]"
-	@echo "  make sdlc-start         SDLC quickstart help"
-	@echo ""
-	@echo "═══ Pack factory (author a pack) ═══"
-	@echo "  make pack-factory       Author a pack with pi + ask_questions (the meta-Facty loop)"
-	@echo "  ./facty pack list       List the packs under packs/"
-	@echo "  ./facty pack validate   Validate a pack (schema + cross-artifact)"
-	@echo "  ./facty pack test       Run a pack on a fact set or every scenario"
-	@echo "  ./facty pack draft-*    One-shot LLM drafts (rules, labels, hypotheses, questions)"
-	@echo "  ./facty pack review     Advisory LLM review for gaps"
-	@echo ""
-	@echo "═══ Agentic runtime ═══"
-	@echo "  make asset-init         Initialize asset graph (assets/graph.json)"
-	@echo "  make asset-status       Show asset graph status"
-	@echo "  make asset-lineage KEY=<key>  Show lineage for an asset"
-	@echo "  make audit-trail        Show audit trail"
-	@echo ""
-	@echo "═══ Git-native pipeline ═══"
-	@echo "  make sdlc-new FEATURE=<slug>         Start new SDLC for feature"
-	@echo "  make sdlc-branch PHASE=<phase> FEATURE=<slug>  Create phase branch"
-	@echo "  make sdlc-merge PHASE=<phase> FEATURE=<slug> Merge with skip-ahead"
-	@echo "  make sdlc-status [FEATURE=<slug>]    Show SDLC status"
-	@echo "  make sdlc-list                       List SDLC branches"
-	@echo "  make sdlc-simulate FEATURE=<slug>    Simulate full pipeline locally"
-	@echo ""
-	@echo "  Phases: ost → prd → bdd → impl   |   Branches: sdlc/<phase>/<slug>"
+	@echo "═══ Assets / SDLC pipeline ═══"
+	@echo "  make asset-status · sdlc-status · sdlc-new FEATURE=<slug> · audit-trail"
 
 info:
-	@echo "gondolin:  $$(command -v gondolin || echo 'not found')"
-	@echo "pi:        $$(command -v pi || echo 'not found')"
-	@echo "session:   $$(./scripts/vm-session.sh status | head -1)"
-	@echo "image:     $$(ls gondolin/snapshots/pi-sandbox.qcow2 >/dev/null 2>&1 && echo 'built (gondolin/)' || echo 'missing — make vm-image')"
+	@echo "python:    $$(uv run python --version 2>/dev/null || python3 --version)"
+	@echo "terminusdb: $$(curl -sf -u admin:root http://127.0.0.1:6363/api/ok >/dev/null 2>&1 && echo 'up on :6363' || echo 'down — docker compose -f compose.yaml up -d')"
+	@echo "smolvm:    $$(command -v smolvm || echo 'not found')"
+	@echo "vibe:      $$(command -v vibe || echo 'not found')"
 
-# ── Facty engine (the product) ─────────────────────────────────────────────
-# The deterministic symbolic half: forward/backward chaining + constraints
-# over canonical case artifacts. The LLM senses and proposes; the engine
-# decides. See docs/adr/0003-detective-dss-neurosymbolic-core.md.
-
-.PHONY: dss-demo dss-demo-2 dss-demo-fraud dss-demo-fraud-2 dss-demo-rca dss-demo-rca-2 dss-selftest dss-live dss-test dss-sense deps deps-sensors
 
 OP ?= facts
-
-# The dss-* targets are thin wrappers over the `facty` CLI (the primary
-# interface — see `./facty --help`). Kept for muscle memory.
-
-dss-live:
-	./facty walkthrough attribution-silver-blaze
-
-dss-demo:
-	./facty run attribution-silver-blaze
-
-dss-demo-2:
-	./facty run attribution-silver-blaze --add-facts engine/cases/attribution-silver-blaze/facts-ledger.json
-
-dss-demo-fraud:
-	./facty run adjudication-phantom-invoice
-
-dss-demo-fraud-2:
-	./facty run adjudication-phantom-invoice --add-facts engine/cases/adjudication-phantom-invoice/facts-trail.json
-
-dss-demo-rca:
-	./facty run causation-three-am-outage
-
-dss-demo-rca-2:
-	./facty run causation-three-am-outage --add-facts engine/cases/causation-three-am-outage/facts-postmortem.json
-
-dss-selftest:
-	./facty selftest
-
-dss-test:
-	./facty test
-
-dss-sense:
-	./facty sense attribution-silver-blaze --op $(OP)
-
-# The optional DX layer: the Textual workbench (engine/tui.py). The engine
-# core + CLI control plane are dependency-free; this venv is only needed
-# for `./facty` (the TUI). Python comes from uv (managed, modern).
 deps:
-	uv venv
-	uv pip install -r requirements.txt
+	uv sync
 
 # The optional sensor layer (engine/label.py): the label sensor (a small
-# CPU-only zero-shot classifier). Host/CI-only — the gondolin VM snapshot
+# CPU-only zero-shot classifier). Host/CI-only — the SmolVM image
 # has no pypi egress (by design); see requirements-sensors.txt.
 deps-sensors:
-	uv venv
+	uv sync
 	uv pip install -r requirements-sensors.txt
+
+# ── Facty engine (TerminusDB-backed; see docs/IMPLEMENTATION.md) ────────────
+# TerminusDB on :6363 first: docker compose -f compose.yaml up -d
+cases:
+	./facty cases
+
+selftest:
+	./facty selftest
+
+e2e:
+	TERMINUSDB_DB=facty-e2e bash scripts/e2e.sh
+
+e2e-live:
+	TERMINUSDB_DB=facty-e2e bash scripts/e2e.sh --live
+
+poc-oracle:
+	python3 engine/engine.py selftest
 
 # ── Agentic Runtime (SDLC) ──────────────────────────────────────────────────
 # Asset-oriented SDLC: OST → PRD → BDD → Implementation → ADRs
@@ -199,52 +122,6 @@ asset-materialize:
 	fi
 	@./scripts/asset.sh materialize "$(KEY)" "$(FILE)" 2>/dev/null || \
 		echo "TODO: scripts/asset.sh not yet implemented (PRD-001)"
-
-# Run decision agent in the gondolin-pi VM (PRD-003)
-agent-decision:
-	@if [ -z "$(PHASE)" ]; then \
-		echo "Usage: make agent-decision PHASE=<discovery|prd|bdd|review> [TASK=\"<task>\"]"; \
-		exit 1; \
-	fi
-	@./scripts/agent-pi.sh decision --phase $(PHASE) --task "$(TASK)"
-
-# Run coding agent in the gondolin-pi VM (PRD-003)
-agent-coding:
-	@if [ -z "$(TASK)" ]; then \
-		echo "Usage: make agent-coding TASK=<task-file> [BDD=<feature-file>]"; \
-		exit 1; \
-	fi
-	@./scripts/agent-pi.sh coding --task $(TASK) $(if $(BDD),--bdd "$(BDD)")
-
-# Build the gondolin VM image from the repo-local config (gondolin/) —
-# one-time per machine; the snapshot lands in gondolin/snapshots/ (gitignored).
-vm-image:
-	@./gondolin/gondolin-pi.sh build
-
-# SDLC VM session lifecycle — boot from YOUR shell (or pi `!` escape) so the
-# API key stays host-side; sandboxed agents exec phases into it over IPC.
-vm-up:
-	@./scripts/vm-session.sh up
-
-vm-down:
-	@./scripts/vm-session.sh down
-
-vm-status:
-	@./scripts/vm-session.sh status
-
-# Generic entry point (PRD-003 REQ-013)
-run-agent:
-	@if [ -z "$(AGENT)" ]; then \
-		echo "Usage: make run-agent AGENT=<decision|coding> [PHASE=...] [TASK=...] [BDD=...]"; \
-		exit 1; \
-	fi
-	@if [ "$(AGENT)" = "decision" ]; then \
-		make agent-decision PHASE="$(PHASE)" TASK="$(TASK)"; \
-	else \
-		make agent-coding TASK="$(TASK)" BDD="$(BDD)"; \
-	fi
-
-# Start SDLC locally (simulation)
 sdlc-start:
 	@echo "Starting agentic SDLC locally..."
 	@echo "Phases: Discovery → PRD → BDD → Implementation → Review → Merge"
@@ -264,55 +141,6 @@ sdlc-start:
 # symbolic representations; the engine validates. See the pack-factory skill.
 
 .PHONY: pack-factory
-pack-factory:
-	@echo "Pack Factory — the meta-Facty loop (author a pack with pi + ask_questions)"
-	@echo ""
-	@./scripts/vm-session.sh status 2>/dev/null | grep -q "^status: up" || { \
-		echo "error: the VM session is not running."; \
-		echo "       boot it from your terminal: make vm-up"; \
-		exit 1; }
-	@echo "The VM session is up. Inside the VM, run:"
-	@echo ""
-	@echo "  pi --skill pack-factory"
-	@echo ""
-	@echo "Then describe your domain. Pi uses ask_questions to elicit your"
-	@echo "knowledge, generates the pack (rules, constraints, hypotheses,"
-	@echo "labels), and validates it. The pack lands at packs/<slug>/"
-	@echo ""
-	@echo "To enter the VM from your terminal:"
-	@echo "  gondolin attach $$(./scripts/vm-session.sh status | awk '/^session:/ {print $$2}')"
-	@echo ""
-	@echo "Validate a pack:"
-	@echo "  ./facty pack validate <slug>"
-	@echo "  ./facty pack test <slug> --tests packs/<slug>/tests"
-	@echo ""
-	@echo "One-shot LLM drafts (no elicitation loop):"
-	@echo "  ./facty pack draft-rules <slug> --domain \"invoice fraud\""
-	@echo "  ./facty pack suggest-labels <slug> --evidence <file>"
-	@echo "  ./facty pack review <slug>"
-
-# Show SDLC status: see the sdlc-status target in the git-native section below.
-
-# Evaluate rules for an asset
-rules-eval:
-	@if [ -z "$(ASSET)" ]; then \
-		echo "Usage: make rules-eval ASSET=<asset-key>"; \
-		exit 1; \
-	fi
-	@echo "Evaluating rules for asset: $(ASSET)"
-	@echo "TODO: Implement rules engine (PRD-002)"
-	@echo "  ./scripts/rules.sh eval $(ASSET)"
-
-# Test a rule
-rules-test:
-	@if [ -z "$(RULE)" ]; then \
-		echo "Usage: make rules-test RULE=<rule-id> [FIXTURE=<file>]"; \
-		exit 1; \
-	fi
-	@echo "Testing rule: $(RULE)"
-	@echo "TODO: Implement rules engine (PRD-002)"
-
-# Show audit trail
 audit-trail:
 	@if [ -f $(AUDIT_FILE) ]; then \
 		echo "═══ Audit Trail (Reification Stream) ═══"; \

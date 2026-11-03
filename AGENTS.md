@@ -26,12 +26,12 @@ costume. (Sherlock was a detective, not a doctor.)
 
 The repo is the engine + typed demo cases + the pack factory:
 
-- `engine/` — schemas, the engine + `facty` CLI, typed demo cases
-  (attribution / adjudication / causation), codegen
-- `scripts/*.sh` — session lifecycle, agent runner, git-native pipeline, asset sync (bash)
+- `engine/` — the PoC engine, golden oracle post-ADR-0005 (`make poc-oracle`) + demo case data
+- `src/facty/` — the implementation (ADR-0005): TerminusDB-backed engine + CLI
+- `scripts/*.sh` — git-native pipeline, asset sync, e2e demo (bash)
 - `templates/sdlc/` — pack-factory templates + agent role prompts (`agents/decision.md`, `agents/coding.md`)
 - `docs/` — architecture, discovery, PRDs, ADRs (heavily cross-referenced — follow links)
-- `.github/workflows/` — CI gating workflows (agents in ephemeral gondolin VMs on self-hosted runners)
+- `.github/workflows/` — CI gating workflows (merge triggers, SDLC)
 - `assets/graph.json` — the asset DAG (single source of truth)
 - `.agentic/` — audit trail (`audit.jsonl`), agent message queues, machine-local session state
 
@@ -61,37 +61,32 @@ Schemas: `engine/schemas/*.schema.json`. Codegen: `engine/emit.py` →
    symbolic engine verifies, chains, prunes, and decides. Never put an
    LLM call in the verdict path (LLM-Modulo; ADR-0003 §1). Rules take
    precedence over probabilities.
-2. **Never run `gondolin list` or id-based `gondolin exec <session-id>` from
-   a sandboxed session.** The pid-based session GC misfires under the
-   sandbox (cannot signal foreign processes) and **deletes live sessions'
-   registry files**. Only ever use socket-path IPC via the scripts
-   (`./scripts/vm-session.sh exec -- <cmd>` reads the recorded path from
-   `.agentic/vm-session.json`). Full rationale: [ADR-0001](docs/adr/0001-session-execution-under-sandboxing.md).
-3. **Session lifecycle commands belong to the user's terminal.** `make
-   vm-up` boots the session in the foreground (it holds the real credential
-   host-side); `make vm-down` signals the host process — a sandboxed agent
-   cannot do either. Agents attach via IPC only.
+2. **SmolVM, not gondolin.** The retired gondolin/pi runtime is gone (ADR-0005);
+   isolation is one SmolVM machine booted from the root `Dockerfile`
+   (`docker build -t facty . && docker save facty | smolvm machine run --net --image - -- bash`,
+   persistent: `smolvm machine create --net --name facty` + `start` + `exec --name facty -- <cmd>`).
+   Don't run docker-in-docker inside the VM; the VM egress allow-list stands
+   (api.mistral.ai, registry.npmjs.org, api.uprelic.com).
+3. **Secrets stay host-side.** The guest only ever sees `MISTRAL_API_KEY=<placeholder>`;
+   the host substitutes the real value on egress (SmolVM host-secret path is the
+   open item in ADR-0005). Never log, echo, or read API keys. Local dev:
+   `export MISTRAL_API_KEY="$(jq -r '.["mistral-subscription"].access' ~/.pi/agent/auth.json)"`
+   (read `auth.json` directly) or `eval "$(./facty env --exports)"`-style hoisting.
 4. **Secrets are host-side placeholders.** The guest and any sandboxed
-   orchestrator only ever see `MISTRAL_API_KEY=<placeholder>`; the gondolin
-   host proxy substitutes the real value into outbound requests. Never log,
+   orchestrator only ever see `MISTRAL_API_KEY=<placeholder>`; the host
+   substitutes the real value into outbound requests (SmolVM host-secret path — open item, ADR-0005). Never log,
    echo, or attempt to read API keys.
-   **Credential resolution** (`scripts/vm-session.sh` `resolve_key`,
-   `scripts/agent-pi.sh` ephemeral path): if `MISTRAL_API_KEY` is set
+   **Credential resolution** (local dev): if `MISTRAL_API_KEY` is set
    (production — explicit pay-per-use API key), it wins. Otherwise the
    scripts prefer the **Mistral subscription token** — the long-lived API
    key the pi-mistral-subscription extension obtains via browser sign-in,
-   stored in `~/.pi/agent/auth.json` under `"mistral-subscription"` — so
-   local dev runs on the subscription (no per-token overage). The token
-   rides the same host-secret mechanism: the guest sees a placeholder, the
-   host proxy substitutes the real value. Both auth styles use the same
-   `Authorization: Bearer <token>` header, so the `mistral` provider picks
-   it up unchanged. (Read `auth.json` directly — `pi auth` does not
-   recognise extension-registered providers by ID.) Fallback: the
-   pay-per-use API key (`pi auth print-api-key --provider mistral`), with
-   a warning.
-5. **`.agentic/audit.jsonl` is append-only.** Only `scripts/agent-pi.sh`
-   writes entries (via `jq`). Never hand-edit or truncate it. Query with jq:
-   `make audit-trail`.
+   stored in `~/.pi/agent/auth.json` under `"mistral-subscription"` (`...
+   .access`), read directly with jq — so local dev runs on the subscription.
+   Both auth styles use the same `Authorization: Bearer <token>` header, so
+   pydantic-ai's `mistral:` provider picks it up unchanged.
+5. **`.agentic/audit.jsonl` is append-only.** Never hand-edit or truncate it;
+   query with `make audit-trail`. (The pi agent-run writer is retired with the
+   gondolin runtime; the pack-factory port writes it — see ADR-0005/T9.)
 6. **Decision artifacts are inputs, not outputs.** Never modify
    `docs/prd/`, `docs/discovery/`, `docs/adr/` when acting as the coding
    agent — unless the PO directs a rename or reframe. Coding agents
@@ -101,49 +96,48 @@ Schemas: `engine/schemas/*.schema.json`. Codegen: `engine/emit.py` →
    registry.npmjs.org). Don't add network features that assume open
    egress — and don't add web-search tooling (ddgr or similar): cases
    handle sensitive data, so nothing leaves the VM except LLM calls.
+8. **Read each stack dependency's docs in detail before building on it.**
+   Search-result snippets are not documentation. For every dependency a
+   component integrates — the cleanroom stack today: TerminusDB v12, SmolVM,
+   pydantic-ai, the Vibe CLI — read the official docs end to end for the
+   features we use (`llms.txt` / `llms-full.txt` / per-page `page.md`, the
+   OpenAPI reference, and the official client source all count), note the
+   version, and log what was read plus every fact that touches our code in
+   `docs/research/deps-log.md`. Verify API shapes against the client
+   source or OpenAPI, not blog posts. When the docs and the running server
+   disagree, trust the server's bind-time errors and record the divergence
+   in the log.
 
 ## Common commands
 
 ```bash
-# The engine (the product) — primary interface: ./facty (see `./facty --help`)
-./facty cases                # list the demo cases (type · pack · drop)
-./facty run <case>           # run a case (phase 1) · --add-facts <drop> = phase 2
-./facty run <case> --json    # machine-readable verdict + trace
-./facty selftest             # acceptance test — every case, asserted
-./facty test                 # all tests: selftest + retry loop + the TUI (headless)
-./facty sense <case> --op facts   # one sensing op, standalone (LLM, streamed)
-./facty sense <case> --op label    # the label sensor (classifier bulk + Strom adjudication)
-./facty sense <case> --op parser   # generate the case's extract parser (prep=parser)
-./facty sense <case> --op decide   # draft the Strom decision questions (LLM, judged)
-./facty env                     # the secrets status (never values); --exports for VM hoisting
-./facty sense <case> --op label --offline   # offline mode: local tier live, LLM ops from cache
-./facty walkthrough <case>   # terminal step-through (VMs, no-TTY)
-./facty tui <case>           # the Textual workbench (needs `make deps`)
-./facty emit                 # codegen projections (TS types + Datalog per case)
-./facty completion bash      # shell completion
-make deps                    # install the optional deps (Textual — the workbench)
-make deps-sensors            # optional sensor deps (onnxruntime — host/CI only)
+# The engine (the product) — primary interface: ./facty (see `./facty --help`).
+# Since ADR-0005, ./facty runs the CLEANROOM stack (, TerminusDB-backed,
+# SmolVM + Vibe CLI + pydantic-ai); engine/ is the retired PoC, kept as the
+# golden oracle: python3 engine/engine.py selftest.
+./facty cases                # list migrated cases/packs (terminusdb/ dirs)
+./facty selftest             # golden acceptance: every migrated case, asserted + replay
+./facty init-db              # create db + install schema (needs TerminusDB on :6363)
+./facty load-pack <dir>      # insert <dir>/terminusdb/pack.json
+./facty load-facts <file>    # insert fact docs
+./facty run <case> --phase 1 --ref <branch>   # deterministic verdict on a branch
+./facty verdict|log|metrics  # inspect outputs, audit trail, LLM latency/tokens
+./facty sense <dir> --out f.json             # live LLM sensing (pydantic-ai)
+# e2e demo: make e2e / make e2e-live   (scripts/e2e.sh [--live], packs/insurance-claim-fraud)
+```
 
-# Make wrappers (kept for muscle memory)
-make dss-demo               # run the attribution case (phase 1)
-make dss-demo-2             # apply the ledger test (phase 2)
-make dss-demo-fraud[-2]     # the fraud case (phases 1/2)
-make dss-demo-rca[-2]       # the RCA case (phases 1/2)
-make dss-selftest           # acceptance test (every case, asserted)
-make dss-test               # all tests
-make dss-live               # walkthrough
-make dss-sense OP=facts     # one sensing op
+```bash
+# PoC oracle (engine/, JSON artifacts) — kept for cross-checking until the PoC
+# is retired (ADR-0005):
+python3 engine/engine.py run --case <case>           # run a case (phase 1)
+python3 engine/engine.py run --case <case> --add-facts <drop>   # phase 2
+python3 engine/engine.py selftest                    # PoC acceptance test
 
-# Session lifecycle (user terminal only for up/down)
-make vm-image                  # build the gondolin VM image (gondolin/, one-time)
-make vm-up                     # boot the pack-factory VM session (foreground, keep open)
-make vm-status                 # session state — sandbox-safe
-make vm-down                   # stop session (user terminal)
+# Make wrappers:
+make selftest               # acceptance test (every case, asserted)
+
 
 # Pack factory (exec into the VM session via socket-path IPC; every run audited)
-make agent-decision PHASE=discovery|prd|bdd|review [TASK="..."]
-make agent-coding   TASK=<repo-relative task file> [BDD=<feature file>]
-make run-agent AGENT=decision|coding [PHASE=...] [TASK=...]
 
 # Assets
 make asset-init / asset-status / asset-lineage KEY=<key>
@@ -171,14 +165,13 @@ Phase vocabularies differ by surface: the decision agent uses
   or a random source in it; (2) case records are auditable text-file
   artifacts (JSON files now, a DB later) — the artifact model is the
   audit trail; (3) the engine core + CLI control plane stay
-  dependency-free so they run in the gondolin VM snapshot (no pip
-  guarantees there) — optional DX layers (the Textual workbench,
-  `./facty`) import lazily and degrade gracefully. Root
-  `requirements.txt` holds the optional deps (`make deps`, uv-managed).
+  dependency-free so they run in the SmolVM image snapshot (no pip
+  guarantees there) — optional layers import lazily and degrade gracefully. The root
+  `pyproject.toml` holds the deps (`make deps` = `uv sync`, uv-managed, Python 3.14).
   The optional sensors (`engine/label.py`) import lazily and degrade
-  gracefully, like the Textual workbench; their deps live in
+  gracefully; their deps live in
   `requirements-sensors.txt` (`make deps-sensors`) — heavy-ish and
-  host/CI-only, never the gondolin VM snapshot. Sensor-sourced evidence
+  host/CI-only, never the SmolVM image. Sensor-sourced evidence
   (the `classify.json` file) is excluded from the LLM's phase-1 files.
 - The label sensor is a **ladder** (`classify.json` `backend`):
   `strom` (default — the Strom decider tier scores every row, the local
@@ -188,8 +181,7 @@ Phase vocabularies differ by surface: the decision agent uses
   only — the offline mode). The Strom decider (`engine/strom.py`,
   stdlib-only) is Uprelic's hosted decision model (`strom-1.0.7`,
   EU/Paris GPUs, calibrated probabilities, ~$0.04 per 1M input tokens,
-  500 req/min); its key rides `UPRELIC_API_KEY` (env / gondolin
-  host-secret injection — never logged, never committed), its question
+  500 req/min); its key rides `UPRELIC_API_KEY` (env / host-side secret injection — never logged, never committed), its question
   set is drafted per pack by the LLM (`--op decide` →
   `sensor/decisions.json`, judged, committed), and its responses cache
   like any sensing response. All tiers are induction-only — never in
@@ -198,71 +190,28 @@ Phase vocabularies differ by surface: the decision agent uses
   recorded facts + cache are the deterministic layer. `--offline` /
   `FACTY_OFFLINE=1` runs the local tier live and replays the LLM ops
   from cache.
-- **Secrets / dotenv** (`engine/dotenv.py`, loaded by the CLI at
-  startup): real keys live in `~/.facty/.env` (machine-local, never
-  committed — the repo is mounted into the VMs); the project `.env`
-  holds non-secret defaults only. `.env.example` documents the known
-  keys (`UPRELIC_API_KEY`, `MISTRAL_API_KEY`). The real environment
-  always wins (setdefault). `./facty env` prints the status (never
-  values); `eval "$(./facty env --exports)"` hoists the keys into the
-  launching shell — gondolin reads them host-side (`--host-secret
-  KEY@host` in gondolin-pi.sh; the guest only ever sees placeholders).
-  **Mistral credential bridge (local dev):** when `MISTRAL_API_KEY` is
-  unset, the VM scripts (`vm-session.sh`, `agent-pi.sh`) read the
-  subscription token directly from `~/.pi/agent/auth.json`
-  (`mistral-subscription.access` — the long-lived key from the
-  pi-mistral-subscription extension's browser sign-in) and pass it as
-  `MISTRAL_API_KEY` to gondolin's host-secret. Result: local dev agent
-  runs bill on the subscription, not the pay-per-use API key. Set
-  `MISTRAL_API_KEY` explicitly in production to force the API key.
-  The pi agent also has the **strom skill** (from
-  platform.uprelic.com/skill.md): installed for host pi sessions at
-  `~/.pi/agent/skills/strom`, and vendored in this repo at
-  `gondolin/skills/strom` — the full gondolin config ships in-repo
-  (runner + build script + skills; `make vm-image` rebuilds the
-  snapshot, which bakes the skill set). The vendored VM is the
-  facty-optimized config (no web-search tooling, by design; runtime
-  egress: api.mistral.ai + registry.npmjs.org + api.uprelic.com).
-- `engine/engine.py` is library + CLI (`run`, `selftest`); the selftest
-  asserts the acceptance criteria and the deterministic replay. The
-  primary interface is the `facty` CLI (`./facty`, `engine/cli.py`).
-- LLM response cache: live sensing calls are cached as raw responses
-  (`.agentic/cache/sensing/`, gitignored); `FACTY_SENSE=cache` replays
-  them without the LLM (offline demos / deterministic-side testing).
-  The workbench authenticates the Mistral subscription through the
-  pi-mistral-subscription extension (the `a` key in `./facty`).
-- Sensing transport: the LLM half runs through the **pi agent's RPC
-  mode** (`pi --mode rpc`, `engine/sensing.py`) — the staged assignment
-  is sent inline (evidence inlined, no tools, thinking off, no session
-  files) and the response streams back live; pi is shut down the moment
-  the agent settles. Env knobs: `FACTY_PROVIDER`, `FACTY_MODEL`,
-  `FACTY_THINKING`. No VM is involved per call — pi is a subprocess;
-  the gondolin VM is the long-lived SDLC-agent session.
-- **Session scoping: one pi session per run** (a case phase instance) —
-  `sensing.session_scope()` wraps a run (the workbench's `do_run`, the
-  walkthrough), so its LLM calls share one process and one conversation
-  prefix: the provider's prompt cache hits across them (measured 19–77%
-  of input served from cache). A new run — another case or phase —
-  starts a fresh session: nothing crosses case/phase boundaries, and
-  the conversation holds only the senses' own Q&A (never the engine's
-  conclusions) — the cache benefits without the bias. The run log
-  prints the cache summary at the end of the sensing.
-- The senses are guided by the pack's **term vocabulary** (the
-  predicates + subjects the rules reference, embedded in the facts
-  task), and the recommended test's evidence is sensed with the
-  engine's **open questions** + hypothesis statements — never the
-  engine's conclusions (scores, rankings, derived facts, prunings);
-  feeding those back would bias the reading toward the current verdict.
-- Out-of-band **commentary**: `./facty explain <case> [--target
-  entities|ranking|verdict]` and the workbench's `x` key ask the LLM to
-  explain the result in plain language. Presentation only — the verdict
-  is deterministic and never depends on it; the commentary is cached
-  like the sensing responses and replayed offline.
-- In the gondolin VM the CLI + workbench run from the baked image
-  (textual + git); `MISTRAL_API_KEY` arrives via gondolin's host-secret
-  injection (guest sees a placeholder, the host proxy substitutes it).
+- **Secrets**: real keys live in `~/.facty/.env` (machine-local, never
+  committed); the real environment always wins. `MISTRAL_API_KEY` set in the
+  env wins (production); otherwise export the subscription token from
+  `~/.pi/agent/auth.json` (`.["mistral-subscription"].access`, read with jq —
+  `pi auth` does not recognise extension providers). Same
+  `Authorization: Bearer` header, so pydantic-ai's `mistral:` provider picks
+  it up unchanged. In the SmolVM the guest only ever sees a placeholder; the
+  host substitutes the real value on egress (open item, ADR-0005). The Strom
+  decider key rides `UPRELIC_API_KEY` the same way (never logged, never
+  committed); its question sets live in `sensor/decisions.json`.
+- `engine/engine.py` is the PoC oracle: library + CLI (`run`, `selftest`),
+  `make poc-oracle`. The primary interface is the `facty` CLI (`./facty` →
+  `src/facty`, ADR-0005).
+- The engine core (`src/facty/`: client/engine/rules/woql) is stdlib-only and
+  runs anywhere; sensing is pydantic-ai (programmatic, `src/facty/sensing.py`,
+  `tools=[]`, typed output, disk cache — `FACTY_SENSE=cache` replays with no
+  LLM) with the Vibe CLI (`vibe -p`, project profiles in `.vibe/agents/`) as
+  the human-facing surface and no-dependency fallback. Metrics:
+  `./facty metrics`; opt-in tracing `FACTY_LOGFIRE=1`. In the SmolVM image the
+  CLI runs from the baked rootfs; `MISTRAL_API_KEY` arrives host-side.
 
-### Bash scripts (match `scripts/vm-session.sh` / `agent-pi.sh`)
+### Bash scripts (match `scripts/e2e.sh`)
 
 - `set -euo pipefail`
 - Header comment block: purpose, usage, env vars
@@ -304,16 +253,14 @@ diagrams, ≤6 boxes each. ASCII diagrams + tables are the house style.
 Cross-link liberally; ADRs record any significant tradeoff (template:
 `templates/sdlc/adr.md`).
 
-### Agent runtime facts
+### Agent runtime facts (post-ADR-0005)
 
-- Models: decision `mistral-large-4` @ max thinking; coding `mistral-large-4` @ low.
-  Per-run overrides: `AGENT_MODEL`, `AGENT_THINKING`. VM template path:
-  `GONDOLIN_PI` (default `<repo>/gondolin/gondolin-pi.sh` — the gondolin
-  image config is vendored in-repo at `gondolin/`; build the snapshot
-  with `make vm-image`).
-- Run modes: preferred `gondolin-pi-session` (long-lived VM session,
-  key held host-side); fallback ephemeral `gondolin-pi` boot (needs the key
-  in the launching shell or the stored `pi auth` credential).
+- The LLM surface is the **Vibe CLI** with project profiles in `.vibe/agents/`
+  (default model alias `facty-large` → `mistral-large-4`; `thinking` per
+  profile). Machine-driven LLM calls go through pydantic-ai
+  (`src/facty/sensing.py`), not the CLI. Pack-factory agent runs (decision /
+  coding roles) are being ported from gondolin/pi to Vibe-in-SmolVM — T9 in
+  docs/CLEANROOM-METHOD.md.
 - Audit entry shape (appended per run, success or failure):
   `{timestamp, type:"agent-run", role, phase, task, model, thinking, runtime, exit_code, duration_s}`.
 
@@ -331,13 +278,7 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
   VM has no web-search tooling by design (cases handle sensitive data;
   its egress is api.mistral.ai + registry.npmjs.org + api.uprelic.com
   only). Do web research on the host, or skip it for sensitive cases.
-- **Cross-project paths** (`~/.cache/gondolin`) may be unreadable from
-  the sandbox — expect prompts or failures when scripts probe them; run
-  those commands from the user's terminal or a pi `!` escape. (The gondolin
-  image config itself is vendored in-repo at `gondolin/`, so it is always
-  readable — the sandbox sees the repo.)
-- Machine-local state is gitignored: `.agentic/tmp/`,
-  `.agentic/vm-session.json`, `.agentic/vm-session.log`.
+- Machine-local state is gitignored: `.agentic/tmp/`, `.cache/`, `.venv/`.
 
 ## Documentation index
 
@@ -349,7 +290,7 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
 | [docs/adr/0003-detective-dss-neurosymbolic-core.md](docs/adr/0003-detective-dss-neurosymbolic-core.md) | The neurosymbolic core (the architecture) |
 | [docs/discovery/detective-dss-poc.md](docs/discovery/detective-dss-poc.md) | The PoC plan (case vocabulary) |
 | [docs/vision.md](docs/vision.md) | The method's philosophical foundations |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Isolation model, session lifecycle, why socket-path-only IPC |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Isolation model (SmolVM; ADR-0005) — gondolin model retired |
 | [docs/SDLC.md](docs/SDLC.md) | Phase-by-phase gates, outputs, review roles (pack factory) |
 | [docs/AGENTIC-RUNTIME.md](docs/AGENTIC-RUNTIME.md) | Two-agent pattern, message protocol, state machine, CI mapping |
 | [docs/ASSET-MODEL.md](docs/ASSET-MODEL.md) | Asset DAG, rules engine, audit/reification stream |
@@ -358,5 +299,10 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
 | [docs/USE-CASES.md](docs/USE-CASES.md) | Multi-tenant client isolation scenarios |
 | [docs/INVESTIGATION-TYPES.md](docs/INVESTIGATION-TYPES.md) | The seven judgement-driven investigation families + the case-prefix convention |
 | [docs/PROVIDERS.md](docs/PROVIDERS.md) | Custom LLM providers — contemplated design (config, auth flow, workbench UI) |
-| [docs/adr/](docs/adr/) | Decision records (start at ADR-0001) |
-| [engine/README.md](engine/README.md) | The engine: layout, protocol, run commands |
+| [docs/adr/](docs/adr/) | Decision records (start at ADR-0001; ADR-0001's gondolin session rules retired by ADR-0005) |
+| [docs/adr/0005-cleanroom-stack-replaces-poc.md](docs/adr/0005-cleanroom-stack-replaces-poc.md) | ADR-0005: cleanroom stack (TerminusDB + SmolVM + Vibe CLI + pydantic-ai) is primary |
+| [docs/CLEANROOM-METHOD.md](docs/CLEANROOM-METHOD.md) | methodology → cleanroom mapping + triage of not-yet-native reasoning patterns (T1–T10) |
+| [docs/research/stack-survey.md](docs/research/stack-survey.md) | backend survey + cleanroom proposal |
+| [docs/research/deps-log.md](docs/research/deps-log.md) | dependency docs log (rule 8): versions, what was read, live-verified divergences |
+| [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | the cleanroom implementation: layout, run, e2e demo, observability |
+| [engine/README.md](engine/README.md) | the PoC engine — golden oracle post-ADR-0005 |

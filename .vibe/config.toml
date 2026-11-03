@@ -1,0 +1,11 @@
+# Project-local Vibe config (loaded when cwd is trusted:
+# run `vibe --trust` once in the repo root, or the sensing calls pass --trust).
+#
+# Default model for every agent: Mistral Large 4.
+active_model = "facty-large"
+
+[[models]]
+name = "mistral-large-4"       # canonical API name
+provider = "mistral"
+alias = "facty-large"
+thinking = "low"               # sensing is extraction, not deliberation; raise to "max" for pack authoring

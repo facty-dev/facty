@@ -1,0 +1,182 @@
+[
+  {
+    "@type": "Fact",
+    "id": "f01",
+    "type": "case",
+    "subject": "claim",
+    "predicate": "claimId",
+    "valueString": "CL-2026-1042",
+    "confidence": 0.95,
+    "source": "evidence/claim-form.txt"
+  },
+  {
+    "@type": "Fact",
+    "id": "f02",
+    "type": "case",
+    "subject": "claim",
+    "predicate": "estimatedDamage",
+    "valueNum": 4200,
+    "confidence": 0.95,
+    "source": "evidence/claim-form.txt"
+  },
+  {
+    "@type": "Fact",
+    "id": "f03",
+    "type": "case",
+    "subject": "claim",
+    "predicate": "incidentType",
+    "valueString": "hit-and-run-parked",
+    "confidence": 0.9,
+    "source": "evidence/claim-form.txt"
+  },
+  {
+    "@type": "Fact",
+    "id": "f04",
+    "type": "evidence",
+    "subject": "police-report",
+    "predicate": "hasWitnesses",
+    "valueBool": false,
+    "confidence": 0.9,
+    "source": "evidence/police-report.txt"
+  },
+  {
+    "@type": "Fact",
+    "id": "f05",
+    "type": "evidence",
+    "subject": "police-report",
+    "predicate": "hasPaintTransfer",
+    "valueBool": false,
+    "confidence": 0.85,
+    "source": "evidence/police-report.txt"
+  },
+  {
+    "@type": "Fact",
+    "id": "f06",
+    "type": "evidence",
+    "subject": "police-report",
+    "predicate": "hasCCTV",
+    "valueBool": false,
+    "confidence": 0.9,
+    "source": "evidence/police-report.txt"
+  },
+  {
+    "@type": "Fact",
+    "id": "f07",
+    "type": "evidence",
+    "subject": "witness",
+    "predicate": "relationshipToClaimant",
+    "valueString": "same-building-neighbor",
+    "confidence": 0.8,
+    "source": "evidence/witness-statement.txt"
+  },
+  {
+    "@type": "Fact",
+    "id": "f08",
+    "type": "evidence",
+    "subject": "witness",
+    "predicate": "sawOtherVehicle",
+    "valueBool": false,
+    "confidence": 0.85,
+    "source": "evidence/witness-statement.txt"
+  },
+  {
+    "@type": "Fact",
+    "id": "f09",
+    "type": "evidence",
+    "subject": "witness",
+    "predicate": "sawSuspiciousActivity",
+    "valueBool": true,
+    "confidence": 0.8,
+    "source": "evidence/witness-statement.txt"
+  },
+  {
+    "@type": "Fact",
+    "id": "f10",
+    "type": "evidence",
+    "subject": "repair-estimate",
+    "predicate": "totalAmount",
+    "valueNum": 4200,
+    "confidence": 0.95,
+    "source": "evidence/repair-estimate.csv"
+  },
+  {
+    "@type": "Fact",
+    "id": "f11",
+    "type": "evidence",
+    "subject": "repair-estimate",
+    "predicate": "hasPaintCorrection",
+    "valueBool": true,
+    "confidence": 0.9,
+    "source": "evidence/repair-estimate.csv"
+  },
+  {
+    "@type": "Fact",
+    "id": "f12",
+    "type": "evidence",
+    "subject": "repair-estimate",
+    "predicate": "hasTotalLossAdjusterFee",
+    "valueBool": true,
+    "confidence": 0.9,
+    "source": "evidence/repair-estimate.csv"
+  },
+  {
+    "@type": "Fact",
+    "id": "f13",
+    "type": "evidence",
+    "subject": "repair-estimate",
+    "predicate": "itemCount",
+    "valueNum": 6,
+    "confidence": 0.95,
+    "source": "evidence/repair-estimate.csv"
+  },
+  {
+    "@type": "Fact",
+    "id": "f14",
+    "type": "evidence",
+    "subject": "prior-claims",
+    "predicate": "claimCount",
+    "valueNum": 3,
+    "confidence": 0.95,
+    "source": "evidence/prior-claims.csv"
+  },
+  {
+    "@type": "Fact",
+    "id": "f15",
+    "type": "evidence",
+    "subject": "prior-claims",
+    "predicate": "priorParkingLotClaims",
+    "valueNum": 2,
+    "confidence": 0.9,
+    "source": "evidence/prior-claims.csv"
+  },
+  {
+    "@type": "Fact",
+    "id": "f16",
+    "type": "world",
+    "subject": "policy",
+    "predicate": "requiresPoliceReport",
+    "valueBool": true,
+    "confidence": 1.0,
+    "source": "policy"
+  },
+  {
+    "@type": "Fact",
+    "id": "f17",
+    "type": "world",
+    "subject": "policy",
+    "predicate": "requiresPaintTransfer",
+    "valueBool": false,
+    "confidence": 1.0,
+    "source": "policy"
+  },
+  {
+    "@type": "Fact",
+    "id": "f18",
+    "type": "world",
+    "subject": "policy",
+    "predicate": "maxClaimRatio",
+    "valueNum": 2.5,
+    "confidence": 1.0,
+    "source": "policy"
+  }
+]
