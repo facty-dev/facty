@@ -102,3 +102,19 @@ Facts:
 - `active_model` is an **alias**; `[[models]]` maps alias → canonical name (`mistral-large-4`) + provider + thinking. → `.vibe/config.toml` (`facty-large`) confirmed.
 - MCP servers via `vibe mcp add NAME --transport stdio --command ...` (for the pack-author agent's TerminusDB access); connectors auto-discovered on the mistral provider.
 - Human-facing surface only; machine-driven LLM calls go through pydantic-ai (see docs/IMPLEMENTATION.md).
+
+## Typer — `fastapi/typer` 0.27.3 (CLI framework; PO directive 2026-10-31: use the standard uv-ecosystem CLI framework)
+
+Docs read (2026-10-31): https://typer.tiangolo.com/ , /tutorial/ , /tutorial/first-steps/ ,
+/tutorial/commands/ , /tutorial/subcommands/ , /tutorial/options/ , /tutorial/arguments/ ,
+/tutorial/testing/ , /tutorial/exceptions/ ; API shapes verified against the installed
+package source (`typer/main.py::get_command_name`, `Typer.add_typer`, `typer.Exit`, `typer.testing.CliRunner`).
+
+Facts:
+- Install is literally `uv add typer` (the docs' own instruction); pulls click + rich + shellingham.
+- `app = typer.Typer(no_args_is_help=True)`; `@app.command()`; command name = function name with `_`→`-` (verified: `init_db` → `init-db`); groups via `sub = typer.Typer(); app.add_typer(sub)` (no name needed — group name comes from the variable).
+- Params from type hints + `Annotated[..., typer.Option("--x")]` / `typer.Argument()`; `Path`, `bool` flags, `Optional[str]` all supported.
+- Exit codes: `raise typer.Exit(1)`; rich pretty-exceptions ON by default, and `pretty_exceptions_show_locals` defaults to **False since 0.23** (secrets never shown in errors) — we set it explicitly False; disable rich with `TYPER_USE_RICH=0`.
+- Tests: `from typer.testing import CliRunner; CliRunner().invoke(app, [...])` (wraps click's runner).
+- Shell completion: `--install-completion` / `--show-completion` built in.
+- → `src/facty/cli.py` rewritten on Typer; `[project.scripts] facty = "facty.cli:main"`; all prior commands/flags preserved; smoke tests in tests/test_cli.py.

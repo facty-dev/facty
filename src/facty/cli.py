@@ -1,26 +1,45 @@
-"""facty CLI — headless, no TUI.
+"""facty CLI — headless, no TUI. Built on Typer (tiangolo; uv-ecosystem standard).
 
-  python -m facty init-db
-  python -m facty keys init | list
-  python -m facty bundle sign|verify|load <bundle-dir> [--dev]
-  python -m facty load-facts <facts.json> --message <msg>
-  python -m facty sense <case-dir> --out <facts.json>   # live LLM sensing
-  python -m facty run <case> [--add-facts <drop.json>] [--phase <name>] [--ref <branch>]
-  python -m facty compile-rules <case-dir>               # dump WOQL (debug)
-  python -m facty log
-  python -m facty selftest                               # golden-compare vs PoC
+  facty init-db
+  facty keys init | list
+  facty bundle sign|verify|load <bundle-dir> [--dev]
+  facty load-facts <facts.json> --message <msg>
+  facty sense <case-dir> --out <facts.json>   # live LLM sensing
+  facty run <case> [--add-facts <drop.json>] [--phase <name>] [--ref <branch>]
+  facty compile-rules <case-dir>               # dump WOQL (debug)
+  facty log | verdict | metrics | cases
+  facty selftest                               # golden-compare vs PoC
 """
 
 from __future__ import annotations
 
-import argparse
+import functools
 import json
 import os
 import sys
+import time
 from pathlib import Path
+from typing import Annotated, Optional
+
+import typer
 
 from . import bundle as bundle_mod
 from . import engine, keys, rules, sensing
+from .client import Client, TerminusError
+
+app = typer.Typer(
+    name="facty",
+    help="Facty — the detective DSS: deterministic bundle engine on TerminusDB, LLM sensing only (ADR-0003/0005/0006).",
+    no_args_is_help=True,
+    pretty_exceptions_show_locals=False,  # never leak key material into error output
+)
+keys_app = typer.Typer(name="keys", help="Ed25519 signing keys (live in ~/.facty/keys, never committed).", no_args_is_help=True)
+bundle_app = typer.Typer(name="bundle", help="Signed bundle v2: sign / verify / load (the trust gate).", no_args_is_help=True)
+app.add_typer(keys_app)
+app.add_typer(bundle_app)
+
+OptRef = Annotated[Optional[str], typer.Option("--ref", help="TerminusDB branch/commit to work on (default main)")]
+OptDev = Annotated[bool, typer.Option("--dev", help="Escape hatch: allow unsigned/legacy bundles (or FACTY_DEV=1)")]
 
 
 def engine_fact_doc(f: dict) -> dict:
@@ -38,86 +57,111 @@ def engine_fact_doc(f: dict) -> dict:
     if f.get("observedAt"):
         doc["observedAt"] = f["observedAt"]
     return doc
-from .client import Client, TerminusError
+
 
 REPO = Path(__file__).resolve().parents[2]  # src/facty/cli.py → repo root
 CASES = REPO / "engine" / "cases"
 
 
-def _client(args) -> Client:
+def _client(ref: Optional[str]) -> Client:
     c = Client()
-    if getattr(args, "ref", None):
+    if ref:
         # TerminusDB branch names cannot contain "/" — sanitize.
-        c.ref = args.ref.replace("/", "-")
+        c.ref = ref.replace("/", "-")
     return c
 
 
-def cmd_init_db(args) -> int:
-    c = _client(args)
+def _gate(fn):
+    """BundleError → clean stderr message + exit 1 (no traceback, no locals)."""
+    @functools.wraps(fn)
+    def wrapper(*a, **kw):
+        try:
+            return fn(*a, **kw)
+        except bundle_mod.BundleError as e:
+            typer.echo(f"error: {e}", err=True)
+            raise typer.Exit(1)
+    return wrapper
+
+
+# ── db / bundle / keys ───────────────────────────────────────────────────────
+
+@app.command("init-db")
+def init_db(ref: OptRef = None):
+    c = _client(ref)
     if not c.db_exists():
         c.create_db()
-        print("created database", c.db)
+        typer.echo("created database " + c.db)
     from .schema import SCHEMA
 
     c.install_schema(SCHEMA)
-    print("schema installed:", ", ".join(d["@id"] for d in SCHEMA))
-    return 0
+    typer.echo("schema installed: " + ", ".join(d["@id"] for d in SCHEMA))
 
 
-def cmd_bundle_load(args) -> int:
-    """The trust gate: signed v2 bundles verify (embedded pubkey, no private
-    key needed); unsigned/legacy bundles are refused unless --dev/FACTY_DEV=1."""
-    c = _client(args)
-    b = bundle_mod.Bundle.from_dir(args.bundle_dir, dev=args.dev)
-    name = args.name or b.id
-    print(b.load_into(c, name, dev=args.dev))
-    return 0
+@bundle_app.command("load")
+@_gate
+def bundle_load(bundle_dir: Annotated[Path, typer.Argument()],
+                name: Annotated[Optional[str], typer.Option("--name")] = None,
+                dev: OptDev = False, ref: OptRef = None):
+    """The trust gate: signed v2 bundles verify (embedded pubkey, no private key
+    needed); unsigned/legacy bundles are refused unless --dev/FACTY_DEV=1."""
+    c = _client(ref)
+    b = bundle_mod.Bundle.from_dir(bundle_dir, dev=dev)
+    typer.echo(b.load_into(c, name or b.id, dev=dev))
 
 
-def cmd_bundle_sign(args) -> int:
-    b = bundle_mod.Bundle.from_dir(args.bundle_dir, dev=True)  # re-sign may start unsigned
-    fp = b.sign(args.key)
-    print(f"signed {b.id}@{b.version} with key {fp} → {b.path / bundle_mod.SIG}")
-    return 0
+@bundle_app.command("sign")
+@_gate
+def bundle_sign(bundle_dir: Annotated[Path, typer.Argument()],
+                key: Annotated[Optional[str], typer.Option("--key", help="key fingerprint (default: sole private key)")] = None):
+    b = bundle_mod.Bundle.from_dir(bundle_dir, dev=True)  # re-sign may start unsigned
+    fp = b.sign(key)
+    typer.echo(f"signed {b.id}@{b.version} with key {fp} → {b.path / bundle_mod.SIG}")
 
 
-def cmd_bundle_verify(args) -> int:
-    b = bundle_mod.Bundle.from_dir(args.bundle_dir, dev=True)
+@bundle_app.command("verify")
+@_gate
+def bundle_verify(bundle_dir: Annotated[Path, typer.Argument()]):
+    b = bundle_mod.Bundle.from_dir(bundle_dir, dev=True)
     if not (b.path / bundle_mod.MANIFEST).exists():
-        print(f"{b.path}: legacy v1 bundle — unsigned, no manifest"); return 1
+        typer.echo(f"{b.path}: legacy v1 bundle — unsigned, no manifest", err=True)
+        raise typer.Exit(1)
     b.verify_or_raise()
-    print(f"OK {b.id}@{b.version} — signature valid, key {b.fingerprint}, "
-          f"{len(b.manifest['contents'])} content files verified")
-    return 0
+    typer.echo(f"OK {b.id}@{b.version} — signature valid, key {b.fingerprint}, "
+               f"{len(b.manifest['contents'])} content files verified")
 
 
-def cmd_keys_init(args) -> int:
-    fp, pub = keys.init_key(args.name)
-    print(f"new key {fp}  (label: {args.name})")
-    print(f"  private: {keys.KEYS_DIR / (fp + '.key')}  (never commit this)")
-    print(f"  public:  {pub}")
-    return 0
+@keys_app.command("init")
+def keys_init(name: Annotated[str, typer.Option("--name")] = "default"):
+    fp, pub = keys.init_key(name)
+    typer.echo(f"new key {fp}  (label: {name})")
+    typer.echo(f"  private: {keys.KEYS_DIR / (fp + '.key')}  (never commit this)")
+    typer.echo(f"  public:  {pub}")
 
 
-def cmd_keys_list(args) -> int:
+@keys_app.command("list")
+def keys_list():
     ks = keys.list_keys()
     if not ks:
-        print(f"no keys in {keys.KEYS_DIR} — run `facty keys init`")
-        return 0
+        typer.echo(f"no keys in {keys.KEYS_DIR} — run `facty keys init`")
+        return
     for k in ks:
-        print(f"{k['fingerprint']}  {k['label']:<12} private={'yes' if k['has_private'] else 'no'}")
-    return 0
+        typer.echo(f"{k['fingerprint']}  {k['label']:<12} private={'yes' if k['has_private'] else 'no'}")
 
 
-def cmd_load_facts(args) -> int:
-    c = _client(args)
-    n = engine.load_facts(c, Path(args.facts), args.message)
-    print(f"loaded {n} facts ({args.message})")
-    return 0
+# ── facts / sense / run ──────────────────────────────────────────────────────
+
+@app.command("load-facts")
+def load_facts(facts: Annotated[Path, typer.Argument()],
+               message: Annotated[str, typer.Option("--message")] = "load facts",
+               ref: OptRef = None):
+    c = _client(ref)
+    n = engine.load_facts(c, facts, message)
+    typer.echo(f"loaded {n} facts ({message})")
 
 
-def cmd_sense(args) -> int:
-    case_dir = Path(args.case_dir)
+@app.command("sense")
+def sense(case_dir: Annotated[Path, typer.Argument()],
+          out: Annotated[Path, typer.Option("--out", "-o")], ):
     ev = sorted((case_dir / "evidence").glob("*"))
     evidence = "\n\n".join(f"--- {p.name} ---\n{p.read_text(errors='replace')}" for p in ev)
     # exact bundle vocabulary: the engine matches subject/predicate/value
@@ -148,52 +192,52 @@ def cmd_sense(args) -> int:
         "engine matches these strings literally. Booleans as true/false. Numbers as numbers. "
         "Do not conclude anything — facts only.\n\nEVIDENCE:\n" + evidence
     )
-    out = sensing.sense_json(prompt, getattr(sensing, "SensedFacts", None))
-    if hasattr(out, "model_dump"):
-        out = out.model_dump()
-    facts = out["facts"] if isinstance(out, dict) and "facts" in out else out
-    docs = [engine_fact_doc(f) for f in facts]  # Fact docs, ready to insert as-is
-    Path(args.out).write_text(json.dumps(docs, indent=2))
-    print(f"sensed {len(json.loads(Path(args.out).read_text()))} facts → {args.out}")
-    return 0
+    o = sensing.sense_json(prompt, getattr(sensing, "SensedFacts", None))
+    if hasattr(o, "model_dump"):
+        o = o.model_dump()
+    facts_list = o["facts"] if isinstance(o, dict) and "facts" in o else o
+    docs_out = [engine_fact_doc(f) for f in facts_list]  # Fact docs, ready to insert as-is
+    out.write_text(json.dumps(docs_out, indent=2))
+    typer.echo(f"sensed {len(docs_out)} facts → {out}")
 
 
-def cmd_run(args) -> int:
-    import time
-
+@app.command("run")
+def run(case: Annotated[str, typer.Argument()],
+        add_facts: Annotated[Optional[Path], typer.Option("--add-facts")] = None,
+        phase: Annotated[str, typer.Option("--phase")] = "1",
+        ref: OptRef = None):
     t0 = time.monotonic()
-    c = _client(args)
-    if args.ref:
+    c = _client(ref)
+    if ref:
         try:
-            c.branch(args.ref)
+            c.branch(c.ref)
         except TerminusError:
             pass  # branch already exists
-    if args.add_facts:
-        engine.load_facts(c, Path(args.add_facts), f"apply {Path(args.add_facts).name}")
-    result = engine.run_phase(c, args.case, args.phase)
-    print(f"[run] phase {args.phase} done in {time.monotonic() - t0:.2f}s (engine only, no LLM)",
-          file=sys.stderr)
-    print(json.dumps({k: v for k, v in result.items() if k != "ranking"}, indent=2, default=str))
+    if add_facts:
+        engine.load_facts(c, add_facts, f"apply {add_facts.name}")
+    result = engine.run_phase(c, case, phase)
+    typer.echo(f"[run] phase {phase} done in {time.monotonic() - t0:.2f}s (engine only, no LLM)", err=True)
+    typer.echo(json.dumps({k: v for k, v in result.items() if k != "ranking"}, indent=2, default=str))
     for r in result["ranking"]:
-        print(f"  {r['hypothesis']:<4} {r['status']:<7} score={r['score']:.4f} "
-              f"claims={r['claimsProven']:.3f} support={r['support']:.0f} prior={r['prior']:.2f}")
-    return 0
+        typer.echo(f"  {r['hypothesis']:<4} {r['status']:<7} score={r['score']:.4f} "
+                   f"claims={r['claimsProven']:.3f} support={r['support']:.0f} prior={r['prior']:.2f}")
 
 
-def cmd_compile_rules(args) -> int:
-    case_dir = Path(args.case_dir)
+# ── inspect / debug ──────────────────────────────────────────────────────────
+
+@app.command("compile-rules")
+def compile_rules(case_dir: Annotated[Path, typer.Argument()]):
     cand = case_dir / "bundle.json"
     if not cand.exists():
         cand = case_dir / "terminusdb" / "pack.json"
     for r in [d for d in json.loads(cand.read_text()) if d.get("@type") == "Rule"]:
         q, id_vars = rules.compile_rule(r)
-        print(r["id"], "→", json.dumps(q))
-    return 0
+        typer.echo(r["id"] + " → " + json.dumps(q))
 
 
-def cmd_log(args) -> int:
-    print(json.dumps(_client(args).commit_log(), indent=2))
-    return 0
+@app.command("log")
+def log(ref: OptRef = None):
+    typer.echo(json.dumps(_client(ref).commit_log(), indent=2))
 
 
 def _strip_ids(x):
@@ -206,69 +250,78 @@ def _strip_ids(x):
     return x
 
 
-def cmd_metrics(args) -> int:
+@app.command("metrics")
+def metrics():
     """Print the sensing metrics log (latency + tokens per LLM call)."""
     from .sensing import METRICS_PATH
 
     if not METRICS_PATH.exists():
-        print("no metrics yet — run a --live sensing first")
-        return 0
+        typer.echo("no metrics yet — run a --live sensing first")
+        return
     for line in METRICS_PATH.read_text().splitlines():
         m = json.loads(line)
-        print(f"{m['ts'][:19]}  {m['op']:<12} {m['model']:<28} {m['seconds']:>6.1f}s  "
-              f"in={m['input_tokens']} out={m['output_tokens']} cached={m['cached']}")
-    return 0
+        typer.echo(f"{m['ts'][:19]}  {m['op']:<12} {m['model']:<28} {m['seconds']:>6.1f}s  "
+                   f"in={m['input_tokens']} out={m['output_tokens']} cached={m['cached']}")
 
 
-def cmd_verdict(args) -> int:
+@app.command("verdict")
+def verdict(ref: OptRef = None):
     """Dump the Verdict docs on the current ref as sorted JSON, @id-stripped
     (so hashing compares content, not generated ids)."""
-    c = _client(args)
+    c = _client(ref)
     vs = [d for d in c.get_all_docs() if d.get("@type") == "Verdict"]
     vs = _strip_ids(sorted(vs, key=lambda d: d["id"]))
     for v in vs:  # ranking is a Set in the DB — unordered on read; sort for stable hashing
         if isinstance(v.get("ranking"), list):
             v["ranking"] = sorted(v["ranking"], key=lambda r: str(r.get("hypothesis")))
-    print(json.dumps(vs, sort_keys=True, indent=2))
-    return 0
+    typer.echo(json.dumps(vs, sort_keys=True, indent=2))
+
+
+@app.command("cases")
+def cases():
+    """List bundles (v2 manifests) and legacy PoC oracle cases."""
+    bdir = REPO / "bundles"
+    if bdir.is_dir():
+        for d in sorted(bdir.iterdir()):
+            if (d / bundle_mod.MANIFEST).exists():
+                m = json.loads((d / bundle_mod.MANIFEST).read_text())
+                signed = "signed" if (d / bundle_mod.SIG).exists() else "UNSIGNED"
+                typer.echo(f"bundle\t{d.name}\tv{m['version']}\t{signed}\tkey={m.get('fingerprint', '-')}")
+    if CASES.is_dir():
+        for d in sorted(CASES.iterdir()):
+            if (d / "terminusdb" / "pack.json").exists():
+                typer.echo(f"case(legacy)\t{d.name}")
 
 
 # Golden expectations transcribed from each case's expected.md (the PoC oracle).
 # ranking: [(hypothesis, approx score)] in expected order; pruned: set of hypothesis ids.
 SELFTEST_CASES = [
     {"name": "attribution-silver-blaze", "dir": CASES / "attribution-silver-blaze",
-     "p1_facts": "facts.json", "p2_facts": "facts-ledger.json",
+     "p1_facts": "terminusdb/facts.json", "p2_facts": "terminusdb/facts-ledger.json",
      "p1": {"derived": {"d1", "d2", "d3"}, "pruned": {"H1", "H4"},
             "ranking": [("H2", 0.740), ("H3", 0.235)], "rec": "q1"},
-     "p2": {"derived": {"d4", "d5"}, "winner": "H3", "score": 0.735}},
+     "p2": {"derived": {"d4", "d5"}, "winner": "H3", "score": 0.735}, "legacy": True},
     {"name": "adjudication-phantom-invoice", "dir": CASES / "adjudication-phantom-invoice",
-     "p1_facts": "facts.json", "p2_facts": "facts-trail.json",
+     "p1_facts": "terminusdb/facts.json", "p2_facts": "terminusdb/facts-trail.json",
      "p1": {"derived": {"d1", "d2", "d3", "d4"}, "pruned": {"H3", "H4"},
             "ranking": [("H2", 0.725), ("H1", 0.535)], "rec": "q1"},
-     "p2": {"derived": {"d5", "d6", "d7", "d8"}, "winner": "H1", "score": 0.935}},
+     "p2": {"derived": {"d5", "d6", "d7", "d8"}, "winner": "H1", "score": 0.935}, "legacy": True},
     {"name": "causation-three-am-outage", "dir": CASES / "causation-three-am-outage",
-     "p1_facts": "facts.json", "p2_facts": "facts-postmortem.json",
+     "p1_facts": "terminusdb/facts.json", "p2_facts": "terminusdb/facts-postmortem.json",
      "p1": {"derived": {"d1", "d2", "d3"}, "pruned": {"H2", "H4"},
             "ranking": [("H1", 0.535), ("H3", 0.430)], "rec": "q1"},
-     "p2": {"derived": {"d4", "d5", "d6"}, "winner": "H3", "score": 0.830}},
+     "p2": {"derived": {"d4", "d5", "d6"}, "winner": "H3", "score": 0.830}, "legacy": True},
     {"name": "insurance-claim-fraud", "dir": REPO / "bundles" / "insurance-claim-fraud",
      "p1_facts": "fixtures/facts-staged.json", "p2_facts": None,
      "p1": {"derived": {"d1", "d2", "d2b", "d3", "d4"}, "pruned": {"H4"},
             "ranking": [("H2", 0.630), ("H1", 0.625), ("H3", 0.620)], "rec": None}},
 ]
-# PoC oracle cases under engine/cases load as legacy unsigned bundles → dev mode
-for _c in SELFTEST_CASES[:3]:
-    _c["legacy"] = True
-    _c["p1_facts"] = "terminusdb/" + _c["p1_facts"]
-    if _c["p2_facts"]:
-        _c["p2_facts"] = "terminusdb/" + _c["p2_facts"]
 
 
-def cmd_selftest(args) -> int:
+@app.command("selftest")
+def selftest():
     """Golden-compare every migrated case against its PoC expected.md assertions,
     plus a determinism replay per case. Runs against a scratch db."""
-    import re
-
     from .schema import SCHEMA
 
     c = Client(db=os.environ.get("TERMINUSDB_DB", "facty-selftest"))
@@ -332,68 +385,18 @@ def cmd_selftest(args) -> int:
         bad = [msg for ok, msg in checks if not ok]
         if bad:
             failures.append(f"{name}: " + "; ".join(bad))
-            print(f"FAIL {name}: {'; '.join(bad)}")
+            typer.echo(f"FAIL {name}: {'; '.join(bad)}")
         else:
-            print(f"PASS {name}")
+            typer.echo(f"PASS {name}")
     if failures:
-        print("SELFTEST FAIL")
-        return 1
-    print("SELFTEST PASS — all cases match the PoC golden expectations, deterministic replay")
-    return 0
+        typer.echo("SELFTEST FAIL")
+        raise typer.Exit(1)
+    typer.echo("SELFTEST PASS — all cases match the PoC golden expectations, deterministic replay")
 
 
-def cmd_cases(args) -> int:
-    """List bundles (v2 manifests) and legacy PoC oracle cases."""
-    bdir = REPO / "bundles"
-    if bdir.is_dir():
-        for d in sorted(bdir.iterdir()):
-            if (d / bundle_mod.MANIFEST).exists():
-                m = json.loads((d / bundle_mod.MANIFEST).read_text())
-                signed = "signed" if (d / bundle_mod.SIG).exists() else "UNSIGNED"
-                print(f"bundle\t{d.name}\tv{m['version']}\t{signed}\tkey={m.get('fingerprint', '-')}")
-    for d in sorted(CASES.iterdir()) if CASES.is_dir() else []:
-        if (d / "terminusdb" / "pack.json").exists():
-            print(f"case(legacy)\t{d.name}")
-    return 0
-
-
-def main(argv=None) -> int:
-    p = argparse.ArgumentParser(prog="facty", description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
-    sub = p.add_subparsers(dest="cmd", required=True)
-
-    def add_ref(sp):
-        sp.add_argument("--ref", default=None, help="TerminusDB branch/commit to work on (default main)")
-
-    sp = sub.add_parser("init-db"); add_ref(sp); sp.set_defaults(fn=cmd_init_db)
-
-    sp = sub.add_parser("keys")
-    ksub = sp.add_subparsers(dest="keys_cmd", required=True)
-    k = ksub.add_parser("init"); k.add_argument("--name", default="default"); k.set_defaults(fn=cmd_keys_init)
-    k = ksub.add_parser("list"); k.set_defaults(fn=cmd_keys_list)
-
-    sp = sub.add_parser("bundle")
-    bsub = sp.add_subparsers(dest="bundle_cmd", required=True)
-    b = bsub.add_parser("load"); b.add_argument("bundle_dir"); b.add_argument("--name"); b.add_argument("--dev", action="store_true"); add_ref(b); b.set_defaults(fn=cmd_bundle_load)
-    b = bsub.add_parser("sign"); b.add_argument("bundle_dir"); b.add_argument("--key", default=None); b.set_defaults(fn=cmd_bundle_sign)
-    b = bsub.add_parser("verify"); b.add_argument("bundle_dir"); b.set_defaults(fn=cmd_bundle_verify)
-    sp = sub.add_parser("load-facts"); sp.add_argument("facts"); sp.add_argument("--message", default="load facts"); add_ref(sp); sp.set_defaults(fn=cmd_load_facts)
-    sp = sub.add_parser("sense"); sp.add_argument("case_dir"); sp.add_argument("--out", required=True); sp.set_defaults(fn=cmd_sense)
-    sp = sub.add_parser("run"); sp.add_argument("case"); sp.add_argument("--add-facts"); sp.add_argument("--phase", default="1"); add_ref(sp); sp.set_defaults(fn=cmd_run)
-    sp = sub.add_parser("compile-rules"); sp.add_argument("case_dir"); sp.set_defaults(fn=cmd_compile_rules)
-    sp = sub.add_parser("log"); add_ref(sp); sp.set_defaults(fn=cmd_log)
-    sp = sub.add_parser("verdict"); add_ref(sp); sp.set_defaults(fn=cmd_verdict)
-    sp = sub.add_parser("metrics"); sp.set_defaults(fn=cmd_metrics)
-    sp = sub.add_parser("cases"); sp.set_defaults(fn=cmd_cases)
-    sp = sub.add_parser("selftest"); sp.set_defaults(fn=cmd_selftest)
-
-    args = p.parse_args(argv)
-    try:
-        return args.fn(args)
-    except bundle_mod.BundleError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 1
+def main() -> None:
+    app()
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
