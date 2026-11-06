@@ -1,0 +1,27 @@
+{
+  "contents": {
+    "bundle.json": "4bf15e79a16ac1daa5befc0bca76853351d076b819e915e4e6daee316bae927a",
+    "classify.json": "0582b10f1bc049436609c8795c73ded7c6857e3b0650fc6f8f14800f11802c86",
+    "evidence/alerts.csv": "542f3a6f5764bd11b423b662e3f692f7b026eb48c37727ecd02799db1c596f4d",
+    "evidence/narrative.txt": "15fa7123cc5ec6264410d2a5b6452dc58950c49f7cd4dc723699ae28634ca576",
+    "evidence/routing-policy.txt": "f498fa988aa20ad4bd7f75c3ee1366dc9a929573fbe351b1c59e0132e01d6878",
+    "evidence/threat-intel.txt": "dfa62d15677439b00d6cbc30ec29531e8d87e024ea408f25d244ec8a0dde8a17",
+    "fixtures/facts-initial.json": "9775a6ae71d4e16a90a6bcbe0149ab65f6c2f046a205ab0954b7d4f64fcc5152",
+    "pack/constraints.json": "e0389bda653ef6475e0fa89095b7744c3c85937792c53e93b339cec41321d27e",
+    "pack/hypotheses.json": "32fdb432b32e4d29e404724c943c0b30daa7261f21c3e553ccc0d92f7b53a6c6",
+    "pack/rules.json": "a26bb4bcd883f15bbdd49505e8c2befe27f1bf4bc2f8e15cc9b9f62b8def1b6e",
+    "sensor/decisions.json": "746e112d160545bb4adc3a3b69ef78cfadb1382643d9b24753d0b619262d3ab2",
+    "tests/facts-initial.expected.json": "168ecd91b4eb8f7c460e63cd101e7b427804111f66b09bb1daf895cd3f76a97e",
+    "tests/facts-initial.json": "7ca8ab11d2d14603234c67cff4741056e190d757f35c9b045de4aaf2b3d6f2ee"
+  },
+  "created": "2026-11-06T04:19:07+00:00",
+  "engine": {
+    "name": "facty",
+    "version": "0.2.0"
+  },
+  "fingerprint": "c50ed3ed27662dd3",
+  "id": "triage-alert-flood",
+  "kind": "domain",
+  "publicKey": "CmfoOCNWShBIojQMIBc7rZz0KeGI11mwi29c63zPweg=",
+  "version": "2.0.0"
+}

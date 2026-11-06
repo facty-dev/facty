@@ -1,0 +1,28 @@
+{
+  "contents": {
+    "bundle.json": "006869f6fa00dc976ce21b109f07b16789defdacb0a91ddec49f913c110d32e8",
+    "classify.json": "18531b8fe083a41bbe3c3ba94b1e1effbdc7ad1fffc5a7a6480f7b7dca5912cb",
+    "evidence/claim-form.txt": "89e23b65258e8a1b1905bf76892e16275d58434885ca237e027fc4bb5904efa6",
+    "evidence/police-report.txt": "002d1cc3e660ac2a1af4804bff4105e5a4535027f10d5abe3bf0678418a16969",
+    "evidence/prior-claims.csv": "7a5c748f35276ef078225802f4a00e72beb969889aefa2b56a920c32a434c948",
+    "evidence/repair-estimate.csv": "52cf07257878d8d56ae07a7b0b12f9ea8bce06428358ff6a2aa976f843a992a3",
+    "evidence/witness-statement.txt": "e34d1b881c772e52e310aa87b4d19b6f28eaf883c62d651e4c9d3a23ea4acc23",
+    "fixtures/facts-staged.json": "9d9706a4d1ea4eaa85f9644234fef2c45a06562591bd33af5bd8de9309d7da59",
+    "pack/constraints.json": "90f6113a47baf5d3fe8f23527169b04fb76847668f51ce0966e943448dd9ecb2",
+    "pack/hypotheses.json": "a7b2eb13d300995073d850a3a26a28702cdd2167af5abe517b7c4e011a16a653",
+    "pack/rules.json": "2a3899ae87d5fb80123952c4678e2847dc831d07b4beb011e08874b5ceec7d5b",
+    "sensor/decisions.json": "3015473f519270d0edf6f577dd6bdead824dac28fbb1dfda7d1f5e1870b97eb6",
+    "tests/facts-staged.expected.json": "b703767472cfc2cd523700a1d918652cd2182bd1b5bd81ba72420d8f7796a037",
+    "tests/facts-staged.json": "a2a79232d94ffb5addba837fbde79247c8aa26d71cffd11a12db6d2cee9e5a8f"
+  },
+  "created": "2026-11-06T04:19:07+00:00",
+  "engine": {
+    "name": "facty",
+    "version": "0.2.0"
+  },
+  "fingerprint": "c50ed3ed27662dd3",
+  "id": "insurance-claim-fraud",
+  "kind": "domain",
+  "publicKey": "CmfoOCNWShBIojQMIBc7rZz0KeGI11mwi29c63zPweg=",
+  "version": "2.0.0"
+}
