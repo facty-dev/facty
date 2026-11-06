@@ -37,9 +37,27 @@ app = typer.Typer(
 keys_app = typer.Typer(name="keys", help="Ed25519 signing keys (live in ~/.facty/keys, never committed).", no_args_is_help=True)
 bundle_app = typer.Typer(name="bundle", help="Signed bundle v2: sign / verify / load (the trust gate).", no_args_is_help=True)
 case_app = typer.Typer(name="case", help="Case lifecycle: a case IS a TerminusDB branch — real, deletable.", no_args_is_help=True)
+vm_app = typer.Typer(name="vm", help="SmolVM sandbox lifecycle: one reused machine, stopped when done (image persists).", no_args_is_help=True)
 app.add_typer(keys_app)
 app.add_typer(bundle_app)
 app.add_typer(case_app)
+app.add_typer(vm_app)
+
+
+@vm_app.command("status")
+def vm_status():
+    if not sandbox._smolvm_available():
+        typer.echo("smolvm binary not found — sandbox backend will use local (--dev)")
+        return
+    p = __import__("subprocess").run(["smolvm", "machine", "list"], capture_output=True, text=True)
+    typer.echo(p.stdout or "(no machines)")
+
+
+@vm_app.command("down")
+def vm_down():
+    """Stop the sandbox VM (the image persists — no rebuild on next use)."""
+    sandbox.shutdown_machine()
+    typer.echo(f"stopped {sandbox.SMOLVM_MACHINE} (image persists; next run reuses it)")
 
 OptRef = Annotated[Optional[str], typer.Option("--ref", help="TerminusDB branch/commit to work on (default main)")]
 OptDev = Annotated[bool, typer.Option("--dev", help="Escape hatch: allow unsigned/legacy bundles (or FACTY_DEV=1)")]
@@ -97,7 +115,7 @@ def init_db(ref: OptRef = None):
     from .schema import SCHEMA
 
     c.install_schema(SCHEMA)
-    typer.echo("schema installed: " + ", ".join(d["@id"] for d in SCHEMA))
+    typer.echo("schema installed: " + ", ".join(d["@id"] for d in SCHEMA if d.get("@type") == "Class"))
 
 
 @bundle_app.command("load")

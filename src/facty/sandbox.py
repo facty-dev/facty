@@ -32,18 +32,39 @@ def _smolvm_available() -> bool:
     return shutil.which("smolvm") is not None
 
 
+def _machine_exists() -> bool:
+    """Single-instance guard: the machine name is fixed (FACTY_SANDBOX_VM) —
+    check the registry before creating so we never multiply VMs."""
+    p = subprocess.run(["smolvm", "machine", "list"], capture_output=True, text=True, timeout=30)
+    return SMOLVM_MACHINE in (p.stdout or "")
+
+
 def ensure_machine() -> None:
-    """Create the SmolVM machine once per process and reuse it across calls/tests
-    (`smolvm machine create --net --name facty` + start). Rebuilding the VM per
-    sandbox call would thrash compute; the VM is a long-lived session."""
+    """Create the SmolVM machine ONCE per process from the saved image and reuse
+    it across calls/tests; persistence lives in the IMAGE (docker save), not in
+    rebuilt VMs. Registers atexit stop so no VM is left hanging open when the
+    engine is done running."""
     global _machine_ready
     if _machine_ready or not _smolvm_available():
         return
-    subprocess.run(["smolvm", "machine", "create", "--net", "--name", SMOLVM_MACHINE],
-                   capture_output=True, timeout=120, check=False)
+    if not _machine_exists():
+        subprocess.run(["smolvm", "machine", "create", "--net", "--name", SMOLVM_MACHINE],
+                       capture_output=True, timeout=120, check=False)
     subprocess.run(["smolvm", "machine", "start", "--name", SMOLVM_MACHINE],
                    capture_output=True, timeout=120, check=False)
     _machine_ready = True
+    import atexit
+    atexit.register(shutdown_machine)
+
+
+def shutdown_machine() -> None:
+    """Stop (not delete) the sandbox VM — the image persists, the machine is
+    stopped when the run is done, so nothing hangs open."""
+    global _machine_ready
+    if _machine_ready and _smolvm_available():
+        subprocess.run(["smolvm", "machine", "stop", "--name", SMOLVM_MACHINE],
+                       capture_output=True, timeout=60, check=False)
+    _machine_ready = False
 
 
 def _run_local(code: str, files: dict[str, bytes], timeout: float) -> dict:

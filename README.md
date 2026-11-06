@@ -41,6 +41,36 @@ flowchart LR
     E --> F[Analyst feedback] --> B
 ```
 
+## Current architecture (technical readers)
+
+One store, one engine, one signed artifact kind. Everything runs headless via
+the `facty` CLI (Typer); TerminusDB v12.1 is the single database — schema
+enforced at every write, and its branch/commit history **is** the audit trail.
+
+```mermaid
+flowchart LR
+    subgraph HOST[Facty CLI — facty case/ingest/sense/run/search]
+      ING[ingest: SHA-256 object store<br/>+ custody + parsers]
+      SEN[sense / extract: pydantic-ai<br/>typed output, BYO-key, cached]
+      ENG[engine: WOQL rule compiler<br/>chain → prune → rank → verdict]
+    end
+    TDB[(TerminusDB v12.1<br/>case = branch · commits = trace<br/>+ versioned semantic index)]
+    OBJ[(.facty/objects<br/>content-addressed originals)]
+    VM[SmolVM sandbox<br/>codemode: LLM-written code runs here]
+    ING --> OBJ
+    ING --> TDB
+    SEN --> TDB
+    ENG <--> TDB
+    SEN -. codemode .-> VM
+    B[bundles/ signed v2<br/>manifest + Ed25519 sig] -->|verify gate| ENG
+```
+
+Determinism contract: the verdict path (engine) never calls an LLM, a clock, or
+a random source — same committed graph state → byte-identical verdict (asserted
+by `./facty selftest`). Semantic search (embeddings) is used on the sensing
+side and, logged and recorded, for contradiction candidates in the trace — it
+never decides anything by itself (ADR-0008/0009).
+
 ## The case loop
 
 New facts don't just add conclusions — they open questions: *what else should

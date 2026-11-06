@@ -28,7 +28,13 @@ VALUE_FIELDS = {
     "var": {"@type": "Optional", "@class": "xsd:string"},  # presence = bind-any (existence)
 }
 
+# v12.1 (versioned search): the @context enables the VectorLink index
+# (`store_indices`); classes with @metadata.embedding are auto-embedded on every
+# commit, versioned per commit. Query = GraphQL over the doc (NO commas),
+# template = Handlebars rendering to the embeddable text.
 SCHEMA: list[dict] = [
+    {"@type": "@context", "@base": "terminusdb:///data/", "@schema": "terminusdb:///schema#",
+     "@metadata": {"terminusdb": {"options": ["store_indices"]}}},
     {"@type": "Class", "@id": "Condition", "@subdocument": [],
      "@key": {"@type": "Random"},
      "subject": "xsd:string", "predicate": "xsd:string", **VALUE_FIELDS},
@@ -37,7 +43,16 @@ SCHEMA: list[dict] = [
      "subject": "xsd:string", "predicate": "xsd:string", **VALUE_FIELDS,
      "confidence": "xsd:decimal", "source": "xsd:string",
      "observedAt": {"@type": "Optional", "@class": "xsd:date"},
-     "@key": {"@type": "Hash", "@fields": ["id"]}},
+     # set at load time (BYO-key embeddings, disk-cached, stored content-addressed);
+     # lets the deterministic engine flag semantic contradiction candidates (ADR-0009)
+     "embeddingSha256": OPT_STR,
+     "@key": {"@type": "Hash", "@fields": ["id"]},
+     # native versioned embedding (12.1): lets the deterministic engine run
+     # semantic-contradiction detection over facts from the commit-indexed
+     # vectors — logged in ADR-0009, never an LLM call
+     "@metadata": {"embedding": {
+         "query": "query($id: ID){ Fact(id: $id) { _id subject predicate valueString valueBool valueNum source } }",
+         "template": "Fact {{subject}} {{predicate}} = {{valueString}}{{valueBool}}{{valueNum}} (source: {{source}}). ID: {{_id}}."}}},
     # FactTemplate: the derived-fact blueprint inside a derive action. Must be
     # a @subdocument — if it were a Fact reference, TerminusDB would create a
     # real Fact node for it and the engine would see the conclusion as a premise.
@@ -129,7 +144,10 @@ SCHEMA: list[dict] = [
     {"@type": "Class", "@id": "ExtractedText",
      "id": "xsd:string", "original": "xsd:string", "parser": "xsd:string",
      "text": "xsd:string", "textSha256": "xsd:string",
-     "@key": {"@type": "Hash", "@fields": ["id"]}},
+     "@key": {"@type": "Hash", "@fields": ["id"]},
+     "@metadata": {"embedding": {
+         "query": "query($id: ID){ ExtractedText(id: $id) { _id text parser } }",
+         "template": "{{parser}}: {{text}} ID: {{_id}}."}}},
     # Quarantine: unknown file types are listed, never dropped, never guessed.
     {"@type": "Class", "@id": "Quarantine",
      "id": "xsd:string", "original": "xsd:string", "path": "xsd:string",

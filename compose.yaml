@@ -3,12 +3,16 @@
 #   make deps && python -m facty init-db
 services:
   terminusdb:
-    image: terminusdb/terminusdb-server:v12
+    image: terminusdb/terminusdb-server:v12.1.0-rc2
     ports:
       - "6363:6363"
     environment:
       TERMINUSDB_ADMIN_PASS: root
       TERMINUSDB_SERVER_DB_PATH: /app/terminusdb/storage
+      # 12.1 native VectorLink index (RC): needs an embedding provider (separate
+      # `embeddings`/Ollama service per the quickstart) — we use BYO-key Mistral
+      # embeddings + content-addressed vectors instead (ADR-0008/0009), so this
+      # stays off: # TERMINUSDB_INDEXER_BACKEND: vectorlink
     volumes:
       - terminusdb-data:/app/terminusdb/storage
   app:

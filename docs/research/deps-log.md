@@ -160,3 +160,29 @@ object store, `EvidenceChunk` docs in TerminusDB, cosine client-side (case scale
 = a drawer). All induction-side; verdict path never reads embeddings. Upgrade
 path: TerminusDB >= 12.1 → native versioned embeddings. Implemented in
 src/facty/search.py; `facty search`, `facty sense --rag`, ingest auto-embeds.
+
+## TerminusDB 12.1.0-rc2 upgrade (2026-11-06, PO approved RC) — live-verified
+
+- Image `terminusdb/terminusdb-server:v12.1.0-rc2` (2026-11-03, latest non-dev tag
+  per Docker Hub); compose.yaml + Dockerfile bumped; container re-created; api/info
+  reports 12.1.0-rc2. Selftest PASS x4 + e2e DETERMINISM OK on the new version.
+- Native versioned search (VectorLink) findings, docs read in full
+  (versioned-search, versioned-search-embeddings, versioned-search-indexing,
+  versioned-search-quickstart, versioned-search-api-reference):
+  schema `@context` with `"store_indices"` must be POSTed to the ROOT document
+  endpoint (`/api/document/{org}/{db}?graph_type=schema&full_replace=true`) —
+  branch paths reject contexts ("Inserting contexts is not allowed");
+  class `@metadata.embedding` = {GraphQL query (NO commas), Handlebars template};
+  search = `GET /api/search/{org}/{db}/{ref}?q=..&snippet=true&type=..`;
+  index status = `GET /api/index/...`; vectors via `/api/plugin/search-embeddings`.
+  In-process engine: `TERMINUSDB_INDEXER_BACKEND=vectorlink` (without it:
+  "vectorlink endpoint is not configured"); with it, indexing runs but
+  searchable_documents stays 0 until an embedding provider is attached (quickstart
+  uses a separate Ollama `embeddings` service; model GGUF from hf.co).
+- DECISION: we keep our BYO-key Mistral-embeddings + content-addressed-vectors +
+  client-side cosine (works on any version, disk-cached = deterministic replay,
+  no HF egress needed — the VM allow-list excludes huggingface.co). Schema now
+  carries store_indices + embedding metadata on Fact/ExtractedText so the native
+  index is ready when an embedding provider is configured. ADR-0009.
+- 12.1 keeps all v12.0.9 endpoint quirks we logged (Set not Array, PUT/POST upsert,
+  Hash-keyed @id for deletes, branch path shapes) — selftest green confirms.

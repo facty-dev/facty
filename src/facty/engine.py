@@ -20,10 +20,57 @@ W_CLAIMS, W_SUPPORT, W_PRIOR = 0.6, 0.3, 0.1
 
 # ── loaders: pack files are already TerminusDB JSON-LD → plain inserts ──────
 
-def load_facts(client, facts_path: Path, message: str) -> int:
+def load_facts(client, facts_path: Path, message: str, embed: bool = True) -> int:
     docs = json.loads(Path(facts_path).read_text())
     client.insert_docs(docs, message=message)
+    if embed:
+        # Embed fact strings on the BYO-key path (disk-cached) and record the
+        # vector hash on the Fact doc — so the deterministic engine can later
+        # flag semantic contradiction candidates WITHOUT any live model call
+        # (replays read the recorded vectors; offline runs replay byte-identical).
+        from . import search
+        texts = [f'{d.get("subject")} {d.get("predicate")} = '
+                 f'{d.get("valueString", d.get("valueBool", d.get("valueNum", "")))}'
+                 for d in docs]
+        embs = search.embed_texts(texts)
+        updates = []
+        for d, emb in zip(docs, embs):
+            if emb:
+                d["embeddingSha256"] = search.store_embedding(emb)
+                updates.append(d)
+        if updates:
+            client.insert_docs(updates, message=f"{message} (embeddings)")
     return len(docs)
+
+
+def semantic_contradictions(client, threshold: float = 0.93) -> list[dict]:
+    """Deterministic-side semantic search (logged, ADR-0009): pairwise cosine
+    over the RECORDED fact embeddings; near-duplicate facts with conflicting
+    values are contradiction candidates. No LLM call — vectors come from the
+    case record (object store). Returns [{a, b, score}]."""
+    from . import search
+    from .ingest import DATA_DIR
+    facts = [d for d in _docs_of(client, "Fact") if d.get("embeddingSha256")]
+    objdir = DATA_DIR / "objects"
+    vecs = {}
+    for d in facts:
+        blob = objdir / d["embeddingSha256"]
+        if blob.exists():
+            vecs[d["id"]] = json.loads(blob.read_text())
+    out = []
+    ids = sorted(vecs)
+    for i in range(len(ids)):
+        for j in range(i + 1, len(ids)):
+            a, b = ids[i], ids[j]
+            fa, fb = next(d for d in facts if d["id"] == a), next(d for d in facts if d["id"] == b)
+            va = fa.get("valueString", fa.get("valueBool", fa.get("valueNum")))
+            vb = fb.get("valueString", fb.get("valueBool", fb.get("valueNum")))
+            if va == vb:
+                continue  # same value — not a contradiction
+            score = search.cosine(vecs[a], vecs[b])
+            if score >= threshold:
+                out.append({"a": a, "b": b, "score": round(score, 6)})
+    return sorted(out, key=lambda c: (-c["score"], c["a"], c["b"]))
 
 
 def fact_from_template(t: dict, rule_id: str = "") -> dict:
@@ -184,6 +231,20 @@ def run_phase(client, case: str, phase: str) -> dict:
     questions = rank_questions(client, alive)
     recommended = questions[0]["id"] if questions else None
     winner = ranking[0]["hypothesis"] if len(alive) == 1 else None
+    # deterministic-side semantic search (logged, ADR-0009): contradiction
+    # candidates from recorded embeddings — trace events + queryable Facts
+    contradictions = semantic_contradictions(client)
+    for c in contradictions:
+        client.insert_docs([{"@type": "Fact", "id": f"sc-{c['a']}-{c['b']}",
+                             "type": "derived", "subject": c["a"],
+                             "predicate": "semanticContradictionWith",
+                             "valueString": c["b"], "confidence": c["score"],
+                             "source": "engine:semantic"}],
+                           message=f"semantic contradiction candidate {c['a']}~{c['b']}")
+    trace += sorted(f"semantic-contradiction-candidate {c['a']}~{c['b']} ({c['score']:.3f})"
+                    for c in contradictions)
+    events += [f"semantic-contradiction-candidate {c['a']}~{c['b']} ({c['score']:.3f})"
+               for c in contradictions]
     verdict = {
         "@type": "Verdict",
         "id": f"verdict-{case}-{phase}",

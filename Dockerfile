@@ -2,7 +2,7 @@
 # Boot it with:  smolvm --image <this image saved via `docker save`>
 # (smolvm boots local container images as micro-VMs; no daemon inside the VM.)
 # v12 + default storage path per terminusdb.com/llms.txt (see docs/research/deps-log.md)
-FROM terminusdb/terminusdb-server:v12
+FROM terminusdb/terminusdb-server:v12.1.0-rc2
 
 ENV TERMINUSDB_SERVER_DB_PATH=/app/terminusdb/storage \
     TERMINUSDB_ADMIN_PASS=root \

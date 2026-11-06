@@ -147,16 +147,39 @@ class Client:
 
     # -- schema ------------------------------------------------------------
     def install_schema(self, schema, author: str = "facty", message: str = "install schema") -> dict:
-        # v12: the schema is written through the document endpoint with
-        # graph_type=schema (POST /api/schema is a legacy 500). PUT-first so
-        # re-running init-db on an existing db is idempotent. Verified live.
+        # v12.1: a schema array containing an @context (store_indices) must be
+        # written to the ROOT document endpoint with full_replace=true —
+        # branch paths reject contexts ("Inserting contexts is not allowed").
+        # Without a context, the branch path works (PUT-first idempotent).
+        has_ctx = any(isinstance(d, dict) and d.get("@type") == "@context" for d in schema)
         q = {"author": author, "message": message, "graph_type": "schema"}
+        if has_ctx:
+            q["full_replace"] = "true"
+            return self._req("schema", "POST", f"/api/document/{self.org}/{self.db}", schema, q)
         try:
             return self._req("schema", "PUT", self._ref_db_path("document/"), schema, q)
         except TerminusError as e:
             if e.status == 404:
                 return self._req("schema", "POST", self._ref_db_path("document/"), schema, q)
             raise
+
+    # -- versioned semantic search (v12.1 VectorLink) ------------------------
+    def search(self, q: str, snippet: bool = True, doc_type: str | None = None) -> list[dict]:
+        """GET /api/search/{org}/{db}/{ref}?q=... — versioned per-commit search."""
+        query = {"q": q, "snippet": "true" if snippet else "false"}
+        if doc_type:
+            query["type"] = doc_type
+        return self._req("search", "GET", f"/api/search/{self.org}/{self.db}/{self._ref_path()}", query=query)
+
+    def index_status(self) -> dict:
+        return self._req("index", "GET", f"/api/index/{self.org}/{self.db}/{self._ref_path()}")
+
+    def embeddings_of_type(self, doc_type: str) -> list[dict]:
+        """GET /api/plugin/search-embeddings/...?doc_type=X — NDJSON of vectors."""
+        out = self._req("embeddings", "GET",
+                        f"/api/plugin/search-embeddings/{self.org}/{self.db}/{self._ref_path()}",
+                        query={"doc_type": doc_type})
+        return out if isinstance(out, list) else [out]
 
     # -- documents ---------------------------------------------------------
     def insert_docs(self, docs, author: str = "facty", message: str = "insert",
