@@ -20,14 +20,6 @@ W_CLAIMS, W_SUPPORT, W_PRIOR = 0.6, 0.3, 0.1
 
 # ── loaders: pack files are already TerminusDB JSON-LD → plain inserts ──────
 
-def load_pack(client, tdb_dir: Path, pack: str) -> dict:
-    """tdb_dir contains pack.json (migrated by scripts/migrate_pack.py)."""
-    docs = json.loads((Path(tdb_dir) / "pack.json").read_text())
-    client.insert_docs(docs, message=f"load pack {pack}")
-    return {k: sum(1 for d in docs if d.get("@type") == k)
-            for k in ("Rule", "Hypothesis", "Constraint")}
-
-
 def load_facts(client, facts_path: Path, message: str) -> int:
     docs = json.loads(Path(facts_path).read_text())
     client.insert_docs(docs, message=message)

@@ -1,7 +1,8 @@
 """facty CLI — headless, no TUI.
 
   python -m facty init-db
-  python -m facty load-pack <case-dir> [--name <case>]
+  python -m facty keys init | list
+  python -m facty bundle sign|verify|load <bundle-dir> [--dev]
   python -m facty load-facts <facts.json> --message <msg>
   python -m facty sense <case-dir> --out <facts.json>   # live LLM sensing
   python -m facty run <case> [--add-facts <drop.json>] [--phase <name>] [--ref <branch>]
@@ -18,7 +19,8 @@ import os
 import sys
 from pathlib import Path
 
-from . import engine, rules, sensing
+from . import bundle as bundle_mod
+from . import engine, keys, rules, sensing
 
 
 def engine_fact_doc(f: dict) -> dict:
@@ -62,13 +64,48 @@ def cmd_init_db(args) -> int:
     return 0
 
 
-def cmd_load_pack(args) -> int:
+def cmd_bundle_load(args) -> int:
+    """The trust gate: signed v2 bundles verify (embedded pubkey, no private
+    key needed); unsigned/legacy bundles are refused unless --dev/FACTY_DEV=1."""
     c = _client(args)
-    tdb = Path(args.case_dir)
-    if (tdb / "pack").is_dir() and not (tdb / "pack.json").exists():
-        tdb = tdb / "terminusdb"  # a PoC case dir → its migrated terminusdb/ subdir
-    name = args.name or tdb.parent.name
-    print(engine.load_pack(c, tdb, name))
+    b = bundle_mod.Bundle.from_dir(args.bundle_dir, dev=args.dev)
+    name = args.name or b.id
+    print(b.load_into(c, name, dev=args.dev))
+    return 0
+
+
+def cmd_bundle_sign(args) -> int:
+    b = bundle_mod.Bundle.from_dir(args.bundle_dir, dev=True)  # re-sign may start unsigned
+    fp = b.sign(args.key)
+    print(f"signed {b.id}@{b.version} with key {fp} → {b.path / bundle_mod.SIG}")
+    return 0
+
+
+def cmd_bundle_verify(args) -> int:
+    b = bundle_mod.Bundle.from_dir(args.bundle_dir, dev=True)
+    if not (b.path / bundle_mod.MANIFEST).exists():
+        print(f"{b.path}: legacy v1 bundle — unsigned, no manifest"); return 1
+    b.verify_or_raise()
+    print(f"OK {b.id}@{b.version} — signature valid, key {b.fingerprint}, "
+          f"{len(b.manifest['contents'])} content files verified")
+    return 0
+
+
+def cmd_keys_init(args) -> int:
+    fp, pub = keys.init_key(args.name)
+    print(f"new key {fp}  (label: {args.name})")
+    print(f"  private: {keys.KEYS_DIR / (fp + '.key')}  (never commit this)")
+    print(f"  public:  {pub}")
+    return 0
+
+
+def cmd_keys_list(args) -> int:
+    ks = keys.list_keys()
+    if not ks:
+        print(f"no keys in {keys.KEYS_DIR} — run `facty keys init`")
+        return 0
+    for k in ks:
+        print(f"{k['fingerprint']}  {k['label']:<12} private={'yes' if k['has_private'] else 'no'}")
     return 0
 
 
@@ -83,14 +120,22 @@ def cmd_sense(args) -> int:
     case_dir = Path(args.case_dir)
     ev = sorted((case_dir / "evidence").glob("*"))
     evidence = "\n\n".join(f"--- {p.name} ---\n{p.read_text(errors='replace')}" for p in ev)
-    # exact pack vocabulary: the engine matches subject/predicate/value literally,
-    # so the senses MUST reuse these strings verbatim
-    pack = case_dir / "pack"
+    # exact bundle vocabulary: the engine matches subject/predicate/value
+    # literally, so the senses MUST reuse these strings verbatim
+    docs = None
+    for cand in (case_dir / "bundle.json", case_dir / "terminusdb" / "pack.json"):
+        if cand.exists():
+            docs = json.loads(cand.read_text()); break
+    if docs is None:
+        pack = case_dir / "pack"
+        docs = [i for f in ("rules.json", "hypotheses.json", "constraints.json")
+                for i in json.loads((pack / f).read_text())]
+    if isinstance(docs, dict) and "documents" in docs:
+        docs = docs["documents"]
     vocab = {"subjects": set(), "predicates": set()}
-    for fname in ("rules.json", "hypotheses.json", "constraints.json"):
-        for item in json.loads((pack / fname).read_text()):
-            for c in item.get("when", []) + item.get("claims", []):
-                vocab["subjects"].add(c["subject"]); vocab["predicates"].add(c["predicate"])
+    for item in docs:
+        for c in item.get("when", []) + item.get("claims", []):
+            vocab["subjects"].add(c["subject"]); vocab["predicates"].add(c["predicate"])
     vocab = {k: sorted(v) for k, v in vocab.items()}
     prompt = (
         "Read the evidence below and emit a JSON object {\"facts\": [...]} — one entry per "
@@ -137,8 +182,10 @@ def cmd_run(args) -> int:
 
 def cmd_compile_rules(args) -> int:
     case_dir = Path(args.case_dir)
-    tdb = case_dir / "terminusdb" if (case_dir / "pack").is_dir() else case_dir
-    for r in [d for d in json.loads((tdb / "pack.json").read_text()) if d.get("@type") == "Rule"]:
+    cand = case_dir / "bundle.json"
+    if not cand.exists():
+        cand = case_dir / "terminusdb" / "pack.json"
+    for r in [d for d in json.loads(cand.read_text()) if d.get("@type") == "Rule"]:
         q, id_vars = rules.compile_rule(r)
         print(r["id"], "→", json.dumps(q))
     return 0
@@ -204,11 +251,17 @@ SELFTEST_CASES = [
      "p1": {"derived": {"d1", "d2", "d3"}, "pruned": {"H2", "H4"},
             "ranking": [("H1", 0.535), ("H3", 0.430)], "rec": "q1"},
      "p2": {"derived": {"d4", "d5", "d6"}, "winner": "H3", "score": 0.830}},
-    {"name": "insurance-claim-fraud", "dir": REPO / "packs" / "insurance-claim-fraud",
-     "p1_facts": "facts-staged.json", "p2_facts": None,
+    {"name": "insurance-claim-fraud", "dir": REPO / "bundles" / "insurance-claim-fraud",
+     "p1_facts": "fixtures/facts-staged.json", "p2_facts": None,
      "p1": {"derived": {"d1", "d2", "d2b", "d3", "d4"}, "pruned": {"H4"},
             "ranking": [("H2", 0.630), ("H1", 0.625), ("H3", 0.620)], "rec": None}},
 ]
+# PoC oracle cases under engine/cases load as legacy unsigned bundles → dev mode
+for _c in SELFTEST_CASES[:3]:
+    _c["legacy"] = True
+    _c["p1_facts"] = "terminusdb/" + _c["p1_facts"]
+    if _c["p2_facts"]:
+        _c["p2_facts"] = "terminusdb/" + _c["p2_facts"]
 
 
 def cmd_selftest(args) -> int:
@@ -236,14 +289,14 @@ def cmd_selftest(args) -> int:
     failures = []
     for spec in SELFTEST_CASES:
         name = spec["name"]
-        tdb = spec["dir"] / "terminusdb"
         c.ref = f"case-{name}"
         try:
             c.branch(c.ref)
         except TerminusError:
             pass
-        engine.load_pack(c, tdb, name)
-        engine.load_facts(c, tdb / spec["p1_facts"], "phase 1 facts")
+        b = bundle_mod.Bundle.from_dir(spec["dir"], dev=spec.get("legacy", False))
+        b.load_into(c, name, dev=spec.get("legacy", False))
+        engine.load_facts(c, spec["dir"] / spec["p1_facts"], "phase 1 facts")
         p1 = engine.run_phase(c, name, "1")
         e1 = spec["p1"]
         rk = {r["hypothesis"]: r["score"] for r in p1["ranking"]}
@@ -257,7 +310,7 @@ def cmd_selftest(args) -> int:
             (p1["recommendedTest"] == e1["rec"], f"p1 rec {p1['recommendedTest']}"),
         ]
         if spec.get("p2_facts"):
-            engine.load_facts(c, tdb / spec["p2_facts"], "phase 2 drop")
+            engine.load_facts(c, spec["dir"] / spec["p2_facts"], "phase 2 drop")
             p2 = engine.run_phase(c, name, "2")
             e2 = spec["p2"]
             rk2 = {r["hypothesis"]: r["score"] for r in p2["ranking"]}
@@ -290,14 +343,17 @@ def cmd_selftest(args) -> int:
 
 
 def cmd_cases(args) -> int:
-    """List the cases/packs that have a migrated terminusdb/ dir."""
-    for base in (CASES, REPO / "packs"):
-        if not base.is_dir():
-            continue
-        for d in sorted(base.iterdir()):
-            if (d / "terminusdb" / "pack.json").exists():
-                kind = "case" if base == CASES else "pack"
-                print(f"{kind}\t{d.name}")
+    """List bundles (v2 manifests) and legacy PoC oracle cases."""
+    bdir = REPO / "bundles"
+    if bdir.is_dir():
+        for d in sorted(bdir.iterdir()):
+            if (d / bundle_mod.MANIFEST).exists():
+                m = json.loads((d / bundle_mod.MANIFEST).read_text())
+                signed = "signed" if (d / bundle_mod.SIG).exists() else "UNSIGNED"
+                print(f"bundle\t{d.name}\tv{m['version']}\t{signed}\tkey={m.get('fingerprint', '-')}")
+    for d in sorted(CASES.iterdir()) if CASES.is_dir() else []:
+        if (d / "terminusdb" / "pack.json").exists():
+            print(f"case(legacy)\t{d.name}")
     return 0
 
 
@@ -310,7 +366,17 @@ def main(argv=None) -> int:
         sp.add_argument("--ref", default=None, help="TerminusDB branch/commit to work on (default main)")
 
     sp = sub.add_parser("init-db"); add_ref(sp); sp.set_defaults(fn=cmd_init_db)
-    sp = sub.add_parser("load-pack"); sp.add_argument("case_dir"); sp.add_argument("--name"); add_ref(sp); sp.set_defaults(fn=cmd_load_pack)
+
+    sp = sub.add_parser("keys")
+    ksub = sp.add_subparsers(dest="keys_cmd", required=True)
+    k = ksub.add_parser("init"); k.add_argument("--name", default="default"); k.set_defaults(fn=cmd_keys_init)
+    k = ksub.add_parser("list"); k.set_defaults(fn=cmd_keys_list)
+
+    sp = sub.add_parser("bundle")
+    bsub = sp.add_subparsers(dest="bundle_cmd", required=True)
+    b = bsub.add_parser("load"); b.add_argument("bundle_dir"); b.add_argument("--name"); b.add_argument("--dev", action="store_true"); add_ref(b); b.set_defaults(fn=cmd_bundle_load)
+    b = bsub.add_parser("sign"); b.add_argument("bundle_dir"); b.add_argument("--key", default=None); b.set_defaults(fn=cmd_bundle_sign)
+    b = bsub.add_parser("verify"); b.add_argument("bundle_dir"); b.set_defaults(fn=cmd_bundle_verify)
     sp = sub.add_parser("load-facts"); sp.add_argument("facts"); sp.add_argument("--message", default="load facts"); add_ref(sp); sp.set_defaults(fn=cmd_load_facts)
     sp = sub.add_parser("sense"); sp.add_argument("case_dir"); sp.add_argument("--out", required=True); sp.set_defaults(fn=cmd_sense)
     sp = sub.add_parser("run"); sp.add_argument("case"); sp.add_argument("--add-facts"); sp.add_argument("--phase", default="1"); add_ref(sp); sp.set_defaults(fn=cmd_run)
@@ -322,7 +388,11 @@ def main(argv=None) -> int:
     sp = sub.add_parser("selftest"); sp.set_defaults(fn=cmd_selftest)
 
     args = p.parse_args(argv)
-    return args.fn(args)
+    try:
+        return args.fn(args)
+    except bundle_mod.BundleError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

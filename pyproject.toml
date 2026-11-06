@@ -14,11 +14,21 @@ requires-python = ">=3.14"
 # no-dependency fallback and the human-facing surface.
 dependencies = [
     "pydantic-ai[mistral]>=1.0",
-    "textual", "pyte",  # PoC oracle workbench (engine/tui.py), until the PoC is retired
+    "textual",
+    "pyte",  # PoC oracle workbench (engine/tui.py), until the PoC is retired
+    "cryptography>=50.0.2",  # M1 trust spine: Ed25519 bundle signatures, Fernet export encryption
 ]
+
+[project.scripts]
+facty = "facty.cli:main"
 
 [tool.uv]
 package = true  # uv sync installs the project itself into .venv
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
