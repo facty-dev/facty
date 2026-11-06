@@ -186,3 +186,10 @@ src/facty/search.py; `facty search`, `facty sense --rag`, ingest auto-embeds.
   index is ready when an embedding provider is configured. ADR-0009.
 - 12.1 keeps all v12.0.9 endpoint quirks we logged (Set not Array, PUT/POST upsert,
   Hash-keyed @id for deletes, branch path shapes) — selftest green confirms.
+
+- OPERATIONAL (12.1.0-rc2): setting TERMINUSDB_INDEXER_BACKEND=vectorlink WITHOUT an
+  embedding provider wedges the server (post-commit indexer worker hangs; /api/ok
+  stops answering). Plain 12.1.0-rc2 with store_indices in the schema but no backend
+  is fine — commits succeed, /api/index reports the endpoint as unconfigured.
+  compose.yaml therefore keeps the backend OFF (commented) until an embedding
+  service is added.
