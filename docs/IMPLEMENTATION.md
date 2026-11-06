@@ -115,7 +115,7 @@ Loading is a plain insert — the DB's schema validation is the only gate.
   condition). `confidence`/`prior`/scores are `xsd:decimal` numbers.
 - `python -m facty.migrate <case-dir> [facts.json ...]` converts the PoC's
   `pack/*.json` + facts **once** into `<case-dir>/terminusdb/{pack.json, facts-*.json}`.
-  PoC files are untouched. Migrated so far: `packs/insurance-claim-fraud`,
+  PoC files are untouched. Migrated so far: `bundles/insurance-claim-fraud`,
   `engine/cases/attribution-silver-blaze`.
 - Derive blueprints are `FactTemplate` **subdocuments** (a Fact reference would
   materialize the conclusion as a premise). `Fact` is discriminated in WOQL by
@@ -146,7 +146,7 @@ Loading is a plain insert — the DB's schema validation is the only gate.
 │   ├── sensing.py             # vibe -p one-shot calls + disk cache
 │   └── cli.py                 # python -m facty …
 ├── scripts/
-│   └── e2e.sh                 # end-to-end demo: packs/insurance-claim-fraud, offline or --live
+│   └── e2e.sh                 # end-to-end demo: bundles/insurance-claim-fraud, offline or --live
 ├── demos/
 │   └── fraud-phase2-drop.json # discriminating-test evidence drop for the e2e demo
 └── spikes/
@@ -171,7 +171,7 @@ docker save facty | smolvm machine run --net --image - -- bash
 # inside (or against compose from the host):
 pip install -e 
 python -m facty init-db                 # create db + install schema
-python -m facty load-pack engine/cases/attribution-silver-blaze
+python -m facty bundle load bundles/insurance-claim-fraud   # signed gate; --dev for legacy
 FACTY_SENSE=cache python -m facty run attribution-silver-blaze   # offline replay
 python -m facty run attribution-silver-blaze --add-facts engine/cases/attribution-silver-blaze/facts-ledger.json
 python -m facty selftest                # golden-compare vs the PoC expected.md

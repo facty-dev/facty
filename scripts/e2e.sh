@@ -6,7 +6,7 @@
 # Usage:
 #   scripts/e2e.sh                 # offline: golden facts, no LLM key needed
 #   scripts/e2e.sh --live          # live sensing via pydantic-ai (mistral-large-4)
-#   scripts/e2e.sh --case <dir>    # default packs/insurance-claim-fraud
+#   scripts/e2e.sh --case <dir>    # default bundles/insurance-claim-fraud
 #
 # Env: TERMINUSDB_URL (default http://127.0.0.1:6363), TERMINUSDB_DB (default facty-e2e),
 #      MISTRAL_API_KEY (only for --live), FACTY_SENSE=cache forces offline.
@@ -17,7 +17,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 LIVE=0
 KEEP=0
-CASE_DIR="$PROJECT_DIR/packs/insurance-claim-fraud"
+CASE_DIR="$PROJECT_DIR/bundles/insurance-claim-fraud"
 while [ $# -gt 0 ]; do
   case "$1" in
     --live) LIVE=1; shift;;
@@ -47,17 +47,18 @@ fi
 step "1. init-db (create + install the artifact-model schema)"
 $PY init-db
 
-step "2. load-pack $CASE_DIR (rules + hypotheses + constraints as schema-validated documents)"
-$PY load-pack "$CASE_DIR" --name "$(basename "$CASE_DIR")"
+step "2. bundle load $CASE_DIR (signed bundle verified, then inserted as schema-validated documents)"
+$PY bundle verify "$CASE_DIR"
+$PY bundle load "$CASE_DIR" --name "$(basename "$CASE_DIR")"
 
 step "3. facts — the LLM's only job: read evidence into facts (confidence + source spans)"
 if [ "$LIVE" = "1" ]; then
   [ -n "${MISTRAL_API_KEY:-}" ] || { echo "MISTRAL_API_KEY required for --live" >&2; exit 1; }
   $PY sense "$CASE_DIR" --out .cache/e2e-facts-live.json
   FACTS=.cache/e2e-facts-live.json
-  echo "(live-sensed $(uv run --python 3.14 python -c "import json;print(len(json.load(open('$FACTS'))))") facts; golden set has $(uv run --python 3.14 python -c "import json;print(len(json.load(open('$CASE_DIR/terminusdb/facts-staged.json'))))") — drift is reported, never decided on)"
+  echo "(live-sensed $(uv run --python 3.14 python -c "import json;print(len(json.load(open('$FACTS'))))") facts; golden set has $(uv run --python 3.14 python -c "import json;print(len(json.load(open('$CASE_DIR/fixtures/facts-staged.json'))))") — drift is reported, never decided on)"
 else
-  FACTS="$CASE_DIR/terminusdb/facts-staged.json"
+  FACTS="$CASE_DIR/fixtures/facts-staged.json"
   echo "offline mode: using golden facts $FACTS (FACTY_SENSE=cache equivalent)"
 fi
 $PY load-facts "$FACTS" --message "phase 1 facts"

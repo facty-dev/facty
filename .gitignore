@@ -40,3 +40,6 @@ __pycache__/
 
 # setuptools build artifacts (uv sync)
 *.egg-info/
+
+# Facty local data dir (content-addressed store, keys override) — never commit
+.facty/

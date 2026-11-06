@@ -2,7 +2,7 @@
 #
 # The product: a domain-agnostic abductive decision-support engine —
 # evidence in, ranked hypotheses out, full reasoning trace. Domains are
-# packs (engine/cases/, packs/).
+# bundles (bundles/, plus the PoC oracle cases under engine/cases/).
 #
 # Implementation (ADR-0005): TerminusDB-backed engine in src/facty, SmolVM
 # image (Dockerfile), Vibe CLI + pydantic-ai for the LLM half. The PoC under

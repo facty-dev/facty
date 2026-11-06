@@ -74,7 +74,7 @@ flowchart LR
     D --> E[Audit trail] --> F[Human review gate]
 ```
 
-## Domains are packs
+## Domains are bundles
 
 Fraud, outages, security findings, contracts — each is a **pack**: an
 ontology + rules + constraints. Same engine, different costume. (Sherlock was

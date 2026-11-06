@@ -20,9 +20,9 @@ full reasoning trace. Two halves, never swapping jobs:
   facts, proposes hypotheses and discriminating tests. Probabilistic:
   great at reading, not at being right.
 
-Domains are **packs** (ontology + rules + constraints) — fraud, incidents,
-security findings, contracts. The engine is the same; the pack is the
-costume. (Sherlock was a detective, not a doctor.)
+Domains are **bundles** (ontology + rules + constraints, signed — ADR-0006) —
+fraud, incidents, security findings, contracts. The engine is the same; the
+bundle is the costume. (Sherlock was a detective, not a doctor.)
 
 The repo is the engine + typed demo cases + the pack factory:
 
@@ -118,12 +118,13 @@ Schemas: `engine/schemas/*.schema.json`. Codegen: `engine/emit.py` →
 ./facty cases                # list migrated cases/packs (terminusdb/ dirs)
 ./facty selftest             # golden acceptance: every migrated case, asserted + replay
 ./facty init-db              # create db + install schema (needs TerminusDB on :6363)
-./facty load-pack <dir>      # insert <dir>/terminusdb/pack.json
+./facty keys init            # Ed25519 keypair in ~/.facty/keys (never committed)
+./facty bundle sign|verify|load <dir>   # signed bundle gate; unsigned refused outside --dev (ADR-0006)
 ./facty load-facts <file>    # insert fact docs
 ./facty run <case> --phase 1 --ref <branch>   # deterministic verdict on a branch
 ./facty verdict|log|metrics  # inspect outputs, audit trail, LLM latency/tokens
 ./facty sense <dir> --out f.json             # live LLM sensing (pydantic-ai)
-# e2e demo: make e2e / make e2e-live   (scripts/e2e.sh [--live], packs/insurance-claim-fraud)
+# e2e demo: make e2e / make e2e-live   (scripts/e2e.sh [--live], bundles/insurance-claim-fraud)
 ```
 
 ```bash
