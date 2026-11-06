@@ -25,7 +25,7 @@ import typer
 
 from . import bundle as bundle_mod
 from . import cases as cases_mod
-from . import codemode, engine, ingest, keys, rules, sandbox, sensing
+from . import codemode, engine, ingest, keys, rules, sandbox, search, sensing
 from .client import Client, TerminusError
 
 app = typer.Typer(
@@ -195,18 +195,39 @@ def ingest_cmd(src: Annotated[Path, typer.Argument(help="directory of evidence f
                source: Annotated[str, typer.Option("--source", "-s", help="custody source label")],
                case: Annotated[Optional[str], typer.Option("--case", help="ingest onto case branch case-<id>")] = None,
                ref: OptRef = None,
-               ocr: OptDev = False):
+               ocr: Annotated[bool, typer.Option("--ocr", help="route images to the BYO-key OCR path")] = False,
+               no_embed: Annotated[bool, typer.Option("--no-embed", help="skip embedding the extracted texts")] = False):
     """Content-addressed ingest: originals → object store (SHA-256), metadata +
-    derived text → TerminusDB. Idempotent; changed files → version-conflict Fact."""
+    derived text → TerminusDB. Idempotent; changed files → version-conflict Fact.
+    Extracted texts are chunked + embedded (BYO-key, cached) for sensing-side RAG."""
     c = _client(ref)
     if case:
         c.ref = cases_mod._slug(case)
-    s = ingest.ingest_dir(c, src, source, ocr=ocr)
+    s = ingest.ingest_dir(c, src, source, ocr=ocr, embed=not no_embed)
     typer.echo(json.dumps(s, indent=2))
     v = ingest.verify_originals(c)
     typer.echo(f"originals verified: {v['checked']} checked, {len(v['mismatches'])} mismatches")
     if v["mismatches"]:
         raise typer.Exit(1)
+
+
+@app.command("search")
+def search_cmd(query: Annotated[str, typer.Argument(help="natural-language query over the case evidence")],
+               case: Annotated[Optional[str], typer.Option("--case")] = None,
+               top_k: Annotated[int, typer.Option("--top-k")] = 5,
+               ref: OptRef = None):
+    """Semantic search over a case's embedded evidence chunks (sensing-side RAG;
+    the verdict path never reads these)."""
+    c = _client(ref)
+    if case:
+        c.ref = cases_mod._slug(case)
+    hits = search.search_case(c, query, top_k=top_k)
+    if not hits:
+        typer.echo("no embedded chunks — ingest with embeddings (needs MISTRAL_API_KEY) or rerun ingest")
+        raise typer.Exit(1)
+    for h in hits:
+        typer.echo(f"{h['score']:.4f}  {h['id']}  ({h['extracted']}, chunk {h['idx']})")
+        typer.echo("  " + h["text"][:300].replace("\n", " "))
 
 
 @app.command("extract")
@@ -246,6 +267,7 @@ def load_facts(facts: Annotated[Path, typer.Argument()],
 def sense(case_dir: Annotated[Optional[Path], typer.Argument()] = None,
           out: Annotated[Path, typer.Option("--out", "-o")] = ...,
           case: Annotated[Optional[str], typer.Option("--case", help="sense from a case branch's extracted texts")] = None,
+          rag: Annotated[Optional[str], typer.Option("--rag", help="semantic query: prepend top matching evidence chunks to the sensing prompt (induction-side only)")] = None,
           ref: OptRef = None):
     c = _client(ref)
     if case:
@@ -255,6 +277,12 @@ def sense(case_dir: Annotated[Optional[Path], typer.Argument()] = None,
         evidence = "\n\n".join(
             f"--- {origs.get(e['original'], {}).get('path', e['original'][:12])} ---\n{e['text']}"
             for e in sorted(ext, key=lambda d: d["id"]))
+        if rag:
+            hits = search.search_case(c, rag)
+            if hits:
+                evidence = ("RELEVANT EVIDENCE CHUNKS (semantic search, induction-side only):\n"
+                            + "\n\n".join(f"--- chunk {h['id']} (score {h['score']:.3f}) ---\n{h['text']}" for h in hits)
+                            + "\n\n" + evidence)
         b = bundle_mod.Bundle.from_db(c, "case")
         docs = b.docs
     else:

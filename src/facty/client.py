@@ -25,10 +25,10 @@ Env:
 from __future__ import annotations
 
 import base64
+import http.client
 import json
 import os
-import urllib.error
-import urllib.request
+from urllib.parse import urlencode, urlparse
 
 
 class TerminusError(RuntimeError):
@@ -55,6 +55,7 @@ class Client:
         # trail is the commit log on this ref; set to a case branch to isolate
         # a run, "main" for the pack itself. "commit:<id>" pins a commit (time-travel).
         self.ref = os.environ.get("TERMINUSDB_REF", "main")
+        self._conn: http.client.HTTPConnection | None = None  # keep-alive (perf)
 
     def _ref_path(self) -> str:
         if self.ref.startswith("commit:"):
@@ -62,27 +63,40 @@ class Client:
         return f"local/branch/{self.ref}"
 
     # -- low level ---------------------------------------------------------
-    def _req(self, op: str, method: str, path: str, body=None, query: dict | None = None):
-        url = f"{self.url}{path}"
-        if query:
-            from urllib.parse import urlencode
+    def _conn_open(self) -> http.client.HTTPConnection:
+        """Persistent keep-alive connection (perf: the engine issues many
+        sequential WOQL queries per run — no reconnect per request)."""
+        if self._conn is None:
+            u = urlparse(self.url)
+            self._conn = http.client.HTTPConnection(u.hostname, u.port or 80, timeout=60)
+        return self._conn
 
-            url += "?" + urlencode(query)
+    def _req(self, op: str, method: str, path: str, body=None, query: dict | None = None):
+        if query:
+            path += "?" + urlencode(query)
         data = None if body is None else json.dumps(body).encode()
-        req = urllib.request.Request(url, data=data, method=method)
+        token = base64.b64encode(f"{self.user}:{self.password}".encode()).decode()
+        headers = {"Authorization": f"Basic {token}", "Accept": "application/json"}
         if body is not None:
-            req.add_header("Content-Type", "application/json")
-        elif method in ("DELETE", "POST"):
+            headers["Content-Type"] = "application/json"
+        else:
             # no body: say so explicitly — a Content-Type without a body makes
             # the server wait for one (observed hang on DELETE /api/branch)
-            req.add_header("Content-Length", "0")
-        token = base64.b64encode(f"{self.user}:{self.password}".encode()).decode()
-        req.add_header("Authorization", f"Basic {token}")
-        try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                raw = resp.read().decode()
-        except urllib.error.HTTPError as e:
-            raise TerminusError(op, e.code, e.read().decode()) from e
+            headers["Content-Length"] = "0"
+        raw, status = "", 0
+        for attempt in (1, 2):  # one reconnect+retry on a stale keep-alive socket
+            try:
+                conn = self._conn_open()
+                conn.request(method, path, body=data, headers=headers)
+                resp = conn.getresponse()
+                raw, status = resp.read().decode(), resp.status
+                break
+            except (http.client.HTTPException, OSError):
+                self._conn = None
+                if attempt == 2:
+                    raise
+        if status >= 400:
+            raise TerminusError(op, status, raw)
         if not raw:
             return {}
         raw = raw.strip()
@@ -97,7 +111,10 @@ class Client:
             if len(parsed) == 1 and len(lines) == 1:
                 return parsed[0]
             return parsed
-        return json.loads(raw)
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return raw  # plain-text endpoints like /api/ok
 
     def raw(self, op: str, method: str, path: str, body=None, query: dict | None = None) -> dict:
         """Escape hatch for endpoints not yet wrapped below."""

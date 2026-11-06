@@ -135,4 +135,12 @@ SCHEMA: list[dict] = [
      "id": "xsd:string", "original": "xsd:string", "path": "xsd:string",
      "reason": "xsd:string",
      "@key": {"@type": "Hash", "@fields": ["id"]}},
+    # EvidenceChunk: a chunk of an ExtractedText + its embedding (stored
+    # content-addressed in the object store, referenced by embeddingSha256).
+    # Sensing-side RAG only — never read by the verdict path.
+    {"@type": "Class", "@id": "EvidenceChunk",
+     "id": "xsd:string", "original": "xsd:string", "extracted": "xsd:string",
+     "idx": "xsd:integer", "text": "xsd:string", "textSha256": "xsd:string",
+     "embeddingSha256": "xsd:string", "embeddingModel": "xsd:string",
+     "@key": {"@type": "Hash", "@fields": ["id"]}},
 ]

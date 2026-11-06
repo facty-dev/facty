@@ -129,3 +129,34 @@ Facts:
   tracked as `Case` registry docs on `main` instead (`cases.py`).
 - `DELETE /api/document/...` requires `author` + `message` query params, and the
   `id` must be the full Hash-keyed `@id` (`Case/<sha256>`), not the logical id.
+
+## Framework choice — pydantic-ai confirmed (2026-11-06, PO question)
+
+Surveyed (web, 2026-11-06: langfuse agent-framework comparison + ecosystem data):
+LangGraph/LangChain dominate mindshare but optimize for LLM-as-controller agent
+loops — the opposite of our neurosymbolic split. Pydantic AI is the one praised
+for "explicit type contracts, tests, quick feedback loops" — exactly our shape
+(LLM = typed induction function via output_type, tools=[], engine owns verdict).
+Instructor is the closest alternative (same pydantic-output idea); DSPy adds
+probabilistic prompt *optimization* (a compile step) — not needed while the
+engine is deterministic. Decision: keep pydantic-ai; no change.
+
+## TerminusDB embeddings — v12.1 RC only (live-verified divergence, 2026-11-06)
+
+Read https://terminusdb.com/docs/versioned-search-embeddings/ (full page).
+Facts: schema-driven embeddings via `@metadata.embedding` {GraphQL `query` (NO
+commas allowed), Handlebars `template`}; gate = `"store_indices"` in
+`@context @metadata.terminusdb.options`; default model `multilingual-e5-base`
+(Q8 GGUF, `passage:`/`query:` prefixes automatic); versioned per commit
+(deterministic replay of history); `VECTORLINK_EMBED_CACHE_SIZE` default 20k;
+re-embedding on schema change; search answers "what is this about", not
+find-by-ID (use WOQL for that).
+DIVERGENCE: the page is marked "Release Candidate — TerminusDB 12.1" and our
+pinned server reports version 12.0.9 (api/info) — POSTing a schema with
+`store_indices` fails with "Unexpected failure in request handler". So on v12 we
+embed on the BYO-key path instead: Mistral embeddings API (`mistral-embed`),
+disk-cached per text (.cache/embeddings/), vectors content-addressed in the
+object store, `EvidenceChunk` docs in TerminusDB, cosine client-side (case scale
+= a drawer). All induction-side; verdict path never reads embeddings. Upgrade
+path: TerminusDB >= 12.1 → native versioned embeddings. Implemented in
+src/facty/search.py; `facty search`, `facty sense --rag`, ingest auto-embeds.

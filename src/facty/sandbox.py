@@ -25,9 +25,25 @@ from pathlib import Path
 
 SMOLVM_MACHINE = os.environ.get("FACTY_SANDBOX_VM", "facty")
 
+_machine_ready: bool = False  # create ONCE per process, then reuse — no VM thrash
+
 
 def _smolvm_available() -> bool:
     return shutil.which("smolvm") is not None
+
+
+def ensure_machine() -> None:
+    """Create the SmolVM machine once per process and reuse it across calls/tests
+    (`smolvm machine create --net --name facty` + start). Rebuilding the VM per
+    sandbox call would thrash compute; the VM is a long-lived session."""
+    global _machine_ready
+    if _machine_ready or not _smolvm_available():
+        return
+    subprocess.run(["smolvm", "machine", "create", "--net", "--name", SMOLVM_MACHINE],
+                   capture_output=True, timeout=120, check=False)
+    subprocess.run(["smolvm", "machine", "start", "--name", SMOLVM_MACHINE],
+                   capture_output=True, timeout=120, check=False)
+    _machine_ready = True
 
 
 def _run_local(code: str, files: dict[str, bytes], timeout: float) -> dict:
@@ -101,5 +117,6 @@ def run_code(code: str, files: dict[str, bytes] | None = None,
             return {"ok": False, "exit_code": -1, "stdout": "",
                     "stderr": "smolvm binary not found — install SmolVM or use backend=local (--dev)",
                     "backend": "smolvm", "seconds": 0.0}
+        ensure_machine()  # create once, reuse across calls
         return _run_smolvm(code, files, timeout)
     return _run_local(code, files, timeout)

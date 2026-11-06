@@ -39,7 +39,7 @@ def _docs_of(client, cls: str) -> list[dict]:
     return [d for d in client.get_all_docs() if d.get("@type") == cls]
 
 
-def ingest_dir(client, src: Path, source: str, ocr: bool = False) -> dict:
+def ingest_dir(client, src: Path, source: str, ocr: bool = False, embed: bool = True) -> dict:
     """Ingest a directory onto the client's current ref. Returns a summary."""
     src = Path(src)
     objects = DATA_DIR / "objects"
@@ -51,11 +51,14 @@ def ingest_dir(client, src: Path, source: str, ocr: bool = False) -> dict:
         by_path.setdefault((d["path"], d["source"]), d)
 
     files = sorted(p for p in src.rglob("*") if p.is_file())
+    # hash all files in parallel (I/O-bound) — low-hanging ingest perf
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=min(8, len(files) or 1)) as ex:
+        shas = list(ex.map(lambda f: _sha256(f.read_bytes()), files))
     new_docs: list[dict] = []
-    for f in files:
+    for f, sha in zip(files, shas):
         rel = str(f.relative_to(src))
         data = f.read_bytes()
-        sha = _sha256(data)
         obj = objects / sha
         now = datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")
 
@@ -113,6 +116,13 @@ def ingest_dir(client, src: Path, source: str, ocr: bool = False) -> dict:
     if new_docs:
         client.insert_docs(new_docs, message=f"ingest {source}: {len(files)} files "
                                               f"({len(summary['added'])} new, {len(summary['skipped'])} unchanged)")
+    if embed and summary["extracted"]:
+        from . import search
+        try:
+            n = search.index_extracted_texts(client)
+            summary["embedded_chunks"] = n
+        except Exception as e:  # embeddings are induction-side; never fail ingest
+            summary["embedded_chunks"] = f"skipped ({e})"
     return summary
 
 
