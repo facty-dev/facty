@@ -74,3 +74,19 @@ def test_smolvm_stop_on_shutdown(tmp_path, monkeypatch):
     assert logtxt.count(" create ") == 1          # created once, reused
     assert " stop " in logtxt                     # stopped on shutdown, not left hanging
     assert sandbox._machine_ready is False
+
+
+def test_mixed_model_vectors_never_compared(tmp_path, monkeypatch):
+    """Portability: facts embedded by different models/dims must not be
+    compared (cosine across dims is meaningless)."""
+    fc = _fake_client_with_facts(tmp_path, monkeypatch, [
+        ("f1", "yes", [1.0, 0.0]),        # model A (2-dim)
+        ("f2", "no", [1.0, 0.0, 0.0]),    # model B (3-dim) — same direction, diff model/dim
+    ])
+    # mark different models
+    import facty.ingest as ing
+    monkeypatch.setattr(ing, "DATA_DIR", tmp_path)
+    docs = fc.get_all_docs()
+    docs[0]["embeddingModel"] = "model-a"; docs[0]["embeddingDim"] = 2
+    docs[1]["embeddingModel"] = "model-b"; docs[1]["embeddingDim"] = 3
+    assert engine.semantic_contradictions(fc, threshold=0.5) == []

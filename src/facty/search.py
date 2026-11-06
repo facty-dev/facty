@@ -89,9 +89,11 @@ def cosine(a: list[float], b: list[float]) -> float:
     return dot / (na * nb) if na and nb else 0.0
 
 
-def store_embedding(vec: list[float], data_dir: Path = DATA_DIR) -> str:
-    """Store the vector content-addressed in the object store; returns its sha."""
-    blob = json.dumps(vec).encode()
+def store_embedding(vec: list[float], model: str = EMBED_MODEL, data_dir: Path = DATA_DIR) -> str:
+    """Store the vector content-addressed in the object store, WITH its model +
+    dimensionality in the blob (portability: vectors from different models/dims
+    are never compared — see search_case / semantic_contradictions)."""
+    blob = json.dumps({"model": model, "dim": len(vec), "embedding": vec}).encode()
     sha = hashlib.sha256(blob).hexdigest()
     obj = data_dir / "objects" / sha
     if not obj.exists():
@@ -118,7 +120,9 @@ def index_extracted_texts(client, data_dir: Path = DATA_DIR, model: str = EMBED_
     docs = []
     for c, emb in zip(chunks, embs):
         if emb:
-            c["embeddingSha256"] = store_embedding(emb, data_dir)
+            c["embeddingModel"] = model
+            c["embeddingDim"] = len(emb)
+            c["embeddingSha256"] = store_embedding(emb, model, data_dir)
         docs.append(c)
     client.insert_docs(docs, message=f"index {len(docs)} evidence chunks ({model})")
     return len(docs)
@@ -136,10 +140,14 @@ def search_case(client, query: str, top_k: int = 5, data_dir: Path = DATA_DIR,
     objdir = data_dir / "objects"
     scored = []
     for c in chunks:
+        # portability: only compare vectors from the SAME model and dim
+        if c.get("embeddingModel") not in (None, model) or c.get("embeddingDim") not in (None, len(qemb)):
+            continue
         blob = objdir / c["embeddingSha256"]
         if not blob.exists():
             continue
-        vec = json.loads(blob.read_text())
+        rec = json.loads(blob.read_text())
+        vec = rec["embedding"] if isinstance(rec, dict) and "embedding" in rec else rec
         scored.append({**c, "score": round(cosine(qemb, vec), 6)})
     scored.sort(key=lambda s: (-s["score"], s["id"]))
     return scored[:top_k]

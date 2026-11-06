@@ -45,7 +45,8 @@ SCHEMA: list[dict] = [
      "observedAt": {"@type": "Optional", "@class": "xsd:date"},
      # set at load time (BYO-key embeddings, disk-cached, stored content-addressed);
      # lets the deterministic engine flag semantic contradiction candidates (ADR-0009)
-     "embeddingSha256": OPT_STR,
+     "embeddingSha256": OPT_STR, "embeddingModel": OPT_STR,
+     "embeddingDim": {"@type": "Optional", "@class": "xsd:integer"},
      "@key": {"@type": "Hash", "@fields": ["id"]},
      # native versioned embedding (12.1): lets the deterministic engine run
      # semantic-contradiction detection over facts from the commit-indexed

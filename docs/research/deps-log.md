@@ -202,3 +202,21 @@ the official quickstart runs it CPU-only with no external network after the
 one-time model pull. So yes: the default runs on CPU. (Our runtime path uses
 Mistral's hosted `mistral-embed` via BYO-key instead; swappable via
 FACTY_EMBED_MODEL / the schema embedding metadata.)
+
+## Embedding model choice + portability (2026-11-06, PO: local model OFF by default, dims portable, model at least open-weight)
+
+- mistral-embed (our BYO-key default, FACTY_EMBED_MODEL): API returns fixed
+  **1024-dim** vectors; the underlying weights are published open-weight by
+  Mistral as `mistralai/Mistral-Embed` on HuggingFace under **Apache-2.0**
+  (Mistral's open models are Apache-2.0 per help.mistral.ai). Satisfies
+  "at least open weight".
+- Local/native default (TerminusDB 12.1 VectorLink): `multilingual-e5-base`,
+  278M params, **768-dim**, **MIT** (inherited from intfloat/multilingual-e5-base),
+  Q8_0 GGUF runs CPU-only. OFF by default in compose.yaml (needs an embedding
+  provider service otherwise it wedges the server — see above).
+- PORTABILITY implemented: every stored vector blob records {model, dim}; Fact
+  and EvidenceChunk docs carry embeddingModel + embeddingDim; search_case and
+  semantic_contradictions only compare vectors of the SAME model and dim
+  (mismatched vectors are skipped, never compared cross-dim). Switching
+  FACTY_EMBED_MODEL re-embeds new content under the new model and leaves old
+  vectors inert. Tested (test_mixed_model_vectors_never_compared).

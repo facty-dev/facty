@@ -36,7 +36,9 @@ def load_facts(client, facts_path: Path, message: str, embed: bool = True) -> in
         updates = []
         for d, emb in zip(docs, embs):
             if emb:
-                d["embeddingSha256"] = search.store_embedding(emb)
+                d["embeddingModel"] = search.EMBED_MODEL
+                d["embeddingDim"] = len(emb)
+                d["embeddingSha256"] = search.store_embedding(emb, search.EMBED_MODEL)
                 updates.append(d)
         if updates:
             client.insert_docs(updates, message=f"{message} (embeddings)")
@@ -110,19 +112,27 @@ def semantic_contradictions(client, threshold: float = 0.93) -> list[dict]:
     vecs = {}
     for d in facts:
         blob = objdir / d["embeddingSha256"]
-        if blob.exists():
-            vecs[d["id"]] = json.loads(blob.read_text())
+        if not blob.exists():
+            continue
+        rec = json.loads(blob.read_text())
+        vec = rec["embedding"] if isinstance(rec, dict) and "embedding" in rec else rec
+        # portability: only compare within the same model AND dim
+        if d.get("embeddingDim") not in (None, len(vec)):
+            continue
+        vecs[d["id"]] = (d.get("embeddingModel"), vec)
     out = []
     ids = sorted(vecs)
     for i in range(len(ids)):
         for j in range(i + 1, len(ids)):
             a, b = ids[i], ids[j]
+            if vecs[a][0] != vecs[b][0]:
+                continue  # different embedding models are not comparable
             fa, fb = next(d for d in facts if d["id"] == a), next(d for d in facts if d["id"] == b)
             va = fa.get("valueString", fa.get("valueBool", fa.get("valueNum")))
             vb = fb.get("valueString", fb.get("valueBool", fb.get("valueNum")))
             if va == vb:
                 continue  # same value — not a contradiction
-            score = search.cosine(vecs[a], vecs[b])
+            score = search.cosine(vecs[a][1], vecs[b][1])
             if score >= threshold:
                 out.append({"a": a, "b": b, "score": round(score, 6)})
     return sorted(out, key=lambda c: (-c["score"], c["a"], c["b"]))
