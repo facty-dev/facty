@@ -120,6 +120,10 @@ Schemas: `engine/schemas/*.schema.json`. Codegen: `engine/emit.py` →
 ./facty init-db              # create db + install schema (needs TerminusDB on :6363)
 ./facty keys init            # Ed25519 keypair in ~/.facty/keys (never committed)
 ./facty bundle sign|verify|load <dir>   # signed bundle gate; unsigned refused outside --dev (ADR-0006)
+./facty case init <id> --bundle <dir>   # case = TerminusDB branch (ADR-0007); case list|show|branch|delete
+./facty ingest <dir> --source <label> --case <id>   # content-addressed originals + custody; conflicts → facts
+./facty sense --case <id> --out f.json  # live LLM sensing from the case's extracted texts (or: sense <dir> --out f.json)
+./facty extract <file> --out f.json --bundle <dir>  # codemode: LLM writes extractor, sandbox runs it (induction only)
 ./facty load-facts <file>    # insert fact docs
 ./facty run <case> --phase 1 --ref <branch>   # deterministic verdict on a branch
 ./facty verdict|log|metrics  # inspect outputs, audit trail, LLM latency/tokens

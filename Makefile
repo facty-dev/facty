@@ -64,6 +64,9 @@ selftest:
 e2e:
 	TERMINUSDB_DB=facty-e2e bash scripts/e2e.sh
 
+demo:
+	bash scripts/demo.sh
+
 e2e-live:
 	TERMINUSDB_DB=facty-e2e bash scripts/e2e.sh --live
 

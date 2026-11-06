@@ -118,3 +118,14 @@ Facts:
 - Tests: `from typer.testing import CliRunner; CliRunner().invoke(app, [...])` (wraps click's runner).
 - Shell completion: `--install-completion` / `--show-completion` built in.
 - → `src/facty/cli.py` rewritten on Typer; `[project.scripts] facty = "facty.cli:main"`; all prior commands/flags preserved; smoke tests in tests/test_cli.py.
+
+## TerminusDB v12 — additional live-verified quirks (2026-10-31, M2)
+
+- `DELETE /api/branch/{org}/{db}/local/branch/{name}` works (curl-verified), but a
+  request with `Content-Type: application/json` and NO body hangs the server —
+  the client now sends `Content-Length: 0` and no Content-Type for bodyless
+  DELETE/POST (`client.py::_req`).
+- v12 has NO branch-listing endpoint (`GET /api/branch/...` → 405) — cases are
+  tracked as `Case` registry docs on `main` instead (`cases.py`).
+- `DELETE /api/document/...` requires `author` + `message` query params, and the
+  `id` must be the full Hash-keyed `@id` (`Case/<sha256>`), not the logical id.

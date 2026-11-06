@@ -24,19 +24,22 @@ from typing import Annotated, Optional
 import typer
 
 from . import bundle as bundle_mod
-from . import engine, keys, rules, sensing
+from . import cases as cases_mod
+from . import codemode, engine, ingest, keys, rules, sandbox, sensing
 from .client import Client, TerminusError
 
 app = typer.Typer(
     name="facty",
-    help="Facty — the detective DSS: deterministic bundle engine on TerminusDB, LLM sensing only (ADR-0003/0005/0006).",
+    help="Facty — the detective DSS: deterministic bundle engine on TerminusDB, LLM sensing only (ADR-0003/0005/0006/0007).",
     no_args_is_help=True,
     pretty_exceptions_show_locals=False,  # never leak key material into error output
 )
 keys_app = typer.Typer(name="keys", help="Ed25519 signing keys (live in ~/.facty/keys, never committed).", no_args_is_help=True)
 bundle_app = typer.Typer(name="bundle", help="Signed bundle v2: sign / verify / load (the trust gate).", no_args_is_help=True)
+case_app = typer.Typer(name="case", help="Case lifecycle: a case IS a TerminusDB branch — real, deletable.", no_args_is_help=True)
 app.add_typer(keys_app)
 app.add_typer(bundle_app)
+app.add_typer(case_app)
 
 OptRef = Annotated[Optional[str], typer.Option("--ref", help="TerminusDB branch/commit to work on (default main)")]
 OptDev = Annotated[bool, typer.Option("--dev", help="Escape hatch: allow unsigned/legacy bundles (or FACTY_DEV=1)")]
@@ -148,6 +151,86 @@ def keys_list():
         typer.echo(f"{k['fingerprint']}  {k['label']:<12} private={'yes' if k['has_private'] else 'no'}")
 
 
+# ── M2: case lifecycle + ingest ──────────────────────────────────────────────
+
+@case_app.command("init")
+@_gate
+def case_init(case_id: Annotated[str, typer.Argument()],
+              bundle_dir: Annotated[Path, typer.Option("--bundle", "-b")],
+              dev: OptDev = False,
+              model: Annotated[Optional[str], typer.Option("--model")] = None,
+              ref: OptRef = None):
+    """Create branch case-<id>, verify+load the signed bundle, register the case."""
+    c = _client(ref)
+    typer.echo(cases_mod.case_init(c, case_id, bundle_dir, dev=dev, model=model))
+
+
+@case_app.command("list")
+def case_list(ref: OptRef = None):
+    for d in cases_mod.case_list(_client(ref)):
+        typer.echo(f"{d['id']:<24} bundle={d['bundle']}@{d['bundleVersion']} "
+                   f"key={d.get('fingerprint') or '-'} created={d.get('created', '?')}")
+
+
+@case_app.command("branch")
+def case_branch(case_id: Annotated[str, typer.Argument()],
+                name: Annotated[str, typer.Argument()], ref: OptRef = None):
+    typer.echo(cases_mod.case_branch(_client(ref), case_id, name))
+
+
+@case_app.command("show")
+def case_show(case_id: Annotated[str, typer.Argument()], ref: OptRef = None):
+    typer.echo(json.dumps(cases_mod.case_show(_client(ref), case_id), indent=2, default=str))
+
+
+@case_app.command("delete")
+def case_delete(case_id: Annotated[str, typer.Argument()], ref: OptRef = None):
+    """Real deletion: the branch is DELETEd. Remains: nothing in the DB; only an
+    attestation hash (M7), if one was submitted."""
+    typer.echo(json.dumps(cases_mod.case_delete(_client(ref), case_id), indent=2))
+
+
+@app.command("ingest")
+def ingest_cmd(src: Annotated[Path, typer.Argument(help="directory of evidence files")],
+               source: Annotated[str, typer.Option("--source", "-s", help="custody source label")],
+               case: Annotated[Optional[str], typer.Option("--case", help="ingest onto case branch case-<id>")] = None,
+               ref: OptRef = None,
+               ocr: OptDev = False):
+    """Content-addressed ingest: originals → object store (SHA-256), metadata +
+    derived text → TerminusDB. Idempotent; changed files → version-conflict Fact."""
+    c = _client(ref)
+    if case:
+        c.ref = cases_mod._slug(case)
+    s = ingest.ingest_dir(c, src, source, ocr=ocr)
+    typer.echo(json.dumps(s, indent=2))
+    v = ingest.verify_originals(c)
+    typer.echo(f"originals verified: {v['checked']} checked, {len(v['mismatches'])} mismatches")
+    if v["mismatches"]:
+        raise typer.Exit(1)
+
+
+@app.command("extract")
+def extract_cmd(file: Annotated[Path, typer.Argument(help="a single messy evidence file")],
+                out: Annotated[Path, typer.Option("--out", "-o")],
+                bundle_dir: Annotated[Optional[Path], typer.Option("--bundle", "-b", help="bundle dir for the exact fact vocabulary")] = None,
+                backend: Annotated[str, typer.Option("--backend", help="auto|smolvm|local")] = "auto",
+                timeout: Annotated[float, typer.Option("--timeout")] = 60.0):
+    """Codemode: the LLM writes an extractor (pydantic-ai, typed), the sandbox runs
+    it under our control (SmolVM when available, local with --dev), and stdout JSON
+    is validated as SensedFacts. Induction only — never in the verdict path."""
+    vocab = None
+    if bundle_dir is not None:
+        docs = json.loads((bundle_dir / "bundle.json").read_text())
+        vocab = {"subjects": sorted({c["subject"] for i in docs for c in i.get("when", []) + i.get("claims", [])}),
+                 "predicates": sorted({c["predicate"] for i in docs for c in i.get("when", []) + i.get("claims", [])})}
+    facts, res = codemode.codemode_extract(file, sensing.SensedFacts, timeout=timeout,
+                                           backend=backend, vocab=vocab)
+    docs = [engine_fact_doc(f.model_dump()) for f in facts.facts]
+    out.write_text(json.dumps(docs, indent=2))
+    typer.echo(f"codemode ({res['backend']}, {res['seconds']}s, exit {res['exit_code']}): "
+               f"{len(docs)} facts → {out}")
+
+
 # ── facts / sense / run ──────────────────────────────────────────────────────
 
 @app.command("load-facts")
@@ -160,22 +243,34 @@ def load_facts(facts: Annotated[Path, typer.Argument()],
 
 
 @app.command("sense")
-def sense(case_dir: Annotated[Path, typer.Argument()],
-          out: Annotated[Path, typer.Option("--out", "-o")], ):
-    ev = sorted((case_dir / "evidence").glob("*"))
-    evidence = "\n\n".join(f"--- {p.name} ---\n{p.read_text(errors='replace')}" for p in ev)
-    # exact bundle vocabulary: the engine matches subject/predicate/value
-    # literally, so the senses MUST reuse these strings verbatim
-    docs = None
-    for cand in (case_dir / "bundle.json", case_dir / "terminusdb" / "pack.json"):
-        if cand.exists():
-            docs = json.loads(cand.read_text()); break
-    if docs is None:
-        pack = case_dir / "pack"
-        docs = [i for f in ("rules.json", "hypotheses.json", "constraints.json")
-                for i in json.loads((pack / f).read_text())]
-    if isinstance(docs, dict) and "documents" in docs:
-        docs = docs["documents"]
+def sense(case_dir: Annotated[Optional[Path], typer.Argument()] = None,
+          out: Annotated[Path, typer.Option("--out", "-o")] = ...,
+          case: Annotated[Optional[str], typer.Option("--case", help="sense from a case branch's extracted texts")] = None,
+          ref: OptRef = None):
+    c = _client(ref)
+    if case:
+        c.ref = cases_mod._slug(case)
+        ext = [d for d in c.get_all_docs() if d.get("@type") == "ExtractedText"]
+        origs = {d["id"]: d for d in c.get_all_docs() if d.get("@type") == "Original"}
+        evidence = "\n\n".join(
+            f"--- {origs.get(e['original'], {}).get('path', e['original'][:12])} ---\n{e['text']}"
+            for e in sorted(ext, key=lambda d: d["id"]))
+        b = bundle_mod.Bundle.from_db(c, "case")
+        docs = b.docs
+    else:
+        assert case_dir is not None, "pass a bundle/case dir or --case <id>"
+        ev = sorted((case_dir / "evidence").glob("*"))
+        evidence = "\n\n".join(f"--- {p.name} ---\n{p.read_text(errors='replace')}" for p in ev)
+        docs = None
+        for cand in (case_dir / "bundle.json", case_dir / "terminusdb" / "pack.json"):
+            if cand.exists():
+                docs = json.loads(cand.read_text()); break
+        if docs is None:
+            pack = case_dir / "pack"
+            docs = [i for f in ("rules.json", "hypotheses.json", "constraints.json")
+                    for i in json.loads((pack / f).read_text())]
+        if isinstance(docs, dict) and "documents" in docs:
+            docs = docs["documents"]
     vocab = {"subjects": set(), "predicates": set()}
     for item in docs:
         for c in item.get("when", []) + item.get("claims", []):

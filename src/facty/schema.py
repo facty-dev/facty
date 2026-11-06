@@ -100,4 +100,39 @@ SCHEMA: list[dict] = [
      "recommendedTest": OPT_STR,
      "trace": STR_SET,
      "@key": {"@type": "Hash", "@fields": ["id"]}},
+    # ── M2: case lifecycle + ingest contract ────────────────────────────────
+    # Case: the registry entry on `main` (v12 has no branch-listing endpoint —
+    # GET /api/branch is 405 — so cases are tracked as docs). The case itself
+    # is the branch `case-<id>`; deleting the case deletes the branch and this
+    # doc. What remains after deletion: nothing in the DB; only an M7
+    # attestation hash, if one was submitted.
+    {"@type": "Class", "@id": "Case",
+     "id": "xsd:string", "bundle": "xsd:string", "bundleVersion": "xsd:string",
+     "fingerprint": OPT_STR, "engineVersion": "xsd:string", "created": "xsd:string",
+     "model": OPT_STR,
+     "@key": {"@type": "Hash", "@fields": ["id"]}},
+    # Original: a content-addressed evidence original. id = sha256 of the bytes.
+    # The untouched bytes live in the local object store (.facty/objects/<sha>);
+    # the DB holds only the hash + metadata + derived nodes.
+    {"@type": "Class", "@id": "Original",
+     "id": "xsd:string", "path": "xsd:string", "name": "xsd:string",
+     "sha256": "xsd:string", "size": "xsd:integer", "mediaType": "xsd:string",
+     "source": "xsd:string",
+     "@key": {"@type": "Hash", "@fields": ["id"]}},
+    # CustodyEvent: who/when/what-source touched an original.
+    {"@type": "Class", "@id": "CustodyEvent",
+     "id": "xsd:string", "original": "xsd:string", "actor": "xsd:string",
+     "source": "xsd:string", "action": "xsd:string", "at": "xsd:string",
+     "@key": {"@type": "Hash", "@fields": ["id"]}},
+    # ExtractedText: derived node — parser output for an original (primary vs
+    # derived is explicit: Original = sacred bytes, ExtractedText = derived).
+    {"@type": "Class", "@id": "ExtractedText",
+     "id": "xsd:string", "original": "xsd:string", "parser": "xsd:string",
+     "text": "xsd:string", "textSha256": "xsd:string",
+     "@key": {"@type": "Hash", "@fields": ["id"]}},
+    # Quarantine: unknown file types are listed, never dropped, never guessed.
+    {"@type": "Class", "@id": "Quarantine",
+     "id": "xsd:string", "original": "xsd:string", "path": "xsd:string",
+     "reason": "xsd:string",
+     "@key": {"@type": "Hash", "@fields": ["id"]}},
 ]

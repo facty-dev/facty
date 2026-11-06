@@ -70,7 +70,12 @@ class Client:
             url += "?" + urlencode(query)
         data = None if body is None else json.dumps(body).encode()
         req = urllib.request.Request(url, data=data, method=method)
-        req.add_header("Content-Type", "application/json")
+        if body is not None:
+            req.add_header("Content-Type", "application/json")
+        elif method in ("DELETE", "POST"):
+            # no body: say so explicitly — a Content-Type without a body makes
+            # the server wait for one (observed hang on DELETE /api/branch)
+            req.add_header("Content-Length", "0")
         token = base64.b64encode(f"{self.user}:{self.password}".encode()).decode()
         req.add_header("Authorization", f"Basic {token}")
         try:
@@ -173,6 +178,12 @@ class Client:
         return self._req("get_doc", "GET", self._ref_db_path("document/"),
                          query={"graph_type": "instance", "id": doc_id})
 
+    def delete_doc(self, doc_id: str, author: str = "facty", message: str = "delete") -> dict:
+        """Delete one instance document (v12 requires author+message params)."""
+        return self._req("delete_doc", "DELETE", self._ref_db_path("document/"),
+                         query={"id": doc_id, "graph_type": "instance",
+                                "author": author, "message": message})
+
     def query_docs(self, query: dict) -> dict:
         """Run a WOQL query on the current ref (branch, or commit:… for time-travel)."""
         return self._req("woql", "POST", self._ref_db_path("woql/"), query)
@@ -185,6 +196,12 @@ class Client:
         return self._req("branch", "POST",
                          f"/api/branch/{self.org}/{self.db}/local/branch/{name}",
                          {"origin": f"{self.org}/{self.db}/local/branch/{origin}"})
+
+    def delete_branch(self, name: str) -> dict:
+        """DELETE a branch — the real deletion semantic behind `facty case delete`
+        (v12 verified: DELETE /api/branch/{org}/{db}/local/branch/{name})."""
+        return self._req("delete_branch", "DELETE",
+                         f"/api/branch/{self.org}/{self.db}/local/branch/{name}")
 
     def commit_log(self) -> dict:
         return self._req("log", "GET", f"/api/log/{self.org}/{self.db}/{self._ref_path()}")
