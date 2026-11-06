@@ -193,3 +193,12 @@ src/facty/search.py; `facty search`, `facty sense --rag`, ingest auto-embeds.
   is fine — commits succeed, /api/index reports the endpoint as unconfigured.
   compose.yaml therefore keeps the backend OFF (commented) until an embedding
   service is added.
+
+## Embedding model CPU question (2026-11-06)
+
+TerminusDB 12.1 default native model `multilingual-e5-base` (278M) is served as a
+first-party Q8_0 GGUF from hf.co/vectorlink — 768-dim vectors, 768 bytes quantized;
+the official quickstart runs it CPU-only with no external network after the
+one-time model pull. So yes: the default runs on CPU. (Our runtime path uses
+Mistral's hosted `mistral-embed` via BYO-key instead; swappable via
+FACTY_EMBED_MODEL / the schema embedding metadata.)

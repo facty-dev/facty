@@ -229,6 +229,35 @@ def ingest_cmd(src: Annotated[Path, typer.Argument(help="directory of evidence f
         raise typer.Exit(1)
 
 
+@app.command("prove")
+def prove_cmd(subject: Annotated[str, typer.Argument()],
+              predicate: Annotated[str, typer.Argument()],
+              value: Annotated[Optional[str], typer.Option("--value", "-v", help="goal value: true/false → bool, numeric → num, else string")] = None,
+              case: Annotated[Optional[str], typer.Option("--case")] = None,
+              ref: OptRef = None):
+    """Backward chaining: prove a goal (subject predicate [value]) → proof tree.
+    Deterministic — pure WOQL over committed graph data, no LLM."""
+    goal = {"subject": subject, "predicate": predicate}
+    if value is not None:
+        if value == "true":
+            goal["valueBool"] = True
+        elif value == "false":
+            goal["valueBool"] = False
+        else:
+            try:
+                goal["valueNum"] = float(value)
+            except ValueError:
+                goal["valueString"] = value
+    c = _client(ref)
+    if case:
+        c.ref = cases_mod._slug(case)
+    tree = engine.prove(c, goal)
+    if tree is None:
+        typer.echo(json.dumps({"provable": False, "goal": goal}))
+        raise typer.Exit(1)
+    typer.echo(json.dumps({"provable": True, "goal": goal, "proof": tree}, indent=2))
+
+
 @app.command("search")
 def search_cmd(query: Annotated[str, typer.Argument(help="natural-language query over the case evidence")],
                case: Annotated[Optional[str], typer.Option("--case")] = None,

@@ -43,6 +43,61 @@ def load_facts(client, facts_path: Path, message: str, embed: bool = True) -> in
     return len(docs)
 
 
+def _goal_key(g: dict) -> str:
+    v = g.get("valueString", g.get("valueBool", g.get("valueNum", g.get("var", "*"))))
+    return f"{g.get('subject')}|{g.get('predicate')}|{v}"
+
+
+def _template_matches_goal(t: dict, goal: dict) -> bool:
+    if t.get("subject") != goal.get("subject") or t.get("predicate") != goal.get("predicate"):
+        return False
+    for k in ("valueString", "valueBool", "valueNum"):
+        if k in goal:
+            return t.get(k) == goal[k]
+    return True  # goal without value = existence query
+
+
+def prove(client, goal: dict, seen: set | None = None, depth: int = 0) -> dict | None:
+    """Backward chaining (GOFAI deduction): prove a goal condition.
+
+    1. entailed directly by a fact → leaf proof
+    2. else by a rule whose derive action produces the goal → recursively prove
+       the rule's premises → proof tree (mirrors the Derivation docs the
+       forward pass writes). Deterministic: rules sorted by id, depth-capped.
+    Returns a proof tree dict, or None if unprovable."""
+    seen = seen if seen is not None else set()
+    key = _goal_key(goal)
+    if depth > 10 or key in seen:
+        return None
+    seen = seen | {key}
+    if any(k in goal for k in ("valueString", "valueBool", "valueNum")):
+        hit = _exists(client, rules.compile_claim(goal))
+    else:  # existence goal (no value): match any value
+        hit = _exists(client, woql.select(["G"], woql.fact_pattern(
+            "G", subject=goal.get("subject"), predicate=goal.get("predicate"))))
+    if hit:
+        facts = [d for d in _docs_of(client, "Fact")
+                 if d.get("subject") == goal.get("subject")
+                 and d.get("predicate") == goal.get("predicate")]
+        fid = facts[0]["id"] if facts else "?"
+        return {"goal": {k: goal[k] for k in ("subject", "predicate") if k in goal},
+                "by": "fact", "fact": fid, "source": next((d.get("source") for d in facts), "")}
+    for r in sorted(_docs_of(client, "Rule"), key=lambda d: d["id"]):
+        for action in r.get("then", []):
+            if action.get("op") != "derive":
+                continue
+            f = action.get("fact")
+            if isinstance(f, str):
+                f = client.get_doc(f)
+            if not _template_matches_goal(f, goal):
+                continue
+            premises = [prove(client, c, seen, depth + 1) for c in r.get("when", [])]
+            if all(premises):
+                return {"goal": {k: goal[k] for k in ("subject", "predicate") if k in goal},
+                        "by": "rule", "rule": r["id"], "premises": premises}
+    return None
+
+
 def semantic_contradictions(client, threshold: float = 0.93) -> list[dict]:
     """Deterministic-side semantic search (logged, ADR-0009): pairwise cosine
     over the RECORDED fact embeddings; near-duplicate facts with conflicting
