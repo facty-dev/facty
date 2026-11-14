@@ -4,11 +4,13 @@
 # Default model for every agent: Mistral Large 4.
 active_model = "facty-large"
 
+# No co-authorship attribution in commit messages (PO, 2026-11-03).
+# Top-level key (env alt: VIBE_INCLUDE_COMMIT_SIGNATURE=false) — under [[models]]
+# it is not a Vibe setting and warns at startup.
+include_commit_signature = false
+
 [[models]]
 name = "mistral-large-4"       # canonical API name
 provider = "mistral"
 alias = "facty-large"
 thinking = "low"               # sensing is extraction, not deliberation; raise to "max" for pack authoring
-
-# No co-authorship attribution in commit messages (PO, 2026-11-03)
-include_commit_signature = false
