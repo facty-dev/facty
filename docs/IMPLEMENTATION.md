@@ -230,7 +230,11 @@ signed bundle (`bundles/<name>/`, ADR-0006). A case starts as a branch loaded
 from a bundle (ADR-0007); a demo example is a bundle plus a starter case with
 fixture evidence (e.g. `bundles/small-business-contract-claim` +
 `assembly-unpaid-invoice`); the golden PoC cases in `tests/golden/cases/` are
-bundles in fixture form. A future marketplace/plugin registry is therefore
+bundles in fixture form. `facty bundle from-golden tests/golden/cases/<case>`
+converts one into a signed v2 bundle under `bundles/<case>/` (pack docs as-is
+— investigation and assembly packs alike — plus `evidence/` and fact
+fixtures as demo content); the result verifies and loads without `--dev`.
+A future marketplace/plugin registry is therefore
 just a namespace + content store over signed bundle manifests — no new trust
 or packaging model needed.
 

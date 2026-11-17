@@ -1,0 +1,200 @@
+[
+  {
+    "@type": "Fact",
+    "id": "f01",
+    "type": "case",
+    "subject": "incident INC-551",
+    "predicate": "checkoutDegraded",
+    "valueBool": true,
+    "confidence": 0.98,
+    "source": "evidence/monitoring.txt:8",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f02",
+    "type": "evidence",
+    "subject": "incident INC-551",
+    "predicate": "windowStart",
+    "valueString": "2026-10-12T02:47:12",
+    "confidence": 0.95,
+    "source": "evidence/monitoring.txt:8",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f03",
+    "type": "evidence",
+    "subject": "incident INC-551",
+    "predicate": "windowEnd",
+    "valueString": "2026-10-12T03:11:58",
+    "confidence": 0.95,
+    "source": "evidence/monitoring.txt:8",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f04",
+    "type": "evidence",
+    "subject": "incident INC-551",
+    "predicate": "errorSignature",
+    "valueString": "HTTP 502 \u2014 upstream payline-gateway timeouts",
+    "confidence": 0.95,
+    "source": "evidence/monitoring.txt:9-10",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f05",
+    "type": "evidence",
+    "subject": "incident INC-551",
+    "predicate": "appTierErrorRate",
+    "valueString": "normal",
+    "confidence": 0.95,
+    "source": "evidence/monitoring.txt:11",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f06",
+    "type": "evidence",
+    "subject": "incident INC-551",
+    "predicate": "trafficDuringWindow",
+    "valueString": "flat",
+    "confidence": 0.9,
+    "source": "evidence/monitoring.txt:12",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f07",
+    "type": "evidence",
+    "subject": "deploy d-2214",
+    "predicate": "deployedAt",
+    "valueString": "2026-10-12T18:40",
+    "confidence": 0.98,
+    "source": "evidence/deploy-log.txt:4",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f08",
+    "type": "evidence",
+    "subject": "deploy d-2214",
+    "predicate": "touchedService",
+    "valueString": "checkout",
+    "confidence": 0.95,
+    "source": "evidence/deploy-log.txt:4",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f09",
+    "type": "evidence",
+    "subject": "deploy-log",
+    "predicate": "deploysInIncidentWindow",
+    "valueNum": 0,
+    "confidence": 0.9,
+    "source": "evidence/deploy-log.txt:10-11",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f10",
+    "type": "evidence",
+    "subject": "cert checkout.kestrel.example",
+    "predicate": "validUntil",
+    "valueString": "2026-11-15",
+    "confidence": 0.98,
+    "source": "evidence/monitoring.txt:14",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f11",
+    "type": "evidence",
+    "subject": "cert checkout.kestrel.example",
+    "predicate": "validThroughIncidentWindow",
+    "valueBool": true,
+    "confidence": 0.95,
+    "source": "evidence/monitoring.txt:8,14",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f12",
+    "type": "evidence",
+    "subject": "incident INC-551",
+    "predicate": "tlsHandshakeErrors",
+    "valueNum": 0,
+    "confidence": 0.95,
+    "source": "evidence/monitoring.txt:13",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f13",
+    "type": "evidence",
+    "subject": "incident INC-551",
+    "predicate": "wafBlockedRequests",
+    "valueNum": 0,
+    "confidence": 0.9,
+    "source": "evidence/slack.txt:7",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f14",
+    "type": "world",
+    "subject": "checkout",
+    "predicate": "dependsOn",
+    "valueString": "Payline",
+    "confidence": 0.95,
+    "source": "evidence/services.txt:3-4",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f15",
+    "type": "evidence",
+    "subject": "incident INC-551",
+    "predicate": "pagerFiredAt",
+    "valueString": "2026-10-12T02:49",
+    "confidence": 0.98,
+    "source": "evidence/alert.txt:4",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f16",
+    "type": "evidence",
+    "subject": "incident INC-551",
+    "predicate": "firstCustomerReportAt",
+    "valueString": "2026-10-12T02:51",
+    "confidence": 0.95,
+    "source": "evidence/alert.txt:6",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f17",
+    "type": "evidence",
+    "subject": "incident INC-551",
+    "predicate": "startedAfterLastDeploy",
+    "valueBool": true,
+    "confidence": 0.9,
+    "source": "evidence/monitoring.txt:8, evidence/deploy-log.txt:4",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f18",
+    "type": "evidence",
+    "subject": "deploy d-2214",
+    "predicate": "soakCleanBeforeIncident",
+    "valueBool": true,
+    "confidence": 0.9,
+    "source": "evidence/deploy-log.txt:6-7",
+    "observedAt": "2026-10-17"
+  }
+]

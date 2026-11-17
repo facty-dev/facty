@@ -1,0 +1,7 @@
+BANK RECORD — account DE44 5001 0517 5402 1337 00 (via fraud unit)
+
+Opened:        2026-10-08
+Holder:        D. Okafor
+Transactions before P-8891: none — the account had never been used.
+2026-10-13:   + EUR 38,400.00 (Meridian Supplies, P-8891)
+2026-10-14:   recall request filed by Meridian; funds not yet returned.

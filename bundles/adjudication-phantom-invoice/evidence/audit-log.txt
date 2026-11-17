@@ -1,0 +1,11 @@
+VENDOR MASTER — AUDIT TRAIL, record V-8842 ("Northwind Facilities Ltd")
+
+2026-10-10 02:13:04  CREATE
+  session:    S-9f3a21 (service account "svc-ap-batch", API key auth)
+  source IP:  185.220.44.7  (geo: Lagos, NG)
+  fields set: name, bank account DE44 5001 0517 5402 1337 00,
+              created-by display field "m.hart"
+
+2026-10-10 02:13:19  UPDATE (bank account verified flag: no)
+
+No interactive login was involved in either event.

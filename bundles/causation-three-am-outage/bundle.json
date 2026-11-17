@@ -1,0 +1,586 @@
+[
+  {
+    "@type": "Rule",
+    "id": "R0",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "checkoutDegraded",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "raise",
+        "hypotheses": [
+          "H1",
+          "H2",
+          "H3",
+          "H4"
+        ]
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R1",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "errorSignature",
+        "valueString": "HTTP 502 \u2014 upstream payline-gateway timeouts"
+      },
+      {
+        "@type": "Condition",
+        "subject": "checkout",
+        "predicate": "dependsOn",
+        "valueString": "Payline"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d1",
+          "type": "derived",
+          "subject": "incident INC-551",
+          "predicate": "errorSource",
+          "valueString": "Payline",
+          "confidence": 0.9
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R2",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "deploy d-2214",
+        "predicate": "touchedService",
+        "valueString": "checkout"
+      },
+      {
+        "@type": "Condition",
+        "subject": "deploy-log",
+        "predicate": "deploysInIncidentWindow",
+        "valueNum": 0
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d2",
+          "type": "derived",
+          "subject": "deploy d-2214",
+          "predicate": "onlyDeployCandidate",
+          "valueBool": true,
+          "confidence": 0.85
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R3",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "errorSignature",
+        "valueString": "HTTP 502 \u2014 upstream payline-gateway timeouts"
+      },
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "checkoutDegraded",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d3",
+          "type": "derived",
+          "subject": "incident INC-551",
+          "predicate": "symptomMatchesUpstreamOutage",
+          "valueBool": true,
+          "confidence": 0.85
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R4",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "deploy d-2214",
+        "predicate": "touchedService",
+        "valueString": "checkout"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q1",
+          "text": "What did deploy d-2214 change in checkout, and can it produce these errors? Pull the diff and the soak results.",
+          "slot": "deploy-diff",
+          "mandatory": true,
+          "priority": 1,
+          "status": "open",
+          "raisedBy": "rule:R4",
+          "discriminates": [
+            "H1"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R5",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "errorSource",
+        "valueString": "Payline"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q2",
+          "text": "Did Payline have an incident in the 02:47\u201303:12 window? Pull their status history and incident record.",
+          "slot": "provider-status",
+          "mandatory": true,
+          "priority": 1,
+          "status": "open",
+          "raisedBy": "rule:R5",
+          "discriminates": [
+            "H3"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R6",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "checkoutDegraded",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q3",
+          "text": "When does the checkout edge certificate expire, and were there TLS handshake failures in the window?",
+          "slot": "cert-check",
+          "mandatory": false,
+          "priority": 3,
+          "status": "open",
+          "raisedBy": "rule:R6",
+          "discriminates": [
+            "H2"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R7",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "deploy d-2214",
+        "predicate": "changeTouchesErrorPath",
+        "valueBool": false
+      },
+      {
+        "@type": "Condition",
+        "subject": "deploy d-2214",
+        "predicate": "soakCleanBeforeIncident",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d4",
+          "type": "derived",
+          "subject": "deploy d-2214",
+          "predicate": "cannotExplainIncident",
+          "valueBool": true,
+          "confidence": 0.9
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R8",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "Payline",
+        "predicate": "incidentMatchesOurWindow",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "appTierErrorRate",
+        "valueString": "normal"
+      },
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "errorSource",
+        "valueString": "Payline"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d5",
+          "type": "derived",
+          "subject": "incident INC-551",
+          "predicate": "upstreamFailureConfirmed",
+          "valueBool": true,
+          "confidence": 0.95
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R9",
+    "version": "1",
+    "pack": "causation-three-am-outage",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "monitoring",
+        "predicate": "syntheticCheckOnPayline",
+        "valueBool": false
+      },
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "pagerFiredAt",
+        "valueString": "2026-10-12T02:49"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d6",
+          "type": "derived",
+          "subject": "incident INC-551",
+          "predicate": "detectionGap",
+          "valueString": "no upstream health check",
+          "confidence": 0.9
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H1",
+    "statement": "Deploy regression \u2014 d-2214 (18:40, touched checkout) shipped a latent defect that surfaced at 02:47.",
+    "status": "open",
+    "prior": 0.35,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "deploy d-2214",
+        "predicate": "touchedService",
+        "valueString": "checkout"
+      },
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "startedAfterLastDeploy",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "deploy d-2214",
+        "predicate": "changeTouchesErrorPath",
+        "valueBool": true
+      }
+    ],
+    "mechanism": "deploy",
+    "evidenceFor": [
+      "f07",
+      "f08"
+    ],
+    "evidenceAgainst": [],
+    "discriminatingTests": [
+      "Pull the d-2214 diff and soak results (q1)"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H2",
+    "statement": "Expired certificate \u2014 the checkout edge certificate expired during the window; TLS handshakes failed.",
+    "status": "open",
+    "prior": 0.2,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "cert checkout.kestrel.example",
+        "predicate": "expiredDuringWindow",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "tlsHandshakeFailures",
+        "valueString": "observed"
+      }
+    ],
+    "mechanism": "cert",
+    "evidenceFor": [],
+    "evidenceAgainst": [
+      "f11",
+      "f12"
+    ],
+    "discriminatingTests": [
+      "Check cert telemetry (q3)"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H3",
+    "statement": "Upstream provider outage \u2014 Payline degraded 02:47\u201303:12; checkout calls to it timed out while our stack stayed healthy.",
+    "status": "open",
+    "prior": 0.3,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "errorSource",
+        "valueString": "Payline"
+      },
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "appTierErrorRate",
+        "valueString": "normal"
+      },
+      {
+        "@type": "Condition",
+        "subject": "Payline",
+        "predicate": "hadIncidentInWindow",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "Payline",
+        "predicate": "incidentMatchesOurWindow",
+        "valueBool": true
+      }
+    ],
+    "mechanism": "upstream",
+    "evidenceFor": [
+      "f04",
+      "f05"
+    ],
+    "evidenceAgainst": [],
+    "discriminatingTests": [
+      "Pull the Payline status history (q2)"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H4",
+    "statement": "Security incident \u2014 attack traffic saturated the checkout tier 02:47\u201303:12.",
+    "status": "open",
+    "prior": 0.15,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "trafficDuringWindow",
+        "valueString": "spike"
+      },
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "wafAttackDetected",
+        "valueBool": true
+      }
+    ],
+    "mechanism": "attack",
+    "evidenceFor": [],
+    "evidenceAgainst": [
+      "f06",
+      "f13"
+    ],
+    "discriminatingTests": [
+      "Pull CDN/WAF request logs"
+    ]
+  },
+  {
+    "@type": "Constraint",
+    "id": "C1",
+    "type": "eliminate",
+    "hypothesis": "H2",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "cert checkout.kestrel.example",
+        "predicate": "validThroughIncidentWindow",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "tlsHandshakeErrors",
+        "valueNum": 0
+      }
+    ],
+    "reason": "the certificate was valid through the window and no TLS handshake failed \u2014 the edge was not the problem"
+  },
+  {
+    "@type": "Constraint",
+    "id": "C2",
+    "type": "eliminate",
+    "hypothesis": "H4",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "trafficDuringWindow",
+        "valueString": "flat"
+      },
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "wafBlockedRequests",
+        "valueNum": 0
+      }
+    ],
+    "reason": "an attack requires traffic; RPS was flat and the WAF blocked nothing \u2014 there was no attack"
+  },
+  {
+    "@type": "Constraint",
+    "id": "C3",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "deploy d-2214",
+        "predicate": "onlyDeployCandidate",
+        "valueBool": true
+      }
+    ],
+    "field": "mechanism",
+    "valueString": "deploy"
+  },
+  {
+    "@type": "Constraint",
+    "id": "C4",
+    "type": "support",
+    "hypothesis": "H3",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "symptomMatchesUpstreamOutage",
+        "valueBool": true
+      }
+    ],
+    "field": "mechanism",
+    "valueString": "upstream"
+  },
+  {
+    "@type": "Constraint",
+    "id": "C5",
+    "type": "eliminate",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "deploy d-2214",
+        "predicate": "cannotExplainIncident",
+        "valueBool": true
+      }
+    ],
+    "reason": "the only candidate deploy changed one backoff constant, touched no error path, and soaked clean for 8 hours \u2014 it cannot produce 502s from an upstream gateway"
+  },
+  {
+    "@type": "Constraint",
+    "id": "C6",
+    "type": "support",
+    "hypothesis": "H3",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "incident INC-551",
+        "predicate": "upstreamFailureConfirmed",
+        "valueBool": true
+      }
+    ],
+    "field": "mechanism",
+    "valueString": "upstream"
+  }
+]

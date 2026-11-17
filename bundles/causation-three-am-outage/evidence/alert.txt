@@ -1,0 +1,6 @@
+PAGERDUTY ALERT — INC-551
+
+Fired:    2026-10-12 02:49 — "checkout 5xx rate > 5% for 2 min"
+Resolved: 2026-10-12 03:12
+First customer report: 02:51 ("checkout failing" via support chat)
+On-call: A. Osei (payments team)

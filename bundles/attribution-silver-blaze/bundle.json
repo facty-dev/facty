@@ -1,0 +1,540 @@
+[
+  {
+    "@type": "Rule",
+    "id": "R0",
+    "version": "1",
+    "pack": "attribution-silver-blaze",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "Silver Blaze",
+        "predicate": "missing",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "John Straker",
+        "predicate": "dead",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "raise",
+        "hypotheses": [
+          "H1",
+          "H2",
+          "H3",
+          "H4"
+        ]
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R1",
+    "version": "1",
+    "pack": "attribution-silver-blaze",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "Silver Blaze",
+        "predicate": "hoofprintsGait",
+        "valueString": "walking"
+      },
+      {
+        "@type": "Condition",
+        "subject": "Silver Blaze",
+        "predicate": "foundRiderless",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d1",
+          "type": "derived",
+          "subject": "Silver Blaze",
+          "predicate": "fate",
+          "valueString": "wandered",
+          "confidence": 0.9
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R2",
+    "version": "1",
+    "pack": "attribution-silver-blaze",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "kennel-dog",
+        "predicate": "barksAt",
+        "valueString": "stranger"
+      },
+      {
+        "@type": "Condition",
+        "subject": "kennel-dog",
+        "predicate": "barkedAtNightVisitor",
+        "valueBool": false
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d2",
+          "type": "derived",
+          "subject": "night-visitor",
+          "predicate": "role",
+          "valueString": "acquaintance",
+          "confidence": 0.85
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R3",
+    "version": "1",
+    "pack": "attribution-silver-blaze",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "night-visitor",
+        "predicate": "role",
+        "valueString": "acquaintance"
+      },
+      {
+        "@type": "Condition",
+        "subject": "John Straker",
+        "predicate": "dead",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "John Straker",
+        "predicate": "cravatTorn",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d3",
+          "type": "derived",
+          "subject": "night-visitor",
+          "predicate": "killed",
+          "valueString": "John Straker",
+          "confidence": 0.8
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R4",
+    "version": "1",
+    "pack": "attribution-silver-blaze",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "John Straker",
+        "predicate": "paidToSabotage",
+        "valueString": "Silas Brown"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d4",
+          "type": "derived",
+          "subject": "John Straker",
+          "predicate": "wasSabotaging",
+          "valueBool": true,
+          "confidence": 0.9
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R5",
+    "version": "1",
+    "pack": "attribution-silver-blaze",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "John Straker",
+        "predicate": "metOnMoor",
+        "valueString": "Ned Hunter"
+      },
+      {
+        "@type": "Condition",
+        "subject": "Ned Hunter",
+        "predicate": "handledTheHorse",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "night-visitor",
+        "predicate": "role",
+        "valueString": "acquaintance"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d5",
+          "type": "derived",
+          "subject": "night-visitor",
+          "predicate": "role",
+          "valueString": "accomplice",
+          "confidence": 0.8
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R6",
+    "version": "1",
+    "pack": "attribution-silver-blaze",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "John Straker",
+        "predicate": "debts",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "John Straker",
+        "predicate": "secondEstablishment",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q1",
+          "text": "Was Straker paid to sabotage Silver Blaze? Check the ledger at his second establishment.",
+          "slot": "sabotage-payment",
+          "mandatory": true,
+          "priority": 1,
+          "status": "open",
+          "raisedBy": "rule:R6",
+          "discriminates": [
+            "H2",
+            "H3"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R7",
+    "version": "1",
+    "pack": "attribution-silver-blaze",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "kennel-log",
+        "predicate": "barkingEntry",
+        "valueString": "absent"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q2",
+          "text": "Who was the night visitor? The dog knew them \u2014 check the stable roster for acquaintances on the grounds that night.",
+          "slot": "night-visitor-identity",
+          "mandatory": true,
+          "priority": 2,
+          "status": "open",
+          "raisedBy": "rule:R7",
+          "discriminates": [
+            "H2",
+            "H3",
+            "H4"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "R8",
+    "version": "1",
+    "pack": "attribution-silver-blaze",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "Silver Blaze",
+        "predicate": "scratched",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "Silas Brown",
+        "predicate": "rivalOf",
+        "valueString": "Colonel Ross"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q3",
+          "text": "Did the rival trainer benefit from the scratch? Check Silas Brown's whereabouts on the night of the disappearance.",
+          "slot": "rival-alibi",
+          "mandatory": false,
+          "priority": 3,
+          "status": "open",
+          "raisedBy": "rule:R8",
+          "discriminates": [
+            "H1"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H1",
+    "statement": "Rival theft \u2014 Silas Brown stole Silver Blaze and killed Straker to sabotage the race",
+    "status": "open",
+    "prior": 0.3,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "Silver Blaze",
+        "predicate": "fate",
+        "valueString": "stolen"
+      },
+      {
+        "@type": "Condition",
+        "subject": "Silas Brown",
+        "predicate": "killed",
+        "valueString": "John Straker"
+      }
+    ],
+    "killer": "rival",
+    "horse_fate": "stolen",
+    "evidenceFor": [
+      "f12",
+      "f13"
+    ],
+    "evidenceAgainst": [
+      "f04",
+      "f05"
+    ],
+    "discriminatingTests": [
+      "Check Silas Brown's alibi for the night of the disappearance"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H2",
+    "statement": "Acquaintance killing \u2014 a mystery acquaintance killed Straker over his secret; the horse wandered to Mapleton",
+    "status": "open",
+    "prior": 0.4,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "Silver Blaze",
+        "predicate": "fate",
+        "valueString": "wandered"
+      },
+      {
+        "@type": "Condition",
+        "subject": "night-visitor",
+        "predicate": "killed",
+        "valueString": "John Straker"
+      }
+    ],
+    "killer": "acquaintance",
+    "horse_fate": "wandered",
+    "evidenceFor": [
+      "f03",
+      "f06",
+      "f08"
+    ],
+    "evidenceAgainst": [],
+    "discriminatingTests": [
+      "Identify the night visitor; check the second-establishment ledger"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H3",
+    "statement": "Self-sabotage \u2014 Straker was paid to sabotage his own horse and was killed by his accomplice; the horse bolted",
+    "status": "open",
+    "prior": 0.35,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "Silver Blaze",
+        "predicate": "fate",
+        "valueString": "wandered"
+      },
+      {
+        "@type": "Condition",
+        "subject": "John Straker",
+        "predicate": "wasSabotaging",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "night-visitor",
+        "predicate": "role",
+        "valueString": "accomplice"
+      }
+    ],
+    "killer": "accomplice",
+    "horse_fate": "wandered",
+    "evidenceFor": [
+      "f10",
+      "f11"
+    ],
+    "evidenceAgainst": [],
+    "discriminatingTests": [
+      "Collect the second-establishment ledger (payments + the 3 a.m. meeting)"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H4",
+    "statement": "Stranger \u2014 a stranger stole the horse and killed Straker",
+    "status": "open",
+    "prior": 0.1,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "Silver Blaze",
+        "predicate": "fate",
+        "valueString": "stolen"
+      },
+      {
+        "@type": "Condition",
+        "subject": "night-visitor",
+        "predicate": "role",
+        "valueString": "stranger"
+      }
+    ],
+    "killer": "stranger",
+    "horse_fate": "stolen",
+    "evidenceFor": [],
+    "evidenceAgainst": [
+      "f06",
+      "f07"
+    ],
+    "discriminatingTests": [
+      "Check whether the dog barked (it did not \u2014 see the kennel-log gap)"
+    ]
+  },
+  {
+    "@type": "Constraint",
+    "id": "C1",
+    "type": "eliminate",
+    "hypothesis": "H4",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "night-visitor",
+        "predicate": "role",
+        "valueString": "acquaintance"
+      }
+    ],
+    "reason": "the dog barks at strangers and did not bark \u2014 the visitor was no stranger"
+  },
+  {
+    "@type": "Constraint",
+    "id": "C2",
+    "type": "eliminate",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "Silver Blaze",
+        "predicate": "fate",
+        "valueString": "wandered"
+      }
+    ],
+    "reason": "the horse wandered, it was not stolen \u2014 no theft, no rival theft"
+  },
+  {
+    "@type": "Constraint",
+    "id": "C3",
+    "type": "eliminate",
+    "hypothesis": "H2",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "John Straker",
+        "predicate": "wasSabotaging",
+        "valueBool": true
+      }
+    ],
+    "reason": "Straker was a perpetrator (paid sabotage), not a pure victim"
+  },
+  {
+    "@type": "Constraint",
+    "id": "C4",
+    "type": "support",
+    "hypothesis": "H2",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "night-visitor",
+        "predicate": "killed",
+        "valueString": "John Straker"
+      }
+    ],
+    "field": "killer",
+    "valueString": "acquaintance"
+  },
+  {
+    "@type": "Constraint",
+    "id": "C5",
+    "type": "support",
+    "hypothesis": "H3",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "night-visitor",
+        "predicate": "role",
+        "valueString": "accomplice"
+      }
+    ],
+    "field": "killer",
+    "valueString": "accomplice"
+  }
+]

@@ -1,0 +1,35 @@
+[
+  {
+    "@type": "Fact",
+    "id": "f15",
+    "type": "evidence",
+    "subject": "John Straker",
+    "predicate": "paidToSabotage",
+    "valueString": "Silas Brown",
+    "confidence": 0.9,
+    "source": "evidence/ledger.txt:4-5",
+    "observedAt": "2026-10-16"
+  },
+  {
+    "@type": "Fact",
+    "id": "f16",
+    "type": "evidence",
+    "subject": "John Straker",
+    "predicate": "metOnMoor",
+    "valueString": "Ned Hunter",
+    "confidence": 0.85,
+    "source": "evidence/ledger.txt:7-8",
+    "observedAt": "2026-10-16"
+  },
+  {
+    "@type": "Fact",
+    "id": "f17",
+    "type": "evidence",
+    "subject": "Ned Hunter",
+    "predicate": "handledTheHorse",
+    "valueBool": true,
+    "confidence": 0.8,
+    "source": "evidence/ledger.txt:8",
+    "observedAt": "2026-10-16"
+  }
+]

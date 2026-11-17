@@ -1,0 +1,6 @@
+APPROVAL WORKFLOW — INV-2261 / P-8891
+
+2026-10-10 09:41  invoice entered by m.hart (AP clerk)
+2026-10-10 09:47  invoice approved by m.hart
+2026-10-13 09:14  payment P-8891 released (SEPA)
+No other user touched this invoice.

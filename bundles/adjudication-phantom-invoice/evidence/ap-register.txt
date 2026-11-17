@@ -1,0 +1,13 @@
+MERIDIAN SUPPLIES GMBH — AP PAYMENT REGISTER (excerpt)
+Fiscal week 41, pulled 2026-10-14 by the fraud unit
+
+PAYMENT P-8891
+  Invoice:      INV-2261 — "Northwind Facilities Ltd"
+  Amount:       EUR 38,400.00
+  Paid:         2026-10-13 09:14 (SEPA credit transfer)
+  To account:   DE44 5001 0517 5402 1337 00
+  Register note: "account not in vendor history — first payment"
+
+STANDING PAYMENTS — "Northwind Facility Services Ltd" (real vendor, since 2024-03-12)
+  Monthly service invoices, always to: DE89 3704 0044 0532 0130 00
+  Last payment:  2026-10-02, EUR 4,120.00 — same account, no changes on file

@@ -1,0 +1,26 @@
+{
+  "contents": {
+    "bundle.json": "06699fc796fc33da56aebc8528c142a7f93a9ec7843b8fc92c78a55cb5899c77",
+    "evidence/alert.txt": "eb30259332f7af07b7d922d86078af9b2a5f8f7445e789da39caa933cef4e3d3",
+    "evidence/deploy-diff.txt": "19ce6cf97132a88d154f90d2db746aa522f02e51babffc4c726eee85ae8c30f2",
+    "evidence/deploy-log.txt": "c5ef06fac467af3fb2edaf89e9910ae99d6e6cfdf2a0868777add9c08e29dce0",
+    "evidence/detection.txt": "6a50e06d4a2aed5638c247829f40811cc3909ae73038017cd9483da0799988c5",
+    "evidence/monitoring.txt": "bf3a51eca364e9fe8f8e360ebc9ed14070eccd1a5300f3590d98fec583fe0525",
+    "evidence/provider-incident.txt": "804b7034d394b3431ec6c0d36a2d5e6589ae363f64a80a55b249399a708eb645",
+    "evidence/services.txt": "428838a28b21d86e378ff7e4ac99cde2c659616ede7b2d2a3396e2b50711b6c2",
+    "evidence/slack.txt": "7e8bcd1bc7354898d7ca49b2dbec2cdefeaa089269fd7432d283f08014d3e6d7",
+    "fixtures/expected.md": "8719f8dfd8b20962569b6636d532d56466eb1c248c58ad65a3e1724bd1bb7411",
+    "fixtures/facts-postmortem.json": "81c6e91c2076477c1e2b62bb7b68c45bf88696c4d6f459a8c1b078cbb6ea7551",
+    "fixtures/facts.json": "dd7780ab24a9f5650f413014b17540def410d55fd5b00a5a93caa98b5054c938"
+  },
+  "created": "2026-11-17T23:14:16+00:00",
+  "engine": {
+    "name": "facty",
+    "version": "0.2.0"
+  },
+  "fingerprint": "c50ed3ed27662dd3",
+  "id": "causation-three-am-outage",
+  "kind": "domain",
+  "publicKey": "CmfoOCNWShBIojQMIBc7rZz0KeGI11mwi29c63zPweg=",
+  "version": "1.0.0"
+}

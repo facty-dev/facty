@@ -1,0 +1,9 @@
+DEPLOY LOG — checkout service, last 72h
+
+d-2214  2026-10-12 18:40  "checkout: retry backoff tuning"
+        touched: checkout/retry.py (backoff base 100ms → 150ms)
+        canary: clean (30 min) · soak: error rate flat 18:40 → 02:47
+d-2209  2026-10-10 16:05  "checkout: copy update" (no code path changes)
+
+[ no deployments between 2026-10-12 18:40 and the incident ]
+[ no deployments during the incident window 02:47–03:12 ]

@@ -1,0 +1,123 @@
+[
+  {
+    "@type": "Fact",
+    "id": "f26",
+    "type": "evidence",
+    "subject": "Northwind Facilities Ltd",
+    "predicate": "createdFromIP",
+    "valueString": "185.220.44.7",
+    "confidence": 0.95,
+    "source": "evidence/audit-log.txt:5",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f27",
+    "type": "evidence",
+    "subject": "Northwind Facilities Ltd",
+    "predicate": "creationSessionUser",
+    "valueString": "svc-ap-batch",
+    "confidence": 0.95,
+    "source": "evidence/audit-log.txt:4",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f28",
+    "type": "evidence",
+    "subject": "Northwind Facilities Ltd",
+    "predicate": "createdFromGeo",
+    "valueString": "Lagos, NG",
+    "confidence": 0.9,
+    "source": "evidence/audit-log.txt:5",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f29",
+    "type": "evidence",
+    "subject": "m.hart",
+    "predicate": "activeSessionAtVendorCreation",
+    "valueBool": false,
+    "confidence": 0.95,
+    "source": "evidence/session-log.txt:4-10",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f30",
+    "type": "evidence",
+    "subject": "INV-2261",
+    "predicate": "emailOriginIP",
+    "valueString": "185.220.44.7",
+    "confidence": 0.95,
+    "source": "evidence/email-headers.txt:5",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f31",
+    "type": "evidence",
+    "subject": "INV-2261",
+    "predicate": "spfResult",
+    "valueString": "fail",
+    "confidence": 0.98,
+    "source": "evidence/email-headers.txt:3",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f32",
+    "type": "evidence",
+    "subject": "INV-2261",
+    "predicate": "dkimResult",
+    "valueString": "fail",
+    "confidence": 0.98,
+    "source": "evidence/email-headers.txt:4",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f33",
+    "type": "evidence",
+    "subject": "account DE44 5001 0517 5402 1337 00",
+    "predicate": "openedOn",
+    "valueString": "2026-10-08",
+    "confidence": 0.95,
+    "source": "evidence/bank-record.txt:3",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f34",
+    "type": "evidence",
+    "subject": "account DE44 5001 0517 5402 1337 00",
+    "predicate": "holder",
+    "valueString": "D. Okafor",
+    "confidence": 0.95,
+    "source": "evidence/bank-record.txt:4",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f35",
+    "type": "evidence",
+    "subject": "account DE44 5001 0517 5402 1337 00",
+    "predicate": "transactionCountBeforePayment",
+    "valueNum": 0,
+    "confidence": 0.95,
+    "source": "evidence/bank-record.txt:5",
+    "observedAt": "2026-10-17"
+  },
+  {
+    "@type": "Fact",
+    "id": "f36",
+    "type": "evidence",
+    "subject": "account DE44 5001 0517 5402 1337 00",
+    "predicate": "recallRequested",
+    "valueBool": true,
+    "confidence": 0.9,
+    "source": "evidence/bank-record.txt:7",
+    "observedAt": "2026-10-17"
+  }
+]

@@ -122,6 +122,7 @@ schema = ontology, enforced on every write).
 ./facty init-db              # create db + install schema (needs TerminusDB on :6363)
 ./facty keys init            # Ed25519 keypair in ~/.facty/keys (never committed)
 ./facty bundle sign|verify|load <dir>   # signed bundle gate; unsigned refused outside --dev (ADR-0006)
+./facty bundle from-golden <case-dir>   # convert a golden case (tests/golden/cases/<c>) into a signed bundle in bundles/
 ./facty case init <id> --bundle <dir>   # case = TerminusDB branch (ADR-0007); case list|show|branch|delete
 ./facty ingest <dir> --source <label> --case <id>   # content-addressed originals + custody; conflicts → facts
 ./facty sense --case <id> --out f.json  # live LLM sensing from the case's extracted texts (or: sense <dir> --out f.json)

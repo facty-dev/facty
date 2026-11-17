@@ -1,0 +1,9 @@
+MAIL HEADERS — INV-2261 message (billing@northwind-facilities.com)
+
+Return-Path:    <billing@northwind-facilities.com>
+SPF:            fail (sender IP not authorized for the domain)
+DKIM:           fail (no valid signature)
+Originating-IP: 185.220.44.7
+Reply-To:       billing@northwind-facilities.com
+Received:       from [185.220.44.7] by mail.meridiansupplies.example
+                2026-10-09 11:02:31 +0200

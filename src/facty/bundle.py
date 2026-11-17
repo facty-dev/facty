@@ -205,6 +205,42 @@ class Bundle:
         return out_path
 
     @classmethod
+    def from_golden(cls, case_dir: str | Path, out_dir: str | Path | None = None, *,
+                    version: str = "1.0.0", include_evidence: bool = True,
+                    include_fixtures: bool = True) -> "Bundle":
+        """Convert a golden PoC case dir (tests/golden/cases/<case>, legacy v1 with
+        terminusdb/pack.json) into an unsigned v2 bundle directory at out_dir
+        (default bundles/<case-name>): bundle.json holds the pack documents as-is
+        (investigation packs and assembly packs alike — Goal/Snippet/Slot docs
+        convert unchanged), evidence/ and fact fixtures are carried along as demo
+        content, then the caller signs. The result loads without --dev."""
+        import shutil
+        case_dir = Path(case_dir)
+        pack = case_dir / "terminusdb" / "pack.json"
+        if not pack.exists():
+            raise BundleError(f"{case_dir}: no terminusdb/pack.json (not a golden case dir)")
+        docs = json.loads(pack.read_text())
+        if isinstance(docs, dict) and "documents" in docs:
+            docs = docs["documents"]
+        out = Path(out_dir) if out_dir else Path("bundles") / case_dir.name
+        if out.exists() and any(out.iterdir()):
+            raise BundleError(f"{out}: exists and is not empty — pick another --out")
+        out.mkdir(parents=True, exist_ok=True)
+        (out / DOCS).write_text(json.dumps(docs, indent=2) + "\n")
+        if include_evidence and (case_dir / "evidence").is_dir():
+            shutil.copytree(case_dir / "evidence", out / "evidence")
+        if include_fixtures:
+            fx = out / "fixtures"
+            fx.mkdir(exist_ok=True)
+            for f in sorted((case_dir / "terminusdb").glob("facts*.json")):
+                shutil.copy2(f, fx / f.name)
+            exp = case_dir / "expected.md"
+            if exp.exists():
+                shutil.copy2(exp, fx / "expected.md")
+        b = cls({"id": out.name, "version": version, "kind": "domain"}, docs, out)
+        return b
+
+    @classmethod
     def from_file(cls, path: str | Path, passphrase: str) -> "Bundle":
         path = Path(path)
         key = base64.urlsafe_b64encode(hashlib.sha256(passphrase.encode()).digest())

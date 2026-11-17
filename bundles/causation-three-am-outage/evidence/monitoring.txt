@@ -1,0 +1,15 @@
+KESTREL — CHECKOUT MONITORING EXPORT, night of 2026-10-11/12
+
+Error rate (checkout 5xx), 15-min buckets:
+  18:00–02:45   0.2%  (baseline)
+  02:45–03:00   41%  peak at 02:58
+  03:00–03:15   recovering
+  03:15+        0.2%  (baseline)
+
+Incident window: 02:47:12 – 03:11:58 UTC.
+Error signature: HTTP 502, body "upstream connect timeout" —
+  upstream: payline-gateway (the payment provider).
+App tier: p95 latency normal, app 5xx rate normal throughout.
+Traffic: RPS flat at ~310 all night — no spike.
+TLS: zero handshake errors all night.
+Certificate "checkout.kestrel.example": valid until 2026-11-15.

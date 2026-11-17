@@ -139,6 +139,25 @@ def bundle_sign(bundle_dir: Annotated[Path, typer.Argument()],
     typer.echo(f"signed {b.id}@{b.version} with key {fp} → {b.path / bundle_mod.SIG}")
 
 
+@bundle_app.command("from-golden")
+@_gate
+def bundle_from_golden(case_dir: Annotated[Path, typer.Argument(help="golden case dir (tests/golden/cases/<case>)")],
+                       out: Annotated[Optional[Path], typer.Option("--out", "-o", help="bundle dir (default bundles/<case-name>)")] = None,
+                       version: Annotated[str, typer.Option("--version")] = "1.0.0",
+                       key: Annotated[Optional[str], typer.Option("--key", help="key fingerprint (default: sole private key)")] = None,
+                       no_evidence: Annotated[bool, typer.Option("--no-evidence")] = False,
+                       no_fixtures: Annotated[bool, typer.Option("--no-fixtures")] = False):
+    """Convert a golden PoC case into a signed v2 bundle (pack docs as-is —
+    investigation and assembly packs alike — plus evidence/fixtures as demo
+    content). The result verifies and loads without --dev."""
+    b = bundle_mod.Bundle.from_golden(case_dir, out, version=version,
+                                      include_evidence=not no_evidence,
+                                      include_fixtures=not no_fixtures)
+    fp = b.sign(key)
+    typer.echo(f"converted {case_dir.name} → {b.path}  ({len(b.docs)} pack docs, signed with key {fp})")
+    typer.echo(f"load with: ./facty bundle load {b.path}   (no --dev needed)")
+
+
 @bundle_app.command("verify")
 @_gate
 def bundle_verify(bundle_dir: Annotated[Path, typer.Argument()]):

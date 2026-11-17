@@ -1,0 +1,24 @@
+{
+  "contents": {
+    "bundle.json": "e7d02d5ee927524540504700330f80ddb99fc52ae7f6441b5a4fbf65d94acc1c",
+    "evidence/kennel-log.txt": "9b00b7c7265a2b32e98397545f319e3a8d2fc0a77770448ee621ae4b1c1b8a87",
+    "evidence/ledger.txt": "467e2f4ec7fe6384b6f15be5cef4b2b8547d8c25c0dd6d803f71eb821d53bd06",
+    "evidence/moor-report.txt": "55dbb1c722e7b393ff5f4cb0becfc03e6e0b3d1f532ecb309b5fee2fc8d65d00",
+    "evidence/rival-note.md": "6bb029bce1b826eff654a4cde8c4e22920313b1760f655f45131057f4367573b",
+    "evidence/stable-roster.md": "91efbb73d87477ac59a63592edbbf0417e51a13e49b41fc7e3484d25588dc14a",
+    "evidence/telegram.txt": "747814cf5ded792863257b02cfb419b27bc4e0085274cdf56f58d1f7b5cc371b",
+    "fixtures/expected.md": "7d906f3e1a2bd4dfdebc8e1a81e79b7a6e599226a2d32859fc92f62642c2df02",
+    "fixtures/facts-ledger.json": "b73f76cda06ad6a34ebfec8d3f86ddeae21f87a082524566403037c101a409a6",
+    "fixtures/facts.json": "a2e37f0620846b090e57e54afc9dc9005a695738d0ea4262490b69029cbc8e84"
+  },
+  "created": "2026-11-17T23:14:15+00:00",
+  "engine": {
+    "name": "facty",
+    "version": "0.2.0"
+  },
+  "fingerprint": "c50ed3ed27662dd3",
+  "id": "attribution-silver-blaze",
+  "kind": "domain",
+  "publicKey": "CmfoOCNWShBIojQMIBc7rZz0KeGI11mwi29c63zPweg=",
+  "version": "1.0.0"
+}

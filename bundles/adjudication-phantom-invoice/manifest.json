@@ -1,0 +1,29 @@
+{
+  "contents": {
+    "bundle.json": "95aa0d9b0254e6ce08b25a8469dba8f1dea4737ad82cc85ac34eea4e875a202e",
+    "evidence/ap-register.txt": "90db7fbe8e983c74c0b255674b65a41ae09445e3a0477e5922ba6474337881a4",
+    "evidence/approval-log.txt": "d761d5c94b0cf68962c90a5a534d18b9932e3ba2d1436b6343aafb55701f659b",
+    "evidence/audit-log.txt": "da0a77a02c827317bde6bfa9de6877632068757e898a18ecd7d1d59447e182fb",
+    "evidence/bank-record.txt": "855bdbdb53df447a23f338d042da15d00c14065a48096ca7c0ee8ef7e18b4e49",
+    "evidence/complaint.txt": "040996ebceea76eef42102ce51f89fe3dba2265d0e92b364c002fd75046cfacd",
+    "evidence/email-headers.txt": "fc043d05ce0090e6af3c49f09ea3d7a890eb8ac8ff7c7077df5af46fc76123a8",
+    "evidence/email-thread.txt": "379d764c56a5dac6645f8b086f3fb1c2d4cfd60e46612b7f9401417e7bf4267b",
+    "evidence/hart-note.txt": "ebcdf17e6a8a2437af5f2cdadf0447120c54f512bbe18dcf07a5fba948a8a703",
+    "evidence/policy.txt": "9cffcaa4957f95fe3ca2dc77ef271a34a7a0ea519c4b7573bf3ff77396137ffa",
+    "evidence/session-log.txt": "8828baacbc9013d55799d1dec3956012a94269604fb760a5595df0e72652c818",
+    "evidence/vendor-master.txt": "df2beb382afad4d4e95687829af3e2eedd64822e45266cad789aad02713afd6c",
+    "fixtures/expected.md": "450e5bbbe03edf0cce5dfd34b4ab4c2494c9dbca53dad6f7463c807a26bf38b4",
+    "fixtures/facts-trail.json": "58c6727b3da4ddaac32fe047e7263e29b14774bb41db3a8f8df95749d1feccb1",
+    "fixtures/facts.json": "dcda0d6454efa40f51a89222a0df853b614fea16268dbee2a6359e6da18c0a88"
+  },
+  "created": "2026-11-17T23:14:15+00:00",
+  "engine": {
+    "name": "facty",
+    "version": "0.2.0"
+  },
+  "fingerprint": "c50ed3ed27662dd3",
+  "id": "adjudication-phantom-invoice",
+  "kind": "domain",
+  "publicKey": "CmfoOCNWShBIojQMIBc7rZz0KeGI11mwi29c63zPweg=",
+  "version": "1.0.0"
+}

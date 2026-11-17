@@ -1,0 +1,11 @@
+FROM: accounts@northwindfacilityservices.com (Northwind Facility Services Ltd)
+TO: ap@meridiansupplies.example
+DATE: 2026-10-14 07:52
+
+"We have never sent invoice INV-2261, and we have never received any
+payment against it. Our bank details have not changed — we have been
+paid to the same account since 2024. Someone is using a name very
+similar to ours. Please recall the payment if possible."
+
+— R. Adeyemi, Accounts, Northwind Facility Services Ltd
+  (existing vendor V-1103 since 2024-03-12)
