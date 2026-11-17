@@ -237,8 +237,9 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
 ### Agent runtime facts (post-ADR-0005)
 
 - The LLM surface is the **Vibe CLI** with project profiles in `.vibe/agents/`
-  (default model alias `facty-large` → `mistral-large-4`; `thinking` per
-  profile). Machine-driven LLM calls go through pydantic-ai
+  (default model alias `facty-large` → `mistral-large-4`; `thinking = "high"`
+  for dev/pack-authoring — the highest level mistral-large-4 supports — and
+  `"low"` pinned on the `sensing` profile to keep the machine loop cheap). Machine-driven LLM calls go through pydantic-ai
   (`src/facty/sensing.py`), not the CLI; the `vibe -p` fallback backend does
   read the project `.vibe/config.toml` (`--trust`, cwd=repo root) — the file is
   shared by design, so keep it to runtime-safe settings (models/providers/

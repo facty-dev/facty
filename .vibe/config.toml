@@ -20,7 +20,7 @@ include_commit_signature = false
 name = "mistral-large-4"       # canonical API name
 provider = "mistral"
 alias = "facty-large"
-thinking = "low"               # sensing is extraction, not deliberation; raise to "max" for pack authoring
+thinking = "high"              # highest level mistral-large-4 supports (catalogue: low/medium/high) — dev default; the sensing profile pins "low"
 # mistral-large-4 actually serves a 1,048,576-token window (live-verified against
 # GET /v1/models, 2026-11). 800k window leaves headroom below the true value;
 # auto_compact_threshold must stay under window - 24k (harness bounds), hence 750k.

@@ -3,6 +3,7 @@
 description = "Sensing: read evidence, emit one JSON object. No tools, no decisions."
 safety = "yolo"
 active_model = "facty-large"
+thinking = "low"               # extraction, not deliberation — keep the machine loop cheap
 enabled_tools = []
 instructions = """
 You are the SENSES of a detective decision-support system (evidence in, verdict
