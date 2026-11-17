@@ -14,10 +14,11 @@
 # Posture:
 #   - the verdict path never calls Strom — induction only (ADR-0003 §1,
 #     the same rule as the local classifier);
-#   - the key comes from UPRELIC_API_KEY (env / gondolin host-secret
-#     injection) — never logged, never in files, never in error text;
+#   - the key comes from UPRELIC_API_KEY (env / SmolVM host-secret
+#     injection, ADR-0005 open item) — never logged, never in files, never
+#     in error text;
 #   - the client is stdlib-only (urllib) — the engine core + CLI stay
-#     dependency-free and run in the gondolin VM snapshot;
+#     dependency-free and run in the SmolVM image;
 #   - EU hosting (Paris), no third-party AI provider, request contents
 #     deleted after 90 days and never used for training (zero data
 #     retention available on request / Enterprise).
@@ -80,8 +81,8 @@ def from_env(**kwargs):
     if not key:
         raise StromError(
             f"{ENV_KEY} is not set — the decider tier (Strom) needs it. "
-            "Set it in the environment (in the VM it arrives via gondolin's "
-            "host-secret injection); never commit it. Without it the label "
+            "Set it in the environment (in the VM it arrives via the SmolVM "
+            "host-secret path); never commit it. Without it the label "
             "sensor runs the local tier only.")
     return Client(key, **kwargs)
 

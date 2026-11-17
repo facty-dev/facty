@@ -35,7 +35,7 @@
 #   facts, source = run_sensor(Path("engine/cases/triage-alert-flood"))
 #
 # Deps (optional, lazily imported — the engine core + CLI stay
-# dependency-free and run in the gondolin VM snapshot, which has no pypi
+# dependency-free and run in the SmolVM image, which has no pypi
 # egress):
 #   make deps-sensors    # uv venv + uv pip install -r requirements-sensors.txt
 #

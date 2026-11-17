@@ -1,6 +1,6 @@
 ---
 # Decision Agent — Role Prompt
-# Runtime: pi inside gondolin micro-VM (gondolin-pi), repo mounted at /workspace
+# Runtime: Vibe CLI inside the SmolVM machine (one OCI image from the root Dockerfile, ADR-0005), repo at /app
 ---
 
 # Role: Decision Agent

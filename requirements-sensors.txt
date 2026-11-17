@@ -1,8 +1,8 @@
 # Facty — optional sensor dependencies (the label sensor, engine/label.py).
 #
-# NOT part of `make deps`: the gondolin VM snapshot has no pypi egress (by
-# design) — the sensors run on the host or CI (GitHub Actions), or baked
-# into the VM snapshot. The engine core + CLI control plane stay
+# NOT part of `make deps`: the SmolVM image has no pypi egress (by
+# design) — the sensors run on the host or CI (GitHub Actions), or are baked
+# into the image at build time. The engine core + CLI control plane stay
 # dependency-free; the sensor imports lazily and fails with a clear hint
 # when these are missing.
 #
