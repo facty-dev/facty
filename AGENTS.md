@@ -243,9 +243,11 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
   (`src/facty/sensing.py`), not the CLI; the `vibe -p` fallback backend does
   read the project `.vibe/config.toml` (`--trust`, cwd=repo root) — the file is
   shared by design, so keep it to runtime-safe settings (models/providers/
-  agents; secrets stay in `~/.vibe/.env`). `max_context_length = 800000` on the
-  `facty-large` model entry overrides Vibe's stale 400k table value (the API
-  serves 1,048,576 — live-verified against `/v1/models`). Pack-factory agent
+  agents; secrets stay in `~/.vibe/.env`). Both `[[models]]` entries sit on
+  `mistral-large-4-0` (aliases `facty-large` + the routed `mistral-large-4-0-3`)
+  with `max_context_length = 1048576` and `auto_compact_threshold = 800000` —
+  overriding the catalogue's stale 400k compaction threshold (the API serves
+  1,048,576 — live-verified against `/v1/models`; see deps-log). Pack-factory agent
   runs (decision / coding roles) are being ported from gondolin/pi to
   Vibe-in-SmolVM — T9 in docs/CLEANROOM-METHOD.md.
 - Audit entry shape (appended per run, success or failure):

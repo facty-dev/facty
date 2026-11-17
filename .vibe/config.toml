@@ -16,24 +16,29 @@ active_model = "facty-large"
 # it is not a Vibe setting and warns at startup.
 include_commit_signature = false
 
+# Mistral Large 4 — two entries, ONE underlying model. The effective model map
+# is keyed by ALIAS, and the catalogue/GrowthBook routes "Mistral Large 4" as
+# id mistral-large-4-0 (picker alias mistral-large-4-0-3) with a stale
+# auto_compact_threshold=400000 — that 400k is what the status bar shows as the
+# ctx limit. So one entry per alias, both on name mistral-large-4-0 (a valid API
+# id; window 1,048,576 live-verified via GET /v1/models, 2026-11-17):
+#   - facty-large        our alias (active_model; sensing fallback via VIBE_ACTIVE_MODEL)
+#   - mistral-large-4-0-3  overrides the routed default row
+# thinking "high" = highest level mistral-large-4 supports (catalogue lists
+# low/medium/high only; "max" would warn and be dropped by the SDK).
+# auto_compact_threshold must stay under window - 24k headroom (harness bounds).
 [[models]]
-name = "mistral-large-4"       # canonical API name
+name = "mistral-large-4-0"
 provider = "mistral"
 alias = "facty-large"
-thinking = "high"              # highest level mistral-large-4 supports (catalogue: low/medium/high) — dev default; the sensing profile pins "low"
-# mistral-large-4 actually serves a 1,048,576-token window (live-verified against
-# GET /v1/models, 2026-11). 800k window leaves headroom below the true value;
-# auto_compact_threshold must stay under window - 24k (harness bounds), hence 750k.
-max_context_length = 800000
-auto_compact_threshold = 750000
+thinking = "high"              # dev default; the sensing profile pins "low"
+max_context_length = 1048576
+auto_compact_threshold = 800000
 
-# The catalogue routes "Mistral Large 4" under id mistral-large-4-0 (aliases
-# mistral-large-4-0-3 / mistral-large-4) with auto_compact_threshold=400000 —
-# that 400k is what the status-bar gauge shows as the limit. Override the same
-# model key so the standard model gets the real window too.
 [[models]]
-name = "mistral-large-4-0"     # catalogue id behind the mistral-large-4 aliases
+name = "mistral-large-4-0"
 provider = "mistral"
 alias = "mistral-large-4-0-3"
-max_context_length = 1048576   # live-verified via GET /v1/models
+thinking = "high"
+max_context_length = 1048576
 auto_compact_threshold = 800000
