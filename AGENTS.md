@@ -239,9 +239,14 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
 - The LLM surface is the **Vibe CLI** with project profiles in `.vibe/agents/`
   (default model alias `facty-large` → `mistral-large-4`; `thinking` per
   profile). Machine-driven LLM calls go through pydantic-ai
-  (`src/facty/sensing.py`), not the CLI. Pack-factory agent runs (decision /
-  coding roles) are being ported from gondolin/pi to Vibe-in-SmolVM — T9 in
-  docs/CLEANROOM-METHOD.md.
+  (`src/facty/sensing.py`), not the CLI; the `vibe -p` fallback backend does
+  read the project `.vibe/config.toml` (`--trust`, cwd=repo root) — the file is
+  shared by design, so keep it to runtime-safe settings (models/providers/
+  agents; secrets stay in `~/.vibe/.env`). `max_context_length = 800000` on the
+  `facty-large` model entry overrides Vibe's stale 400k table value (the API
+  serves 1,048,576 — live-verified against `/v1/models`). Pack-factory agent
+  runs (decision / coding roles) are being ported from gondolin/pi to
+  Vibe-in-SmolVM — T9 in docs/CLEANROOM-METHOD.md.
 - Audit entry shape (appended per run, success or failure):
   `{timestamp, type:"agent-run", role, phase, task, model, thinking, runtime, exit_code, duration_s}`.
 

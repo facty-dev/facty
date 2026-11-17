@@ -1,6 +1,13 @@
 # Project-local Vibe config (loaded when cwd is trusted:
 # run `vibe --trust` once in the repo root, or the sensing calls pass --trust).
 #
+# This file is SHARED by design: interactive dev sessions and the facty machine
+# loops both read it (the sensing fallback runs `vibe -p --agent sensing --trust`
+# with cwd=repo root). Keep it runtime-safe: model/provider/agent aliases only —
+# no secrets (keys live in ~/.vibe/.env, host-side). Dev-convenience settings
+# like max_context_length are fine here too: one-shot sensing prompts are tiny,
+# so a larger window only moves the compaction threshold, never the cost.
+#
 # Default model for every agent: Mistral Large 4.
 active_model = "facty-large"
 
@@ -14,3 +21,6 @@ name = "mistral-large-4"       # canonical API name
 provider = "mistral"
 alias = "facty-large"
 thinking = "low"               # sensing is extraction, not deliberation; raise to "max" for pack authoring
+# Vibe 3.1.2's built-in table says 400k; the API serves 1,048,576 (live-verified
+# against GET /v1/models, 2026-11). 800k leaves headroom below the true window.
+max_context_length = 800000
