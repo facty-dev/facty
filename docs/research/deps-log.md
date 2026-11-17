@@ -389,3 +389,24 @@ Facts that touch our code:
 - Candidate presets for a forensic/legal tool: `terminus` (Avenir/Montserrat,
   technical), `sahara` (warm paper — legal-document feel), `cerberus` (neutral
   default); dark variants included in each.
+
+## Mistral Vibe CLI — `mistral-vibe` 3.1.2 (uv tool; harness pkg `mistralai_vibe_local_harness`)
+
+Sources read (2026-11-17):
+- `vibe:vibe` skill bundled in the install (`…/site-packages/vibe/plugins/builtins/vibe/skills/vibe/SKILL.md`) — authoritative config/behavior reference; points to github.com/mistralai/mistral-vibe README and docs.mistral.ai/vibe/code/overview
+- Installed source: `…/site-packages/vibe/core/config/` (orchestrator.py, layers/, _model_aliases.py) and `…/site-packages/mistralai_vibe_local_harness/vibe/completion_profile/` (compile.py, bounds.py, known_models.py)
+- `vibe config schema` (JSON schema of every setting, incl. `$defs/ModelConfig`)
+- Live API with MISTRAL_API_KEY: `GET /v1/models`, `GET /v1/model-catalog?surface=vibe-code`
+- Verification pattern that costs no LLM call: `vibe -p "ping" --max-turns 0 --trust --output-dir DIR` → `export.json` contains the effective config (models, agents, warnings on stderr)
+
+Facts that touch our code/config:
+- **Project config is shared by design**: `.vibe/config.toml` loads only when the folder is trusted; `-p` never prompts, so the sensing fallback runs `vibe -p --agent sensing --trust` with cwd=repo root (`src/facty/sensing.py`) and reads the same file as interactive sessions. Keep it runtime-safe: models/providers/agents only, secrets in `~/.vibe/.env` (host-side). `VIBE_STRICT_CONFIG=1` refuses unknown keys — usable in CI to validate our project config.
+- **Layer precedence**: builtin defaults < model-catalog / GrowthBook (session-resolved, read-only) < user `~/.vibe/config.toml` < project `.vibe/config.toml`. `[[models]]` entries merge by `name` (the model key); `alias` is what `/model` and `--model` pick. An alias that is itself a model key, or claimed by two models, resolves to nothing (`_model_aliases.py`).
+- **`[[models]]` keys** (ModelConfig schema): `max_context_length`, `auto_compact_threshold`, `max_output_tokens`, `thinking`, `thinking_levels`, `supports_images`, prices, `temperature`, `top_p`.
+- **Context window resolution** (harness `compile.py`): explicit `max_context_length` > catalogue entry > known-model table. For `mistral-large-4` all three now agree at **1,048,576** (known table in 3.1.2 + live `/v1/models`, verified 2026-11-17).
+- **The status-bar "ctx limit" is the compaction threshold**, not the window: the catalogue/GrowthBook entry `mistral-large-4-0` (aliases `mistral-large-4-0-3`, `mistral-large-4`) ships `auto_compact_threshold=400000` — that was the "400k" we saw. Override the same model key in project config to change it.
+- **Threshold bounds** (`bounds.py`): headroom = min(24_000, ceil(window/4)); threshold must be < window − headroom or it is auto-fitted with a warning. Default = min(256_000, window − 60_000). A user-level top-level `auto_compact_threshold` (ours: 200000 in `~/.vibe/config.toml`) applies to every model without its own — set it per-model to override.
+- **Thinking levels for mistral-large-4-0 are `low/medium/high` only** (live model-catalog). `"max"` loads with a config warning and the Mistral SDK drops it — highest valid = `"high"`.
+- **Agent profiles** live in `.vibe/agents/<name>.toml` (`description`, `safety`, `active_model`, `thinking`, `enabled_tools`, `instructions`); select with `--agent` / `-p --agent`. Our split: `facty-large` model entry `thinking="high"` (dev + pack authoring), `sensing.toml` pins `thinking="low"` (machine loop stays cheap).
+- **Our repo settings** (`.vibe/config.toml`): `facty-large` = name `mistral-large-4`, thinking high, `max_context_length=800000`, `auto_compact_threshold=750000`; second entry keyed on the routed id `mistral-large-4-0` (alias `mistral-large-4-0-3`) with `max_context_length=1048576`, `auto_compact_threshold=800000`. Verified via the export pattern above: both entries resolve, session runtime-state shows `context_window: 800000, compaction_threshold: 750000`, no config warnings.
+- Env overrides: any setting via `VIBE_` prefix (e.g. `VIBE_ACTIVE_MODEL=facty-large` — used by the sensing fallback).
