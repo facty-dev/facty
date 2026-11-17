@@ -22,7 +22,11 @@ full reasoning trace. Two halves, never swapping jobs:
 
 Domains are **bundles** (ontology + rules + constraints, signed — ADR-0006) —
 fraud, incidents, security findings, contracts. The engine is the same; the
-bundle is the costume. (Sherlock was a detective, not a doctor.)
+bundle is the costume. (Sherlock was a detective, not a doctor.) One artifact,
+three roles: a knowledge pack, a case's starting pack, and a demo example are
+the same signed bundle — a case is a branch loaded from it (ADR-0007), a demo
+is a bundle plus fixture evidence. A future marketplace/plugin registry is
+just a namespace over signed bundle manifests.
 
 The repo is the engine + typed demo cases + the pack factory:
 

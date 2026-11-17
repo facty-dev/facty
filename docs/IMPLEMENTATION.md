@@ -225,6 +225,15 @@ Packs are authored/stored **directly as TerminusDB documents** (the schema in
 `src/facty/schema.py`): `@type`-tagged JSON-LD with typed fields.
 Loading is a plain insert — the DB's schema validation is the only gate.
 
+**Pack ≡ case pack ≡ demo.** There is exactly one distributable artifact: the
+signed bundle (`bundles/<name>/`, ADR-0006). A case starts as a branch loaded
+from a bundle (ADR-0007); a demo example is a bundle plus a starter case with
+fixture evidence (e.g. `bundles/small-business-contract-claim` +
+`assembly-unpaid-invoice`); the golden PoC cases in `tests/golden/cases/` are
+bundles in fixture form. A future marketplace/plugin registry is therefore
+just a namespace + content store over signed bundle manifests — no new trust
+or packaging model needed.
+
 - Polymorphic values are typed, not stringly-normalized: exactly one of
   `valueString` / `valueBool` / `valueNum` (or `var` for a bind-any existence
   condition). `confidence`/`prior`/scores are `xsd:decimal` numbers.

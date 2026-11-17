@@ -111,6 +111,15 @@ Fraud, outages, security findings, contracts — each is a **pack**: an
 ontology + rules + constraints. Same engine, different costume. (Sherlock was
 a detective, not a doctor — the method is the product.)
 
+**One artifact, three roles.** A knowledge pack, a case's starting pack, and a
+demo example are the *same thing*: a signed bundle (`bundles/<name>/`,
+Ed25519 manifest per ADR-0006). A case is just a branch created from a bundle
+(`facty case init <id> --bundle …`, ADR-0007); a demo is a bundle plus a
+starter case branch with fixture evidence. That identity is what makes a
+future **marketplace / plugin registry** trivial: a registry is only a
+namespace over signed bundle manifests — verify the signature, load, run. No
+new artifact kind, no new trust model.
+
 ## Why determinism matters
 
 **Determinism is the baseline, not a mode.** The engine always owns the
