@@ -109,7 +109,7 @@ Vehicle: `assembly-unpaid-invoice` (Marisol's bakery; see
    4 typed slots, 4 template snippets) + demo case with 4 evidence files
    (contract, delivery receipt, email thread, claimant statement).
    **Done 2026-11-17** (025): pack authored + signed; DSL gained `cmp`
-   comparisons (live-verified WOQL `Less/Greater/Gte/Lte`); selftest golden
+   comparisons (live-verified WOQL `Less/Greater/Gte/Lte`); selftest
    entry added.
 2. Engine path as-is: `facty ingest` → `sense` (`FACTY_SENSE=cache` for the
    demo; live LLM optional) → `run` → `prove`. `./facty selftest` stays green.
@@ -225,25 +225,24 @@ Packs are authored/stored **directly as TerminusDB documents** (the schema in
 `src/facty/schema.py`): `@type`-tagged JSON-LD with typed fields.
 Loading is a plain insert — the DB's schema validation is the only gate.
 
-**Pack ≡ case pack ≡ demo.** There is exactly one distributable artifact: the
-signed bundle (`bundles/<name>/`, ADR-0006). A case starts as a branch loaded
-from a bundle (ADR-0007); a demo example is a bundle plus a starter case with
-fixture evidence (e.g. `bundles/small-business-contract-claim` +
-`assembly-unpaid-invoice`); the golden PoC cases in `tests/golden/cases/` are
-bundles in fixture form. `facty bundle from-golden tests/golden/cases/<case>`
-converts one into a signed v2 bundle under `bundles/<case>/` (pack docs as-is
-— investigation and assembly packs alike — plus `evidence/` and fact
-fixtures as demo content); the result verifies and loads without `--dev`.
-A future marketplace/plugin registry is therefore
-just a namespace + content store over signed bundle manifests — no new trust
-or packaging model needed.
+**Pack ≡ case pack ≡ demo — one form only: the signed bundle.** The signed
+bundle (`bundles/<name>/`, ADR-0006) is the only pack representation; there is
+no legacy or unsigned form to maintain (`bundle load` verifies the signature
+and refuses anything else; `bundle sign` is the authoring bootstrap for a fresh
+`bundle.json`). A case starts as a branch loaded from a bundle (ADR-0007); a
+demo example is a bundle plus a starter case with fixture evidence (e.g.
+`bundles/small-business-contract-claim` + `assembly-unpaid-invoice`; the
+retired PoC's case packs live on as `bundles/attribution-silver-blaze` etc.).
+A future marketplace/plugin registry is therefore just a namespace + content
+store over signed bundle manifests — no new trust or packaging model needed.
 
 - Polymorphic values are typed, not stringly-normalized: exactly one of
   `valueString` / `valueBool` / `valueNum` (or `var` for a bind-any existence
   condition). `confidence`/`prior`/scores are `xsd:decimal` numbers.
-- Golden fixtures from the retired PoC live in `tests/golden/cases/<case>/`
-  (pack + sensed facts + `expected.md`); `./facty selftest` runs them as
-  branches and asserts the expected verdicts. Live packs live in `bundles/`.
+- Every bundle in `bundles/` carries its own fixtures (`fixtures/facts*.json`,
+  `expected.md`); `./facty selftest` loads each signed bundle (signature
+  verified), replays the fixtures on a scratch branch, and asserts the expected
+  verdicts plus a byte-identical determinism replay.
 - Derive blueprints are `FactTemplate` **subdocuments** (a Fact reference would
   materialize the conclusion as a premise). `Fact` is discriminated in WOQL by
   its unique `source` field (Isa/@type triples don't parse in v12).
@@ -276,8 +275,7 @@ or packaging model needed.
 ├── web/                       # Svelte 5 + Vite static UI (shadcn-svelte + wintry theme)
 ├── bundles/                   # signed packs (Ed25519 manifest): insurance-claim-fraud, …
 ├── tests/
-│   ├── golden/cases/          # retired PoC's golden case data (pack + facts + expected.md)
-│   └── test_*.py              # pytest suite
+│   └── test_*.py              # pytest suite (M1 trust spine, ingest, prove, …)
 ├── scripts/
 │   ├── e2e.sh                 # end-to-end demo: bundles/insurance-claim-fraud, offline or --live
 │   └── demo-ui.sh             # headless Web UI e2e demo (case assembly-unpaid-invoice)
@@ -304,8 +302,8 @@ pip install -e
 python -m facty init-db                 # create db + install schema
 python -m facty bundle load bundles/insurance-claim-fraud   # signed gate; --dev for legacy
 FACTY_SENSE=cache python -m facty run attribution-silver-blaze   # offline replay
-python -m facty run attribution-silver-blaze --add-facts tests/golden/cases/attribution-silver-blaze/facts-ledger.json
-python -m facty selftest                # golden acceptance vs tests/golden/cases/*/expected.md
+python -m facty run attribution-silver-blaze --add-facts bundles/attribution-silver-blaze/fixtures/facts-ledger.json
+python -m facty selftest                # acceptance: every signed bundle in bundles/, asserted + replayed
 python -m facty serve                   # Web UI on http://127.0.0.1:8080
 ```
 

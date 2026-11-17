@@ -2,18 +2,17 @@
 #
 # The product: a domain-agnostic abductive decision-support engine —
 # evidence in, ranked hypotheses out, full reasoning trace. Domains are
-# bundles (bundles/); golden case data for the acceptance test lives in
-# tests/golden/cases/.
+# bundles (bundles/) — signed, distributable, the only pack form (ADR-0006).
 #
 # Implementation (ADR-0005, the only stack): TerminusDB-backed engine in
 # src/facty, SmolVM image (Dockerfile), Vibe CLI + pydantic-ai for the LLM
-# half. The PoC engine is retired; tests/golden/cases keeps its case data.
+# half. The PoC engine is retired; its case packs live on as signed bundles.
 #
 # ── Quick start ──────────────────────────────────────────────────────────────
 #
 #   make deps                              # uv sync (Python 3.14, .python-version)
 #   docker compose -f compose.yaml up -d   # TerminusDB on :6363
-#   make selftest                          # golden acceptance — every case
+#   make selftest                          # acceptance — every signed bundle, asserted + replayed
 #   make e2e                               # end-to-end demo (offline)
 #   make e2e-live                          # with live LLM sensing
 #
@@ -27,8 +26,8 @@ help:
 	@echo ""
 	@echo "═══ Engine (the product; ADR-0005 stack) ═══"
 	@echo "  make deps               uv sync (Python from .python-version)"
-	@echo "  make cases              ./facty cases — migrated cases/packs"
-	@echo "  make selftest           ./facty selftest — golden acceptance, all cases"
+	@echo "  make cases              ./facty cases — the signed bundles"
+	@echo "  make selftest           ./facty selftest — acceptance: every signed bundle, asserted + replayed"
 	@echo "  make e2e / e2e-live     scripts/e2e.sh [--live] — end-to-end demo"
 	@echo "  make demo-ui            scripts/demo-ui.sh — served UI demo (assembly-unpaid-invoice)"
 	@echo ""

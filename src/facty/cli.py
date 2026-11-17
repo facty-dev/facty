@@ -2,13 +2,13 @@
 
   facty init-db
   facty keys init | list
-  facty bundle sign|verify|load <bundle-dir> [--dev]
+  facty bundle sign|verify|load <bundle-dir>   # signed v2 bundles only — the one form
   facty load-facts <facts.json> --message <msg>
   facty sense <case-dir> --out <facts.json>   # live LLM sensing
   facty run <case> [--add-facts <drop.json>] [--phase <name>] [--ref <branch>]
-  facty compile-rules <case-dir>               # dump WOQL (debug)
+  facty compile-rules <bundle-dir>             # dump WOQL (debug)
   facty log | verdict | metrics | cases
-  facty selftest                               # golden acceptance vs tests/golden
+  facty selftest                               # acceptance: every signed bundle in bundles/
 """
 
 from __future__ import annotations
@@ -60,7 +60,6 @@ def vm_down():
     typer.echo(f"stopped {sandbox.SMOLVM_MACHINE} (image persists; next run reuses it)")
 
 OptRef = Annotated[Optional[str], typer.Option("--ref", help="TerminusDB branch/commit to work on (default main)")]
-OptDev = Annotated[bool, typer.Option("--dev", help="Escape hatch: allow unsigned/legacy bundles (or FACTY_DEV=1)")]
 
 
 def engine_fact_doc(f: dict) -> dict:
@@ -81,7 +80,7 @@ def engine_fact_doc(f: dict) -> dict:
 
 
 REPO = Path(__file__).resolve().parents[2]  # src/facty/cli.py → repo root
-CASES = REPO / "tests" / "golden" / "cases"  # golden case data (packs + fact fixtures + expected.md)
+BUNDLES = REPO / "bundles"  # the signed bundles — the only pack/case/demo form (ADR-0006)
 
 
 def _client(ref: Optional[str]) -> Client:
@@ -122,50 +121,27 @@ def init_db(ref: OptRef = None):
 @_gate
 def bundle_load(bundle_dir: Annotated[Path, typer.Argument()],
                 name: Annotated[Optional[str], typer.Option("--name")] = None,
-                dev: OptDev = False, ref: OptRef = None):
-    """The trust gate: signed v2 bundles verify (embedded pubkey, no private key
-    needed); unsigned/legacy bundles are refused unless --dev/FACTY_DEV=1."""
+                ref: OptRef = None):
+    """The trust gate: the signed v2 bundle verifies against its embedded pubkey
+    (no private key needed) before anything is inserted. Unsigned dirs are refused."""
     c = _client(ref)
-    b = bundle_mod.Bundle.from_dir(bundle_dir, dev=dev)
-    typer.echo(b.load_into(c, name or b.id, dev=dev))
+    b = bundle_mod.Bundle.from_dir(bundle_dir)
+    typer.echo(b.load_into(c, name or b.id))
 
 
 @bundle_app.command("sign")
 @_gate
 def bundle_sign(bundle_dir: Annotated[Path, typer.Argument()],
                 key: Annotated[Optional[str], typer.Option("--key", help="key fingerprint (default: sole private key)")] = None):
-    b = bundle_mod.Bundle.from_dir(bundle_dir, dev=True)  # re-sign may start unsigned
+    b = bundle_mod.Bundle.from_dir(bundle_dir, allow_unsigned=True)  # authoring bootstrap
     fp = b.sign(key)
     typer.echo(f"signed {b.id}@{b.version} with key {fp} → {b.path / bundle_mod.SIG}")
-
-
-@bundle_app.command("from-golden")
-@_gate
-def bundle_from_golden(case_dir: Annotated[Path, typer.Argument(help="golden case dir (tests/golden/cases/<case>)")],
-                       out: Annotated[Optional[Path], typer.Option("--out", "-o", help="bundle dir (default bundles/<case-name>)")] = None,
-                       version: Annotated[str, typer.Option("--version")] = "1.0.0",
-                       key: Annotated[Optional[str], typer.Option("--key", help="key fingerprint (default: sole private key)")] = None,
-                       no_evidence: Annotated[bool, typer.Option("--no-evidence")] = False,
-                       no_fixtures: Annotated[bool, typer.Option("--no-fixtures")] = False):
-    """Convert a golden PoC case into a signed v2 bundle (pack docs as-is —
-    investigation and assembly packs alike — plus evidence/fixtures as demo
-    content). The result verifies and loads without --dev."""
-    b = bundle_mod.Bundle.from_golden(case_dir, out, version=version,
-                                      include_evidence=not no_evidence,
-                                      include_fixtures=not no_fixtures)
-    fp = b.sign(key)
-    typer.echo(f"converted {case_dir.name} → {b.path}  ({len(b.docs)} pack docs, signed with key {fp})")
-    typer.echo(f"load with: ./facty bundle load {b.path}   (no --dev needed)")
 
 
 @bundle_app.command("verify")
 @_gate
 def bundle_verify(bundle_dir: Annotated[Path, typer.Argument()]):
-    b = bundle_mod.Bundle.from_dir(bundle_dir, dev=True)
-    if not (b.path / bundle_mod.MANIFEST).exists():
-        typer.echo(f"{b.path}: legacy v1 bundle — unsigned, no manifest", err=True)
-        raise typer.Exit(1)
-    b.verify_or_raise()
+    b = bundle_mod.Bundle.from_dir(bundle_dir)  # verifies on load
     typer.echo(f"OK {b.id}@{b.version} — signature valid, key {b.fingerprint}, "
                f"{len(b.manifest['contents'])} content files verified")
 
@@ -194,12 +170,11 @@ def keys_list():
 @_gate
 def case_init(case_id: Annotated[str, typer.Argument()],
               bundle_dir: Annotated[Path, typer.Option("--bundle", "-b")],
-              dev: OptDev = False,
               model: Annotated[Optional[str], typer.Option("--model")] = None,
               ref: OptRef = None):
     """Create branch case-<id>, verify+load the signed bundle, register the case."""
     c = _client(ref)
-    typer.echo(cases_mod.case_init(c, case_id, bundle_dir, dev=dev, model=model))
+    typer.echo(cases_mod.case_init(c, case_id, bundle_dir, model=model))
 
 
 @case_app.command("list")
@@ -459,10 +434,8 @@ def serve_cmd(host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
 # ── inspect / debug ──────────────────────────────────────────────────────────
 
 @app.command("compile-rules")
-def compile_rules(case_dir: Annotated[Path, typer.Argument()]):
-    cand = case_dir / "bundle.json"
-    if not cand.exists():
-        cand = case_dir / "terminusdb" / "pack.json"
+def compile_rules(bundle_dir: Annotated[Path, typer.Argument()]):
+    cand = bundle_dir / "bundle.json"
     for r in [d for d in json.loads(cand.read_text()) if d.get("@type") == "Rule"]:
         q, id_vars = rules.compile_rule(r)
         typer.echo(r["id"] + " → " + json.dumps(q))
@@ -512,44 +485,39 @@ def verdict(ref: OptRef = None):
 
 @app.command("cases")
 def cases():
-    """List bundles (v2 manifests) and golden cases (tests/golden/cases)."""
-    bdir = REPO / "bundles"
-    if bdir.is_dir():
-        for d in sorted(bdir.iterdir()):
+    """List the signed bundles in bundles/ — the only pack/case/demo form."""
+    if BUNDLES.is_dir():
+        for d in sorted(BUNDLES.iterdir()):
             if (d / bundle_mod.MANIFEST).exists():
                 m = json.loads((d / bundle_mod.MANIFEST).read_text())
                 signed = "signed" if (d / bundle_mod.SIG).exists() else "UNSIGNED"
                 typer.echo(f"bundle\t{d.name}\tv{m['version']}\t{signed}\tkey={m.get('fingerprint', '-')}")
-    if CASES.is_dir():
-        for d in sorted(CASES.iterdir()):
-            if (d / "terminusdb" / "pack.json").exists():
-                typer.echo(f"case(golden)\t{d.name}")
 
 
-# Golden expectations live in tests/golden/cases/<case>/expected.md (transcribed
-# from the retired PoC oracle, ADR-0005).
+# Acceptance expectations for every signed bundle in bundles/ (transcribed from
+# each bundle's fixtures/expected.md — originally the PoC oracle's assertions).
 # ranking: [(hypothesis, approx score)] in expected order; pruned: set of hypothesis ids.
 SELFTEST_CASES = [
-    {"name": "attribution-silver-blaze", "dir": CASES / "attribution-silver-blaze",
-     "p1_facts": "terminusdb/facts.json", "p2_facts": "terminusdb/facts-ledger.json",
+    {"name": "attribution-silver-blaze", "dir": BUNDLES / "attribution-silver-blaze",
+     "p1_facts": "fixtures/facts.json", "p2_facts": "fixtures/facts-ledger.json",
      "p1": {"derived": {"d1", "d2", "d3"}, "pruned": {"H1", "H4"},
             "ranking": [("H2", 0.740), ("H3", 0.235)], "rec": "q1"},
-     "p2": {"derived": {"d4", "d5"}, "winner": "H3", "score": 0.735}, "legacy": True},
-    {"name": "adjudication-phantom-invoice", "dir": CASES / "adjudication-phantom-invoice",
-     "p1_facts": "terminusdb/facts.json", "p2_facts": "terminusdb/facts-trail.json",
+     "p2": {"derived": {"d4", "d5"}, "winner": "H3", "score": 0.735}},
+    {"name": "adjudication-phantom-invoice", "dir": BUNDLES / "adjudication-phantom-invoice",
+     "p1_facts": "fixtures/facts.json", "p2_facts": "fixtures/facts-trail.json",
      "p1": {"derived": {"d1", "d2", "d3", "d4"}, "pruned": {"H3", "H4"},
             "ranking": [("H2", 0.725), ("H1", 0.535)], "rec": "q1"},
-     "p2": {"derived": {"d5", "d6", "d7", "d8"}, "winner": "H1", "score": 0.935}, "legacy": True},
-    {"name": "causation-three-am-outage", "dir": CASES / "causation-three-am-outage",
-     "p1_facts": "terminusdb/facts.json", "p2_facts": "terminusdb/facts-postmortem.json",
+     "p2": {"derived": {"d5", "d6", "d7", "d8"}, "winner": "H1", "score": 0.935}},
+    {"name": "causation-three-am-outage", "dir": BUNDLES / "causation-three-am-outage",
+     "p1_facts": "fixtures/facts.json", "p2_facts": "fixtures/facts-postmortem.json",
      "p1": {"derived": {"d1", "d2", "d3"}, "pruned": {"H2", "H4"},
             "ranking": [("H1", 0.535), ("H3", 0.430)], "rec": "q1"},
-     "p2": {"derived": {"d4", "d5", "d6"}, "winner": "H3", "score": 0.830}, "legacy": True},
-    {"name": "insurance-claim-fraud", "dir": REPO / "bundles" / "insurance-claim-fraud",
+     "p2": {"derived": {"d4", "d5", "d6"}, "winner": "H3", "score": 0.830}},
+    {"name": "insurance-claim-fraud", "dir": BUNDLES / "insurance-claim-fraud",
      "p1_facts": "fixtures/facts-staged.json", "p2_facts": None,
      "p1": {"derived": {"d1", "d2", "d2b", "d3", "d4"}, "pruned": {"H4"},
             "ranking": [("H2", 0.630), ("H1", 0.625), ("H3", 0.620)], "rec": None}},
-    {"name": "assembly-unpaid-invoice", "dir": REPO / "bundles" / "small-business-contract-claim",
+    {"name": "assembly-unpaid-invoice", "dir": BUNDLES / "small-business-contract-claim",
      "p1_facts": "fixtures/facts-initial.json", "p2_facts": None,
      "p1": {"derived": {"d1", "d2", "d3", "d4"}, "pruned": {"H2", "H3"},
             "ranking": [("H1", 0.750)], "rec": "q-written-complaint"}},
@@ -558,8 +526,8 @@ SELFTEST_CASES = [
 
 @app.command("selftest")
 def selftest():
-    """Golden-compare every golden case (tests/golden/cases, transcribed from the
-    retired PoC oracle) against its expected.md assertions, plus a determinism
+    """Acceptance: load every signed bundle in bundles/ (signature-verified),
+    replay its fixture facts, assert the expected verdicts, plus a determinism
     replay per case. Runs against a scratch db."""
     from .schema import SCHEMA
 
@@ -586,8 +554,8 @@ def selftest():
             c.branch(c.ref)
         except TerminusError:
             pass
-        b = bundle_mod.Bundle.from_dir(spec["dir"], dev=spec.get("legacy", False))
-        b.load_into(c, name, dev=spec.get("legacy", False))
+        b = bundle_mod.Bundle.from_dir(spec["dir"])  # signed — verifies on load
+        b.load_into(c, name)
         engine.load_facts(c, spec["dir"] / spec["p1_facts"], "phase 1 facts")
         p1 = engine.run_phase(c, name, "1")
         e1 = spec["p1"]
@@ -630,7 +598,7 @@ def selftest():
     if failures:
         typer.echo("SELFTEST FAIL")
         raise typer.Exit(1)
-    typer.echo("SELFTEST PASS — all cases match the golden expectations, deterministic replay")
+    typer.echo("SELFTEST PASS — every signed bundle replays to its expected verdict, deterministically")
 
 
 def main() -> None:

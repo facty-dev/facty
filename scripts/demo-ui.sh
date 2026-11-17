@@ -25,7 +25,7 @@ export TERMINUSDB_PASS="${TERMINUSDB_PASS:-root}"
 
 step() { printf '\033[34m==>\033[0m %s\n' "$*"; }
 
-step "selftest (golden, incl. determinism replay)"
+step "selftest (signed bundles, incl. determinism replay)"
 "$FACTY" selftest | tail -1
 
 step "case init $CASE (signed bundle gate)"

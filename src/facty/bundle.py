@@ -20,10 +20,10 @@ v2 directory layout:
   bundle.sig      {"fingerprint": ..., "signature": b64}
   fixtures/ conformance/ ...   any extra files, covered by manifest.contents
 
-Legacy v1 dirs (a bare pack.json, e.g. the golden cases under tests/golden/cases)
-are readable in --dev mode only: unsigned bundles are refused otherwise.
-
-Env: FACTY_DEV=1 is the global escape hatch; --dev on the CLI commands.
+There is exactly one bundle form: the signed v2 directory. Unsigned or legacy
+dirs are refused everywhere except `bundle sign`, which bootstraps a manifest
+for a fresh bundle.json (authoring, not compatibility — nothing legacy is
+readable).
 """
 
 from __future__ import annotations
@@ -31,7 +31,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import os
 from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -54,10 +53,6 @@ def canonical(obj) -> bytes:
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def dev_mode(flag: bool = False) -> bool:
-    return flag or os.environ.get("FACTY_DEV", "") == "1"
 
 
 def engine_version() -> str:
@@ -91,26 +86,23 @@ class Bundle:
     # ── directory projection ────────────────────────────────────────────────
 
     @classmethod
-    def from_dir(cls, path: str | Path, dev: bool = False) -> "Bundle":
-        """Load a bundle directory. v2 (manifest+bundle.json) requires a valid
-        signature unless dev. v1 legacy (bare pack.json / terminusdb/pack.json)
-        is dev-only."""
+    def from_dir(cls, path: str | Path, allow_unsigned: bool = False) -> "Bundle":
+        """Load a signed v2 bundle directory (manifest+bundle.json) and verify
+        its signature. `allow_unsigned` is for `bundle sign` only — it bootstraps
+        a manifest for a fresh bundle.json. Nothing else is readable: there is
+        no legacy or dev path."""
         path = Path(path)
         if (path / MANIFEST).exists():
             b = cls._from_dir_v2(path)
-            if not dev_mode(dev):
+            if not allow_unsigned:
                 b.verify_or_raise()
             return b
-        for legacy in (path / "pack.json", path / "terminusdb" / "pack.json"):
-            if legacy.exists():
-                if not dev_mode(dev):
-                    raise BundleError(
-                        f"{path}: unsigned legacy bundle (v1) refused — re-sign as v2 "
-                        f"(`facty bundle sign`) or pass --dev / FACTY_DEV=1")
-                docs = json.loads(legacy.read_text())
-                return cls({"id": path.name, "version": "1.0.0", "kind": "domain",
-                            "legacy": True}, docs, path)
-        raise BundleError(f"{path}: not a bundle (no {MANIFEST} or pack.json)")
+        if allow_unsigned and (path / DOCS).exists():
+            docs = json.loads((path / DOCS).read_text())
+            if isinstance(docs, dict) and "documents" in docs:
+                docs = docs["documents"]
+            return cls({"id": path.name, "version": "1.0.0", "kind": "domain"}, docs, path)
+        raise BundleError(f"{path}: not a signed bundle (no {MANIFEST}) — sign it first (`facty bundle sign`)")
 
     @classmethod
     def _from_dir_v2(cls, path: Path) -> "Bundle":
@@ -134,7 +126,7 @@ class Bundle:
             raise BundleError("cannot verify: bundle not loaded from a directory")
         m = self.manifest
         if not (self.path / SIG).exists():
-            raise BundleError(f"{self.path}: unsigned bundle (no {SIG}) — refused outside --dev")
+            raise BundleError(f"{self.path}: unsigned bundle (no {SIG}) — sign it first (`facty bundle sign`)")
         sig = json.loads((self.path / SIG).read_text())
         if sig.get("fingerprint") != m.get("fingerprint"):
             raise BundleError(f"{self.path}: signature fingerprint does not match manifest")
@@ -179,10 +171,10 @@ class Bundle:
                                       "Goal", "Snippet")]
         return cls({"id": name, "version": "db", "kind": "domain", "source": "terminusdb"}, docs)
 
-    def load_into(self, client, name: str | None = None, dev: bool = False) -> dict:
-        """The trust gate: verify (unless --dev), then insert into the current
+    def load_into(self, client, name: str | None = None) -> dict:
+        """The trust gate: verify the signature, then insert into the current
         ref as schema-validated documents — the single write choke point."""
-        if (self.path is not None) and (self.path / MANIFEST).exists() and not dev_mode(dev):
+        if (self.path is not None) and (self.path / MANIFEST).exists():
             self.verify_or_raise()
         name = name or self.id
         client.insert_docs(self.docs, message=f"load bundle {name}@{self.version}")
@@ -203,42 +195,6 @@ class Bundle:
         key = base64.urlsafe_b64encode(hashlib.sha256(passphrase.encode()).digest())
         out_path.write_bytes(Fernet(key).encrypt(payload))
         return out_path
-
-    @classmethod
-    def from_golden(cls, case_dir: str | Path, out_dir: str | Path | None = None, *,
-                    version: str = "1.0.0", include_evidence: bool = True,
-                    include_fixtures: bool = True) -> "Bundle":
-        """Convert a golden PoC case dir (tests/golden/cases/<case>, legacy v1 with
-        terminusdb/pack.json) into an unsigned v2 bundle directory at out_dir
-        (default bundles/<case-name>): bundle.json holds the pack documents as-is
-        (investigation packs and assembly packs alike — Goal/Snippet/Slot docs
-        convert unchanged), evidence/ and fact fixtures are carried along as demo
-        content, then the caller signs. The result loads without --dev."""
-        import shutil
-        case_dir = Path(case_dir)
-        pack = case_dir / "terminusdb" / "pack.json"
-        if not pack.exists():
-            raise BundleError(f"{case_dir}: no terminusdb/pack.json (not a golden case dir)")
-        docs = json.loads(pack.read_text())
-        if isinstance(docs, dict) and "documents" in docs:
-            docs = docs["documents"]
-        out = Path(out_dir) if out_dir else Path("bundles") / case_dir.name
-        if out.exists() and any(out.iterdir()):
-            raise BundleError(f"{out}: exists and is not empty — pick another --out")
-        out.mkdir(parents=True, exist_ok=True)
-        (out / DOCS).write_text(json.dumps(docs, indent=2) + "\n")
-        if include_evidence and (case_dir / "evidence").is_dir():
-            shutil.copytree(case_dir / "evidence", out / "evidence")
-        if include_fixtures:
-            fx = out / "fixtures"
-            fx.mkdir(exist_ok=True)
-            for f in sorted((case_dir / "terminusdb").glob("facts*.json")):
-                shutil.copy2(f, fx / f.name)
-            exp = case_dir / "expected.md"
-            if exp.exists():
-                shutil.copy2(exp, fx / "expected.md")
-        b = cls({"id": out.name, "version": version, "kind": "domain"}, docs, out)
-        return b
 
     @classmethod
     def from_file(cls, path: str | Path, passphrase: str) -> "Bundle":

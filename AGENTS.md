@@ -31,7 +31,7 @@ just a namespace over signed bundle manifests.
 The repo is the engine + typed demo cases + the pack factory:
 
 - `src/facty/` — the implementation (ADR-0005, the only stack): TerminusDB-backed engine + CLI
-- `tests/golden/cases/` — golden case data (packs + sensed-fact fixtures + expected.md) driving `./facty selftest`; the PoC engine itself is retired (ADR-0005)
+- `bundles/` — the signed bundles (manifest + Ed25519 sig + pack docs + fixtures): packs, case packs and demos are the same artifact (ADR-0006); `./facty selftest` replays them all
 - `scripts/*.sh` — git-native pipeline, asset sync, e2e demo (bash)
 - `templates/sdlc/` — pack-factory templates + agent role prompts (`agents/decision.md`, `agents/coding.md`)
 - `docs/` — architecture, discovery, PRDs, ADRs (heavily cross-referenced — follow links)
@@ -117,12 +117,11 @@ schema = ontology, enforced on every write).
 # The engine (the product) — primary interface: ./facty (see `./facty --help`).
 # ./facty runs the cleanroom stack (TerminusDB-backed, SmolVM + Vibe CLI +
 # pydantic-ai, ADR-0005) — the only stack; the PoC engine is retired.
-./facty cases                # list bundles and golden cases (tests/golden/cases)
-./facty selftest             # golden acceptance: every migrated case, asserted + replay
+./facty cases                # list the signed bundles (bundles/)
+./facty selftest             # acceptance: every signed bundle, asserted + replay
 ./facty init-db              # create db + install schema (needs TerminusDB on :6363)
 ./facty keys init            # Ed25519 keypair in ~/.facty/keys (never committed)
-./facty bundle sign|verify|load <dir>   # signed bundle gate; unsigned refused outside --dev (ADR-0006)
-./facty bundle from-golden <case-dir>   # convert a golden case (tests/golden/cases/<c>) into a signed bundle in bundles/
+./facty bundle sign|verify|load <dir>   # signed bundle gate — the only form; unsigned refused (ADR-0006)
 ./facty case init <id> --bundle <dir>   # case = TerminusDB branch (ADR-0007); case list|show|branch|delete
 ./facty ingest <dir> --source <label> --case <id>   # content-addressed originals + custody; conflicts → facts
 ./facty sense --case <id> --out f.json  # live LLM sensing from the case's extracted texts (or: sense <dir> --out f.json)
@@ -136,7 +135,7 @@ schema = ontology, enforced on every write).
 
 ```bash
 # Make wrappers:
-make selftest               # acceptance test (every golden case, asserted + replay)
+make selftest               # acceptance test (every signed bundle, asserted + replay)
 make demo-ui                # served UI demo (scripts/demo-ui.sh)
 
 
@@ -178,7 +177,7 @@ Phase vocabularies differ by surface: the decision agent uses
   output, `tools=[]`, disk-cached — `FACTY_SENSE=cache` replays with no LLM.
   The PoC-era label-sensor ladder (`engine/label.py`, `engine/strom.py`,
   `classify.json`, `requirements-sensors.txt`) is retired with the PoC engine
-  (ADR-0005); its golden case data survives in `tests/golden/cases/`.
+  (ADR-0005); its case packs survive as signed bundles in `bundles/`.
 - **Secrets**: real keys live in `~/.facty/.env` (machine-local, never
   committed); the real environment always wins. `MISTRAL_API_KEY` set in the
   env wins (production); otherwise export the subscription token from
@@ -208,11 +207,9 @@ Phase vocabularies differ by surface: the decision agent uses
 
 | Artifact | Path | Numbering |
 |---|---|---|
-| Golden case evidence (raw) | `tests/golden/cases/<case>/evidence/` | — |
-| Golden pack (rules/constraints/hypotheses) | `tests/golden/cases/<case>/pack/` | — |
-| Golden sensed facts | `tests/golden/cases/<case>/facts.json` (+ `facts-<drop>.json`) | — |
-| Golden expected outcome | `tests/golden/cases/<case>/expected.md` | — |
-| Signed live bundles | `bundles/<bundle>/` (manifest + Ed25519 sig + pack docs) | — |
+| Bundle (pack = case pack = demo) | `bundles/<bundle>/` (manifest + Ed25519 sig + bundle.json) | — |
+| Bundle evidence (raw) | `bundles/<bundle>/evidence/` | — |
+| Bundle fact fixtures + expected outcome | `bundles/<bundle>/fixtures/` (`facts*.json`, `expected.md`) | — |
 | Discovery assets | `docs/discovery/{problems,solutions,assumptions,ost,verticals}.md` | — |
 | PRDs | `docs/prd/PRD-NNN-<slug>.md` | 3-digit (`PRD-001`) |
 | ADRs | `docs/adr/NNNN-<slug>.md` | **4-digit** (`0001-`) |
@@ -289,4 +286,4 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
 | [docs/research/stack-survey.md](docs/research/stack-survey.md) | backend survey + cleanroom proposal |
 | [docs/research/deps-log.md](docs/research/deps-log.md) | dependency docs log (rule 8): versions, what was read, live-verified divergences |
 | [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | the cleanroom implementation: layout, run, e2e demo, observability |
-| [tests/golden/](tests/golden) | the retired PoC's golden case data driving `./facty selftest` |
+| [bundles/](bundles) | the signed bundles — packs, case packs and demos in one form |

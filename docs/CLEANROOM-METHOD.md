@@ -50,4 +50,4 @@ performance, scale, or UX.
 - Vision/method (unchanged): [PHILOSOPHY.md](PHILOSOPHY.md), [vision.md](vision.md), ADR-0003 (superseded in part by ADR-0005)
 - Decision: [ADR-0005](adr/0005-cleanroom-stack-replaces-poc.md); survey: [docs/research/stack-survey.md](research/stack-survey.md); dependency docs log: [docs/research/deps-log.md](research/deps-log.md)
 - Implementation: [docs/IMPLEMENTATION.md](../docs/IMPLEMENTATION.md), this repo's `./facty`
-- Legacy: [ARCHITECTURE.md](ARCHITECTURE.md) (gondolin model — retired with the PoC); the PoC's golden case data survives in `tests/golden/cases/`
+- Legacy: [ARCHITECTURE.md](ARCHITECTURE.md) (gondolin model — retired with the PoC); the PoC's case packs survive as signed bundles in `bundles/`

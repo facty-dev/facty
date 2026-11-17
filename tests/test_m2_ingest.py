@@ -127,4 +127,4 @@ def test_unsigned_bundle_refused_in_case_init(client, tmp_path):
     (bdir / "bundle.json").write_text("[]")
     (bdir / "manifest.json").write_text(json.dumps({"id": "u", "version": "2.0.0"}))
     with pytest.raises(BundleError):
-        cases_mod.case_init(client, "x", str(bdir), dev=False)
+        cases_mod.case_init(client, "x", str(bdir))

@@ -34,18 +34,18 @@ def _docs_of(client, cls: str) -> list[dict]:
     return [d for d in client.get_all_docs() if d.get("@type") == cls]
 
 
-def case_init(client, case_id: str, bundle_dir: str, dev: bool = False,
+def case_init(client, case_id: str, bundle_dir: str,
               model: str | None = None) -> dict:
     """Create the case branch, load the (signed) bundle, register the Case doc."""
     branch = _slug(case_id)
-    b = bundle_mod.Bundle.from_dir(bundle_dir, dev=dev)  # gate: verifies unless --dev
+    b = bundle_mod.Bundle.from_dir(bundle_dir)  # gate: verifies the signature
     main = client.ref
     client.ref = branch
     try:
         client.branch(branch, origin="main")
     except Exception:
         pass  # already exists
-    counts = b.load_into(client, b.id, dev=dev)
+    counts = b.load_into(client, b.id)
     case_doc = {"@type": "Case", "id": case_id, "bundle": b.id,
                 "bundleVersion": b.version, "fingerprint": b.fingerprint or "",
                 "engineVersion": engine_version(),

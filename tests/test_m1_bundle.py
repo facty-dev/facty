@@ -1,5 +1,6 @@
-"""M1 trust-spine tests: Ed25519 keys, bundle v2 sign/verify, the --dev gate,
-and the encrypted file projection (same artifact, another serialization).
+"""M1 trust-spine tests: Ed25519 keys, bundle v2 sign/verify (the one and only
+bundle form — unsigned dirs are refused), and the encrypted file projection
+(same artifact, another serialization).
 
 Run: uv run pytest tests/test_m1_bundle.py
 Keys are generated into a tmp dir via FACTY_KEYS_DIR — nothing touches
@@ -60,19 +61,19 @@ def test_keys_init_and_fingerprint(keys_dir):
 
 def test_sign_verify_roundtrip(bundle_dir, keys_dir):
     b, fp = make_signed(bundle_dir, keys_dir)
-    loaded = Bundle.from_dir(bundle_dir)  # no --dev: must verify against embedded pubkey
+    loaded = Bundle.from_dir(bundle_dir)  # verifies against the embedded pubkey
     assert loaded.fingerprint == fp
     loaded.verify_or_raise()
 
 
-def test_unsigned_refused_without_dev(bundle_dir, keys_dir):
+def test_unsigned_refused(bundle_dir, keys_dir):
     docs = json.loads((bundle_dir / "bundle.json").read_text())
     Bundle({"id": "test-bundle", "version": "2.0.0", "kind": "domain"}, docs, path=bundle_dir)
     (bundle_dir / "manifest.json").write_text(json.dumps({"id": "test-bundle", "version": "2.0.0"}))
     with pytest.raises(BundleError, match="unsigned"):
         Bundle.from_dir(bundle_dir)
-    # --dev escape hatch loads it
-    b = Bundle.from_dir(bundle_dir, dev=True)
+    # the only unsigned entry point is authoring: sign bootstraps the manifest
+    b = Bundle.from_dir(bundle_dir, allow_unsigned=True)
     assert b.id == "test-bundle"
 
 
@@ -106,10 +107,10 @@ def test_encrypted_file_projection_roundtrip(bundle_dir, keys_dir):
         Bundle.from_file(out, passphrase="wrong")
 
 
-def test_legacy_v1_pack_refused_outside_dev(tmp_path):
+def test_bare_pack_dir_refused(tmp_path):
+    # no parallel form: a dir without manifest.json is not a bundle at all
     d = tmp_path / "legacy"
     d.mkdir()
     (d / "pack.json").write_text(json.dumps([{"@type": "Rule", "id": "r1"}]))
-    with pytest.raises(BundleError, match="--dev"):
+    with pytest.raises(BundleError, match="not a signed bundle"):
         Bundle.from_dir(d)
-    assert Bundle.from_dir(d, dev=True).docs[0]["id"] == "r1"

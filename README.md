@@ -6,7 +6,7 @@
 > **cleanroom stack** in [`src/facty/`](src/facty) — TerminusDB as store/schema/
 > rule engine (WOQL), SmolVM for isolation, pydantic-ai + Vibe CLI for the LLM
 > half, `./facty` as the headless CLI and `facty serve` + `web/` as the Web UI.
-> The retired PoC's golden case data lives on in `tests/golden/cases/`.
+> The retired PoC's case packs live on as signed bundles in `bundles/`.
 > See [ADR-0005](docs/adr/0005-cleanroom-stack-replaces-poc.md),
 > [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), and the methodology mapping +
 > triage in [docs/CLEANROOM-METHOD.md](docs/CLEANROOM-METHOD.md).
@@ -115,9 +115,7 @@ a detective, not a doctor — the method is the product.)
 demo example are the *same thing*: a signed bundle (`bundles/<name>/`,
 Ed25519 manifest per ADR-0006). A case is just a branch created from a bundle
 (`facty case init <id> --bundle …`, ADR-0007); a demo is a bundle plus a
-starter case branch with fixture evidence. Old PoC case packs convert with
-`facty bundle from-golden tests/golden/cases/<case>` → signed bundle in
-`bundles/`. That identity is what makes a
+starter case branch with fixture evidence. That identity is what makes a
 future **marketplace / plugin registry** trivial: a registry is only a
 namespace over signed bundle manifests — verify the signature, load, run. No
 new artifact kind, no new trust model.
@@ -159,7 +157,7 @@ Web UI (`facty serve` + `web/`, http://127.0.0.1:8080); both are clients of
 the same gateway, so they stay at parity.
 
 ```bash
-./facty cases            # the demo cases (golden fixtures + bundles)
+./facty cases            # the signed bundles (packs = case packs = demos)
 ./facty run <case>       # deterministic verdict on a case branch
 ./facty serve            # HTTP gateway + Web UI on :8080
 ./facty selftest         # acceptance test — every case, asserted + replayed
