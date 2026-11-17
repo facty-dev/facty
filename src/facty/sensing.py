@@ -21,6 +21,7 @@ Env:
   FACTY_SENSE         "live" (default) | "cache"
   FACTY_SENSE_BACKEND "pydantic" (default if importable) | "vibe"
   FACTY_MODEL         default "mistral-large-4"  (pydantic: "mistral:<model>")
+  FACTY_THINKING      default "low"  (pydantic model_settings.thinking; machine loop stays cheap)
   VIBE_BIN            default "vibe"
   MISTRAL_API_KEY     picked up by pydantic-ai's mistral provider / vibe auth
 """
@@ -145,7 +146,12 @@ def _sense_pydantic(prompt: str, output_type):
 
     _maybe_logfire()
     model = f"mistral:{os.environ.get('FACTY_MODEL', 'mistral-large-4')}"
-    agent = Agent(model, instructions=SYSTEM_INSTRUCTION, output_type=output_type, retries=3)
+    # Machine loop: low thinking (extraction, not deliberation) regardless of
+    # any CLI-level model config — pydantic-ai reads no vibe config; the model
+    # name and these settings are the whole machine-loop config.
+    thinking = os.environ.get("FACTY_THINKING", "low")
+    agent = Agent(model, instructions=SYSTEM_INSTRUCTION, output_type=output_type, retries=3,
+                  model_settings={"thinking": thinking})
     result = agent.run_sync(prompt)
     out = result.output
     text = out if isinstance(out, str) else (
