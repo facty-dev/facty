@@ -25,7 +25,7 @@ import typer
 
 from . import bundle as bundle_mod
 from . import cases as cases_mod
-from . import codemode, engine, ingest, keys, rules, sandbox, search, sensing
+from . import codemode, engine, ingest, keys, rules, sandbox, search, sensing, serve as serve_mod
 from .client import Client, TerminusError
 
 app = typer.Typer(
@@ -393,6 +393,50 @@ def run(case: Annotated[str, typer.Argument()],
                    f"claims={r['claimsProven']:.3f} support={r['support']:.0f} prior={r['prior']:.2f}")
 
 
+@app.command("assemble")
+def assemble_cmd(case: Annotated[str, typer.Argument()],
+                 goal: Annotated[Optional[str], typer.Option("--goal")] = None,
+                 ref: OptRef = None):
+    """Deterministic assembly: snippets whose `when` is proven → AssembledDocument."""
+    c = _client(ref)
+    if ref:
+        try:
+            c.branch(c.ref)
+        except TerminusError:
+            pass
+    doc = engine.assemble(c, case, goal)
+    typer.echo(f"assembled {doc['id']} — {len(doc['snippets'])} snippets, sha256 {doc['sha256'][:12]}")
+    typer.echo(doc["content"])
+
+
+@app.command("answer")
+def answer_cmd(case: Annotated[str, typer.Argument()],
+               question: Annotated[str, typer.Argument()],
+               value: Annotated[str, typer.Argument()],
+               ref: OptRef = None):
+    """Slot filling (human loop): answer an open question → typed Fact + close it."""
+    c = _client(ref)
+    if ref:
+        try:
+            c.branch(c.ref)
+        except TerminusError:
+            pass
+    doc = engine.answer_question(c, question, value)
+    typer.echo(json.dumps(doc, indent=2, default=str))
+
+
+@app.command("serve")
+def serve_cmd(host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
+              port: Annotated[int, typer.Option("--port")] = 8080,
+              ref: OptRef = None):
+    """The one HTTP/JSON gateway: every CLI op as an endpoint + SSE watch + the
+    static Web UI (web/dist). The UI and the CLI are both clients of it."""
+    if ref:
+        import os
+        os.environ.setdefault("TERMINUSDB_REF", ref)
+    serve_mod.serve(host=host, port=port)
+
+
 # ── inspect / debug ──────────────────────────────────────────────────────────
 
 @app.command("compile-rules")
@@ -485,6 +529,10 @@ SELFTEST_CASES = [
      "p1_facts": "fixtures/facts-staged.json", "p2_facts": None,
      "p1": {"derived": {"d1", "d2", "d2b", "d3", "d4"}, "pruned": {"H4"},
             "ranking": [("H2", 0.630), ("H1", 0.625), ("H3", 0.620)], "rec": None}},
+    {"name": "assembly-unpaid-invoice", "dir": REPO / "bundles" / "small-business-contract-claim",
+     "p1_facts": "fixtures/facts-initial.json", "p2_facts": None,
+     "p1": {"derived": {"d1", "d2", "d3", "d4"}, "pruned": {"H2", "H3"},
+            "ranking": [("H1", 0.750)], "rec": "q-written-complaint"}},
 ]
 
 

@@ -1,0 +1,31 @@
+[
+  {
+    "@type": "Goal",
+    "id": "goal-recover-unpaid-invoice",
+    "pack": "small-business-contract-claim",
+    "name": "Recover an unpaid invoice (demand letter + small-claims filing)",
+    "statement": "Prove the debt on an unpaid invoice — signed contract, accepted delivery, no written rejection within the §7 window — and assemble the demand letter and small-claims complaint packet.",
+    "intentPhrases": [
+      "unpaid invoice",
+      "client won't pay",
+      "recover an unpaid invoice",
+      "they refuse to pay the invoice",
+      "my customer owes me money"
+    ],
+    "requiredSlots": [
+      {"@type": "Slot", "name": "writtenComplaint", "type": "bool",
+       "producesSubject": "buyer", "producesPredicate": "rejectionInWriting",
+       "fillers": ["llm", "human"], "confirm": true},
+      {"@type": "Slot", "name": "smallClaimsLimit", "type": "num",
+       "producesSubject": "jurisdiction", "producesPredicate": "smallClaimsLimit",
+       "fillers": ["human"], "confirm": false},
+      {"@type": "Slot", "name": "targetsEmployee", "type": "bool",
+       "producesSubject": "matter", "producesPredicate": "targetsEmployee",
+       "fillers": ["human"], "confirm": true},
+      {"@type": "Slot", "name": "deliveryDate", "type": "date",
+       "producesSubject": "delivery", "producesPredicate": "date",
+       "fillers": ["llm", "human"], "confirm": false}
+    ],
+    "output": "demand-letter + small-claims complaint packet (Markdown, printable to PDF)"
+  }
+]

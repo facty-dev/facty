@@ -1,7 +1,7 @@
 # One-shot sensing agent: NO tools, single turn, structured JSON out.
 # The LLM is a function call inside the deterministic engine — never the judge.
 description = "Sensing: read evidence, emit one JSON object. No tools, no decisions."
-safety = "ask"
+safety = "yolo"
 active_model = "facty-large"
 enabled_tools = []
 instructions = """

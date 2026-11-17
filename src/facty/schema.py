@@ -37,7 +37,12 @@ SCHEMA: list[dict] = [
      "@metadata": {"terminusdb": {"options": ["store_indices"]}}},
     {"@type": "Class", "@id": "Condition", "@subdocument": [],
      "@key": {"@type": "Random"},
-     "subject": "xsd:string", "predicate": "xsd:string", **VALUE_FIELDS},
+     "subject": "xsd:string", "predicate": "xsd:string", **VALUE_FIELDS,
+     # comparison conditions (rules.py CMP_OPS): cmp = lt|le|gt|ge; the value is
+     # compared either to the condition's own literal or to another fact's value
+     # (compareToSubject/compareToPredicate, valueField = valueNum default)
+     "cmp": OPT_STR, "compareToSubject": OPT_STR, "compareToPredicate": OPT_STR,
+     "valueField": OPT_STR},
     {"@type": "Class", "@id": "Fact",
      "id": "xsd:string", "type": "xsd:string",          # case | evidence | derived
      "subject": "xsd:string", "predicate": "xsd:string", **VALUE_FIELDS,
@@ -161,5 +166,37 @@ SCHEMA: list[dict] = [
      "id": "xsd:string", "original": "xsd:string", "extracted": "xsd:string",
      "idx": "xsd:integer", "text": "xsd:string", "textSha256": "xsd:string",
      "embeddingSha256": "xsd:string", "embeddingModel": "xsd:string",
+     "@key": {"@type": "Hash", "@fields": ["id"]}},
+    # ── assembly family (USE-CASE-DOC-ASSEMBLY.md; the "document" is any data asset) ──
+    # Slot: one required input of a Goal. `producesSubject`/`producesPredicate`
+    # name the Fact (subject, predicate) a filled slot writes; `fillers` lists the
+    # permitted fillers (human | llm | pipeline) — the pack gates non-human fillers;
+    # confirm=true opens a ranked confirmation Question for the human.
+    {"@type": "Class", "@id": "Slot", "@subdocument": [],
+     "@key": {"@type": "Random"},
+     "name": "xsd:string", "type": "xsd:string",          # string | bool | num | date
+     "producesSubject": "xsd:string", "producesPredicate": "xsd:string",
+     "fillers": STR_SET, "confirm": {"@type": "Optional", "@class": "xsd:boolean"}},
+    # Goal: what the pack assembles. intentPhrases drive deterministic-first
+    # intent recognition (unknown utterances → LLM typed candidates, ranked mode).
+    {"@type": "Class", "@id": "Goal",
+     "id": "xsd:string", "pack": "xsd:string", "name": "xsd:string",
+     "statement": "xsd:string", "intentPhrases": STR_SET,
+     "requiredSlots": {"@type": "Set", "@class": "Slot"},
+     "output": OPT_STR,                                     # output asset description
+     "@key": {"@type": "Hash", "@fields": ["id"]}},
+    # Snippet: a template fragment of the output asset, included iff its `when`
+    # conditions are all proven (deterministic assembly selects these).
+    {"@type": "Class", "@id": "Snippet",
+     "id": "xsd:string", "pack": "xsd:string", "title": "xsd:string",
+     "body": "xsd:string", "order": "xsd:integer",
+     "when": {"@type": "Set", "@class": "Condition"},
+     "@key": {"@type": "Hash", "@fields": ["id"]}},
+    # AssembledDocument: the committed output asset — rendered from the proven
+    # snippets, with the verdict id and a content hash (deterministic assembly).
+    {"@type": "Class", "@id": "AssembledDocument",
+     "id": "xsd:string", "case": "xsd:string", "goal": "xsd:string",
+     "format": "xsd:string", "content": "xsd:string", "snippets": STR_SET,
+     "verdict": OPT_STR, "sha256": "xsd:string",
      "@key": {"@type": "Hash", "@fields": ["id"]}},
 ]

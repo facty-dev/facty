@@ -1,0 +1,555 @@
+[
+  {
+    "@type": "Rule",
+    "id": "r-open-intake-questions",
+    "version": "1",
+    "pack": "small-business-contract-claim",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "intake",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-written-complaint",
+          "slot": "writtenComplaint",
+          "text": "Did the buyer send any WRITTEN rejection of the goods within 5 days of delivery (email or letter)?",
+          "mandatory": true,
+          "priority": 1,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1",
+            "H2",
+            "H3"
+          ]
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-small-claims-limit",
+          "slot": "smallClaimsLimit",
+          "text": "What is the small-claims court monetary limit for your jurisdiction (CAD)?",
+          "mandatory": true,
+          "priority": 2,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1"
+          ]
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-target",
+          "slot": "targetsEmployee",
+          "text": "Is this claim against the client BUSINESS entity (yes) or against an individual employee (no)? Facty never assembles claims against workers.",
+          "mandatory": true,
+          "priority": 3,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1"
+          ]
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-delivery-date",
+          "slot": "deliveryDate",
+          "text": "On what date were the goods delivered and accepted? (YYYY-MM-DD)",
+          "mandatory": false,
+          "priority": 4,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1",
+            "H3"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-debt-established",
+    "version": "1",
+    "pack": "small-business-contract-claim",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "contract",
+        "predicate": "signed",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "delivery",
+        "predicate": "accepted",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "invoice",
+        "predicate": "paid",
+        "valueBool": false
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d1",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "debtEstablished",
+          "valueBool": true,
+          "confidence": 0.95
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "raise",
+        "hypotheses": [
+          "H1"
+        ]
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-setoff-invalid",
+    "version": "1",
+    "pack": "small-business-contract-claim",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "contract",
+        "predicate": "signed",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "buyer",
+        "predicate": "rejectionInWriting",
+        "valueBool": false
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d2",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "setoffInvalid",
+          "valueBool": true,
+          "confidence": 0.95
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "raise",
+        "hypotheses": [
+          "H1"
+        ]
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-small-claims-ok",
+    "version": "1",
+    "pack": "small-business-contract-claim",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "invoice",
+        "predicate": "amount",
+        "cmp": "lt",
+        "compareToSubject": "jurisdiction",
+        "compareToPredicate": "smallClaimsLimit"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d3",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "smallClaimsOK",
+          "valueBool": true,
+          "confidence": 1.0
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-demand-ready",
+    "version": "1",
+    "pack": "small-business-contract-claim",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "debtEstablished",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "setoffInvalid",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "smallClaimsOK",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d4",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "demandReady",
+          "valueBool": true,
+          "confidence": 1.0
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "raise",
+        "hypotheses": [
+          "H1"
+        ]
+      }
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H1",
+    "statement": "Breach of contract \u2014 the full invoiced amount is owed. Goods were delivered and accepted, the invoice is unpaid, and no written rejection exists within the contractual window (\u00a77).",
+    "status": "open",
+    "prior": 0.5,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "contract",
+        "predicate": "signed",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "delivery",
+        "predicate": "accepted",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "invoice",
+        "predicate": "paid",
+        "valueBool": false
+      },
+      {
+        "@type": "Condition",
+        "subject": "buyer",
+        "predicate": "rejectionInWriting",
+        "valueBool": false
+      }
+    ],
+    "evidenceFor": [
+      "Signed contract with delivery and payment obligations",
+      "Written acceptance of the delivered goods ('the cake was perfect')",
+      "Invoice unpaid past its due date",
+      "No written rejection within the \u00a77 window"
+    ],
+    "evidenceAgainst": [
+      "Buyer raised a quality complaint (verbal)",
+      "Claim targets an individual employee rather than the business (ethics guard)"
+    ],
+    "discriminatingTests": [
+      "Is there any written rejection of the goods within 5 days of delivery?",
+      "Is the claim against the client business entity (not an employee)?"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H2",
+    "statement": "Partial liability \u2014 a valid quality setoff reduces the amount owed. The buyer complained about quality and rejected the goods in writing within the \u00a77 window.",
+    "status": "open",
+    "prior": 0.3,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "buyer",
+        "predicate": "qualityComplaint",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "buyer",
+        "predicate": "rejectionInWriting",
+        "valueBool": true
+      }
+    ],
+    "evidenceFor": [
+      "Buyer did complain about quality",
+      "A written rejection within the \u00a77 window exists"
+    ],
+    "evidenceAgainst": [
+      "The only complaint was a phone call \u2014 nothing in writing",
+      "The buyer accepted the goods in writing after delivery"
+    ],
+    "discriminatingTests": [
+      "Did the buyer send any written rejection within 5 days of delivery?"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H3",
+    "statement": "No breach \u2014 the rejection was justified and nothing is owed. The goods were not accepted and the buyer rejected them in writing.",
+    "status": "open",
+    "prior": 0.2,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "buyer",
+        "predicate": "rejectionInWriting",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "delivery",
+        "predicate": "accepted",
+        "valueBool": false
+      }
+    ],
+    "evidenceFor": [
+      "Written rejection within the \u00a77 window",
+      "Delivery never accepted"
+    ],
+    "evidenceAgainst": [
+      "The client's own email accepts the delivery ('the cake was perfect')",
+      "The receipt is signed by the client's office manager"
+    ],
+    "discriminatingTests": [
+      "Did the client accept the delivery in writing?"
+    ]
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-no-written-rejection-eliminates-setoff",
+    "type": "eliminate",
+    "hypothesis": "H2",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "buyer",
+        "predicate": "rejectionInWriting",
+        "valueBool": false
+      }
+    ],
+    "reason": "\u00a77: a quality setoff requires a written rejection within 5 days of delivery. No written rejection exists, so the setoff hypothesis is pruned."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-acceptance-eliminates-no-breach",
+    "type": "eliminate",
+    "hypothesis": "H3",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "delivery",
+        "predicate": "accepted",
+        "valueBool": true
+      }
+    ],
+    "reason": "The client accepted the delivery in writing ('the cake was perfect'), so the goods are deemed accepted under \u00a77 and the no-breach hypothesis is pruned."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-debt-supports-breach",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "debtEstablished",
+        "valueBool": true
+      }
+    ],
+    "reason": "The forward chain established the debt (signed contract + accepted delivery + unpaid invoice), supporting the breach hypothesis."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-ethics-guard",
+    "type": "eliminate",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "targetsEmployee",
+        "valueBool": true
+      }
+    ],
+    "reason": "Ethics guard: Facty never assembles a claim targeting an individual worker. Any employee-targeting path is pruned, regardless of the debt evidence."
+  },
+  {
+    "@type": "Goal",
+    "id": "goal-recover-unpaid-invoice",
+    "pack": "small-business-contract-claim",
+    "name": "Recover an unpaid invoice (demand letter + small-claims filing)",
+    "statement": "Prove the debt on an unpaid invoice \u2014 signed contract, accepted delivery, no written rejection within the \u00a77 window \u2014 and assemble the demand letter and small-claims complaint packet.",
+    "intentPhrases": [
+      "unpaid invoice",
+      "client won't pay",
+      "recover an unpaid invoice",
+      "they refuse to pay the invoice",
+      "my customer owes me money"
+    ],
+    "requiredSlots": [
+      {
+        "@type": "Slot",
+        "name": "writtenComplaint",
+        "type": "bool",
+        "producesSubject": "buyer",
+        "producesPredicate": "rejectionInWriting",
+        "fillers": [
+          "llm",
+          "human"
+        ],
+        "confirm": true
+      },
+      {
+        "@type": "Slot",
+        "name": "smallClaimsLimit",
+        "type": "num",
+        "producesSubject": "jurisdiction",
+        "producesPredicate": "smallClaimsLimit",
+        "fillers": [
+          "human"
+        ],
+        "confirm": false
+      },
+      {
+        "@type": "Slot",
+        "name": "targetsEmployee",
+        "type": "bool",
+        "producesSubject": "matter",
+        "producesPredicate": "targetsEmployee",
+        "fillers": [
+          "human"
+        ],
+        "confirm": true
+      },
+      {
+        "@type": "Slot",
+        "name": "deliveryDate",
+        "type": "date",
+        "producesSubject": "delivery",
+        "producesPredicate": "date",
+        "fillers": [
+          "llm",
+          "human"
+        ],
+        "confirm": false
+      }
+    ],
+    "output": "demand-letter + small-claims complaint packet (Markdown, printable to PDF)"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-header",
+    "pack": "small-business-contract-claim",
+    "title": "Demand letter header",
+    "order": 1,
+    "when": [],
+    "body": "# DEMAND LETTER\n\n**Re: Unpaid invoice \u2014 custom order (matter assembly-unpaid-invoice)**\n\nTo the accounts department of the client:\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-debt-clause",
+    "pack": "small-business-contract-claim",
+    "title": "The debt is owed in full",
+    "order": 2,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "debtEstablished",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "setoffInvalid",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 1. The full invoiced amount is owed\n\nThe goods were delivered and accepted in writing, and the invoice remains unpaid past its due date. No written rejection was made within the contractual window (\u00a77: goods are deemed accepted unless rejected in writing within 5 days of delivery), so no quality setoff is available. **The full amount is due.**\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-small-claims-clause",
+    "pack": "small-business-contract-claim",
+    "title": "Small-claims filing route",
+    "order": 3,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "smallClaimsOK",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 2. This claim is within the small-claims limit\n\nThe amount claimed is within the small-claims court monetary limit for this jurisdiction, so this matter can be filed in small-claims court. A statement of claim is enclosed.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-employee-notice",
+    "pack": "small-business-contract-claim",
+    "title": "Ethics guard notice (never rendered for business-entity claims)",
+    "order": 9,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "targetsEmployee",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## BLOCKED\n\nThis assembly path targets an individual employee. Facty's ethics guard prunes any claim against workers \u2014 this document is never produced.\n"
+  }
+]

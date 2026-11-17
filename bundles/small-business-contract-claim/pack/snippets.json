@@ -1,0 +1,45 @@
+[
+  {
+    "@type": "Snippet",
+    "id": "s-header",
+    "pack": "small-business-contract-claim",
+    "title": "Demand letter header",
+    "order": 1,
+    "when": [],
+    "body": "# DEMAND LETTER\n\n**Re: Unpaid invoice — custom order (matter assembly-unpaid-invoice)**\n\nTo the accounts department of the client:\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-debt-clause",
+    "pack": "small-business-contract-claim",
+    "title": "The debt is owed in full",
+    "order": 2,
+    "when": [
+      {"@type": "Condition", "subject": "matter", "predicate": "debtEstablished", "valueBool": true},
+      {"@type": "Condition", "subject": "matter", "predicate": "setoffInvalid", "valueBool": true}
+    ],
+    "body": "\n## 1. The full invoiced amount is owed\n\nThe goods were delivered and accepted in writing, and the invoice remains unpaid past its due date. No written rejection was made within the contractual window (§7: goods are deemed accepted unless rejected in writing within 5 days of delivery), so no quality setoff is available. **The full amount is due.**\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-small-claims-clause",
+    "pack": "small-business-contract-claim",
+    "title": "Small-claims filing route",
+    "order": 3,
+    "when": [
+      {"@type": "Condition", "subject": "matter", "predicate": "smallClaimsOK", "valueBool": true}
+    ],
+    "body": "\n## 2. This claim is within the small-claims limit\n\nThe amount claimed is within the small-claims court monetary limit for this jurisdiction, so this matter can be filed in small-claims court. A statement of claim is enclosed.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-employee-notice",
+    "pack": "small-business-contract-claim",
+    "title": "Ethics guard notice (never rendered for business-entity claims)",
+    "order": 9,
+    "when": [
+      {"@type": "Condition", "subject": "matter", "predicate": "targetsEmployee", "valueBool": true}
+    ],
+    "body": "\n## BLOCKED\n\nThis assembly path targets an individual employee. Facty's ethics guard prunes any claim against workers — this document is never produced.\n"
+  }
+]

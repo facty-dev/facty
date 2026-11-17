@@ -1,0 +1,42 @@
+[
+  {
+    "@type": "Constraint",
+    "id": "c-no-written-rejection-eliminates-setoff",
+    "type": "eliminate",
+    "hypothesis": "H2",
+    "when": [
+      {"@type": "Condition", "subject": "buyer", "predicate": "rejectionInWriting", "valueBool": false}
+    ],
+    "reason": "§7: a quality setoff requires a written rejection within 5 days of delivery. No written rejection exists, so the setoff hypothesis is pruned."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-acceptance-eliminates-no-breach",
+    "type": "eliminate",
+    "hypothesis": "H3",
+    "when": [
+      {"@type": "Condition", "subject": "delivery", "predicate": "accepted", "valueBool": true}
+    ],
+    "reason": "The client accepted the delivery in writing ('the cake was perfect'), so the goods are deemed accepted under §7 and the no-breach hypothesis is pruned."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-debt-supports-breach",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {"@type": "Condition", "subject": "matter", "predicate": "debtEstablished", "valueBool": true}
+    ],
+    "reason": "The forward chain established the debt (signed contract + accepted delivery + unpaid invoice), supporting the breach hypothesis."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-ethics-guard",
+    "type": "eliminate",
+    "hypothesis": "H1",
+    "when": [
+      {"@type": "Condition", "subject": "matter", "predicate": "targetsEmployee", "valueBool": true}
+    ],
+    "reason": "Ethics guard: Facty never assembles a claim targeting an individual worker. Any employee-targeting path is pruned, regardless of the debt evidence."
+  }
+]

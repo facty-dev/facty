@@ -30,7 +30,7 @@ induction (the LLM collects): answers the open questions → new evidence → ne
 What changes between investigation types is not the skeleton but the
 **verdict type** — what the judgement is — and the shape of the errors.
 
-## The seven families
+## The eight families
 
 | Family | Case prefix | Core question | Verdict type | Canonical examples | Error-cost shape |
 |---|---|---|---|---|---|
@@ -40,6 +40,7 @@ What changes between investigation types is not the skeleton but the
 | Triage | `triage-` | How bad, who owns it, how fast? | route + priority | incident severity, security alert, support routing | delay is the costly error |
 | Verification | `verification-` | Is the claim true? | supported / refuted / unproven + trace | fact-checking, OSINT, financial-statement audit | unsupported claim published = the costly error |
 | Acceptance | `acceptance-` | Is it OK to proceed? | risk rating + conditions | contract DD, vendor onboarding, M&A tech DD, hiring, regulatory-change impact | missed red flag = downstream liability |
+| Assembly | `assembly-` | What must the product contain, and can we prove it? | assembled artifact + applicable-clause set + proof trace | legal document assembly (Docassemble / CRT Solution Explorer style), report generation, RFP responses — see [USE-CASE-DOC-ASSEMBLY.md](USE-CASE-DOC-ASSEMBLY.md) | an unproven clause in a filed document = the costly error |
 | Diagnosis | `diagnosis-` | What's wrong with it? | condition + confidence | medical, mechanical | wrong treatment — **declined as a vertical** (ADR-0003, option 5) |
 
 Triage is not a peer of the others — it is the shallow, confidence-gated
@@ -64,6 +65,13 @@ judgement that routes a signal into one of the families above. A future
   refutes; the trace *is* the verdict.
 - **Acceptance** — obligation extraction + rule checklists; the verdict
   is a gate, not an explanation.
+- **Assembly** — the verdict is an artifact: template snippets whose
+  conditions are *proven* (WOQL over facts + derivations) get assembled
+  deterministically into the output data asset (a PDF, a dossier, a
+  claim-record write-back — whatever Dagster can represent); every clause
+  carries its proof tree (`facty prove`). Questions are slot-filling
+  questionnaires (Docassemble/CRT-style). Exemplars (lawyers / journalists /
+  insurance): [USE-CASE-DOC-ASSEMBLY.md](USE-CASE-DOC-ASSEMBLY.md).
 - **Diagnosis** — the canonical abduction, declined for liability
   reasons; the method transfers if a domain ever clears the bar.
 

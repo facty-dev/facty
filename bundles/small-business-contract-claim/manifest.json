@@ -1,0 +1,25 @@
+{
+  "contents": {
+    "bundle.json": "d7c18e0c3695006dbc8b5379b39879f8d600b67425fcbb89369d38e0ee4b5866",
+    "evidence/contract.txt": "3d167c9c908c6151b277264e632f07416ff77a6f08d0264ea857d73e0c6ccfb8",
+    "evidence/delivery-receipt.txt": "4e8892d313c033bb008a6b939121281bf29558e1fe50490352f1fc11ccc245ac",
+    "evidence/email-thread.eml": "728c2ba041e2c2d4b047bbd654939e5c739f7263c4a9d112166fb9d8971eadc4",
+    "evidence/marisol-statement.txt": "86f37481525f930e72ff30739241d908c7fc775c89c92040611be1d16919031d",
+    "fixtures/facts-initial.json": "188f2112cd79c8010940771e5792b42fad46a8cda6612a50f6dec814af40d02c",
+    "pack/constraints.json": "7cb81e5a6a2c21679dda68c23463b32a6d54a99f2ed1f15ee1515cc40fc56902",
+    "pack/goal.json": "54bd9295a3bd347018870db71c1c6a567c11228fe594d8597b22dd6d4a3d7550",
+    "pack/hypotheses.json": "e1291f10a1a283acf4a3289740cc04fc451688849e5e1bc5cd80498afdaf39a1",
+    "pack/rules.json": "9465ee85f51c34be4b73fa4d13f9ce9112098ef592b1af655936c4f0edbdab18",
+    "pack/snippets.json": "b67d1d36bcc8dec4a3745ff1ec9dbdc56382008ef3ae5869adf9e592411acd90"
+  },
+  "created": "2026-11-17T16:16:41+00:00",
+  "engine": {
+    "name": "facty",
+    "version": "0.2.0"
+  },
+  "fingerprint": "c50ed3ed27662dd3",
+  "id": "small-business-contract-claim",
+  "kind": "domain",
+  "publicKey": "CmfoOCNWShBIojQMIBc7rZz0KeGI11mwi29c63zPweg=",
+  "version": "1.0.0"
+}

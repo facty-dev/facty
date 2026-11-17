@@ -43,3 +43,10 @@ __pycache__/
 
 # Facty local data dir (content-addressed store, keys override) — never commit
 .facty/
+
+# Web UI (ADR-0011): deps and build output are baked at image build, not committed
+web/node_modules/
+web/dist/
+
+# Playwright CLI session artifacts (snapshots, console logs) — tool-local
+.playwright-cli/

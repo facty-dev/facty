@@ -1,0 +1,16 @@
+<script>
+  import { ui } from "./store.svelte.js";
+  import { Badge } from "$lib/components/ui/badge/index.js";
+</script>
+
+<div class="text-xs">
+  {#each ui.commits as c}
+    <div class="flex items-center gap-2 border-b border-dashed py-1">
+      <Badge variant="outline" class="font-mono">{c.identifier?.slice(0, 10)}</Badge>
+      <Badge variant="secondary">deterministic commit</Badge>
+      <span class="truncate">{c.message}</span>
+    </div>
+  {:else}
+    <div class="text-muted-foreground">no commits yet</div>
+  {/each}
+</div>

@@ -47,6 +47,47 @@
   Vibe CLI for human-in-the-loop). Persistence/audit = TerminusDB commits
   (git-for-data), not files.
 
+## The triadic runtime (ADR-0010, proposed 2026-11-17)
+
+Inside the same VM, three planes glued through MCP and one op set
+([ADR-0010](adr/0010-triadic-runtime-parity.md)):
+
+```
+┌─ harness plane ─────────────────────────────────────────────┐
+│  Vibe CLI (human surface; any MCP-capable harness later)     │
+│     │ MCP stdio                  │ MCP stdio                 │
+│     ▼                            ▼                           │
+│  terminusdb MCP (built-in)    dagster-mcp (evidence plane)   │
+│     │                            │                           │
+│     └────────► facty serve ◄─────┘  one op set, one          │
+└───────────────────┬─────────────────────────────────────────┘
+                    │ CLI / Web UI / machine loop (pydantic-ai)
+                    ▼ turn dispatcher (reads Step.mode per turn)
+   TerminusDB case branch = system of record (commits, signed
+   config docs); Dagster assets commit via a TDB resource
+```
+
+- **TerminusDB** — store, ontology, WOQL reasoning, audit. Built-in MCP
+  plugin (`builtin_plugins/mcp.pl`, stdio + `POST /api/mcp`).
+- **Dagster** — evidence pipelines as a thin shell over framework-agnostic
+  asset functions; per-case pipeline config is a signed doc on the case
+  branch; TDB commits are the authoritative lineage (Dagster run history is
+  telemetry); `dagster-mcp` stdio in-VM; headless fallback runner = no Dagster.
+- **Parity invariants**: CLI ↔ Web UI (both are clients of `facty serve`);
+  MCP coverage ↔ op set; machine loop ↔ human loop (same interfaces; humans
+  answer `Question` docs as UI questionnaires — slot filling).
+- **Turn modes** per signed step config: `deterministic` (engine only,
+  byte-identical replay) / `ranked` (engine-constrained pick, recorded) /
+  `free` (LLM sensing only). Verdict-path turns are always `deterministic`.
+- **Providers are config**: model aliases → pydantic-ai/Vibe providers; BYO
+  open-weight and local in-VM serving (ollama/llama.cpp/vLLM, zero egress)
+  first-class; non-US hosted via per-deployment egress allow-list +
+  host-secret; US closed models not supported by default (absent from the
+  default allow-list, no special-casing in code).
+- **TrustGraph deferred** (no reasoner, no versioned history — see deps-log
+  2026-11-17); re-evaluate on multi-tenant scale / evidence-mill lineage /
+  decider-tier needs.
+
 ## Why socket-path-only mattered (historical, ADR-0001)
 
 Under gondolin's pid-based session GC, sandbox signal failures could delete

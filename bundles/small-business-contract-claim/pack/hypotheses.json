@@ -1,0 +1,73 @@
+[
+  {
+    "@type": "Hypothesis",
+    "id": "H1",
+    "statement": "Breach of contract — the full invoiced amount is owed. Goods were delivered and accepted, the invoice is unpaid, and no written rejection exists within the contractual window (§7).",
+    "status": "open",
+    "prior": 0.5,
+    "claims": [
+      {"@type": "Condition", "subject": "contract", "predicate": "signed", "valueBool": true},
+      {"@type": "Condition", "subject": "delivery", "predicate": "accepted", "valueBool": true},
+      {"@type": "Condition", "subject": "invoice", "predicate": "paid", "valueBool": false},
+      {"@type": "Condition", "subject": "buyer", "predicate": "rejectionInWriting", "valueBool": false}
+    ],
+    "evidenceFor": [
+      "Signed contract with delivery and payment obligations",
+      "Written acceptance of the delivered goods ('the cake was perfect')",
+      "Invoice unpaid past its due date",
+      "No written rejection within the §7 window"
+    ],
+    "evidenceAgainst": [
+      "Buyer raised a quality complaint (verbal)",
+      "Claim targets an individual employee rather than the business (ethics guard)"
+    ],
+    "discriminatingTests": [
+      "Is there any written rejection of the goods within 5 days of delivery?",
+      "Is the claim against the client business entity (not an employee)?"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H2",
+    "statement": "Partial liability — a valid quality setoff reduces the amount owed. The buyer complained about quality and rejected the goods in writing within the §7 window.",
+    "status": "open",
+    "prior": 0.3,
+    "claims": [
+      {"@type": "Condition", "subject": "buyer", "predicate": "qualityComplaint", "valueBool": true},
+      {"@type": "Condition", "subject": "buyer", "predicate": "rejectionInWriting", "valueBool": true}
+    ],
+    "evidenceFor": [
+      "Buyer did complain about quality",
+      "A written rejection within the §7 window exists"
+    ],
+    "evidenceAgainst": [
+      "The only complaint was a phone call — nothing in writing",
+      "The buyer accepted the goods in writing after delivery"
+    ],
+    "discriminatingTests": [
+      "Did the buyer send any written rejection within 5 days of delivery?"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H3",
+    "statement": "No breach — the rejection was justified and nothing is owed. The goods were not accepted and the buyer rejected them in writing.",
+    "status": "open",
+    "prior": 0.2,
+    "claims": [
+      {"@type": "Condition", "subject": "buyer", "predicate": "rejectionInWriting", "valueBool": true},
+      {"@type": "Condition", "subject": "delivery", "predicate": "accepted", "valueBool": false}
+    ],
+    "evidenceFor": [
+      "Written rejection within the §7 window",
+      "Delivery never accepted"
+    ],
+    "evidenceAgainst": [
+      "The client's own email accepts the delivery ('the cake was perfect')",
+      "The receipt is signed by the client's office manager"
+    ],
+    "discriminatingTests": [
+      "Did the client accept the delivery in writing?"
+    ]
+  }
+]

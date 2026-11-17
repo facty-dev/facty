@@ -90,6 +90,121 @@ builder (`woql.py`) → server-side validation at bind time. Dialect errors are
 impossible by construction; retry loops exist only for sensing semantics, never
 for query syntax.
 
+## Triadic glue roadmap (ADR-0010, proposed 2026-11-17)
+
+Planned components — none exist yet; this section is the spec, not a layout.
+**Priority: Web UI/UX first** (it is the demo surface for non-developers —
+questionnaire wizard, chat, live bullseye of known knowns / known unknowns /
+unknown unknowns, hypothesis graph, proof trees); the CLI remains the headless
+driver for Dagster pipelines and CI.
+
+### Order of work (slices)
+
+**Slice 1 — prove one use case end to end, driving the Web UI prototype.**
+Vehicle: `assembly-unpaid-invoice` (Marisol's bakery; see
+[USE-CASE-DOC-ASSEMBLY.md](USE-CASE-DOC-ASSEMBLY.md)). Ordered steps:
+
+1. Demo content: tiny signed pack `small-business-contract-claim` (3
+   hypotheses, 5 rules, 4 constraints incl. the anti-worker guard, 1 Goal with
+   4 typed slots, 4 template snippets) + demo case with 4 evidence files
+   (contract, delivery receipt, email thread, claimant statement).
+   **Done 2026-11-17** (025): pack authored + signed; DSL gained `cmp`
+   comparisons (live-verified WOQL `Less/Greater/Gte/Lte`); selftest golden
+   entry added.
+2. Engine path as-is: `facty ingest` → `sense` (`FACTY_SENSE=cache` for the
+   demo; live LLM optional) → `run` → `prove`. `./facty selftest` stays green.
+   **Done 2026-11-17** (025): winner H1 score 0.750, H2/H3 pruned by named
+   constraints; `prove` now expands Derivation edges into full proof trees.
+3. `facty serve` minimal gateway: stdlib `http.server` + SSE watch endpoint
+   tailing the case branch commit log; ops = ingest / load-facts / sense /
+   run / prove / assemble / answer + `/api/state`, `/api/log`, `/api/watch`.
+   **Done 2026-11-17** (027): `src/facty/serve.py`; CLI↔UI parity by
+   construction (UI calls the same endpoints).
+4. Web UI prototype (stack per [ADR-0011](adr/0011-web-ui-stack-svelte-static-build.md):
+   Svelte 5 + Vite compiled to static `web/dist` at image build, served by
+   `facty serve`; pure client of the gateway ops + TDB reads).
+   **Done 2026-11-17** (027, reskinned 030): `web/` on the ADR-0011 stack —
+   Svelte 5 + Vite 8 + **shadcn-svelte** components (sidebar app shell, button,
+   input, select, badge, card, scroll-area, sonner, … copied into
+   `web/src/lib/components/ui/` via the CLI — we own the source) on bits-ui +
+   **Tailwind v4** (`@tailwindcss/vite`), themed by **Skeleton's `wintry`
+   preset** (`data-theme="wintry"`, dark mode via `.dark` + theme toggle in the
+   sidebar; Skeleton's `--color-*` scale mapped onto the shadcn vars in
+   `src/app.css`). Panels: intent box (deterministic phrase match),
+   questionnaire wizard + chat (switchable per turn), live bullseye
+   (Proven / Open / Anomalies), hypothesis graph (d3-force SVG, `prunedBy`
+   labels), proof-tree panel, assembled-packet preview (marked, print-to-PDF),
+   turn timeline. Dockerfile is multi-stage (node builder → static `web/dist`
+   only at runtime). Build: 17 kB CSS / 147 kB JS gzip.
+5. Deterministic assembly step: **done 2026-11-17** (027) — `facty assemble`
+   selects snippets whose `when` is proven, renders Markdown, commits
+   `AssembledDocument` (sha256). `facty answer` = human-loop slot filling
+   (`answer:<slot>` Fact + closes the OpenQuestion).
+6. E2E demo script: **done 2026-11-17** (027) — `scripts/demo-ui.sh [--check]`
+   drives the whole flow headless and smoke-tests the served API + SSE + UI;
+   without `--check` it boots `facty serve` for interactive use.
+
+**Slice 2 — the evidence plane and MCP glue.** Dagster wrapping of the ingest
+assets (framework-agnostic functions, TDB resource, commit per
+materialization), pipeline config as signed docs + headless runner, CLI as
+headless driver inside Dagster/CI, `dagster-mcp` + TerminusDB built-in MCP +
+facty MCP server over stdio in the VM, turn dispatcher + `Turn` docs with
+per-step modes and per-turn surface.
+
+**Slice 3 — providers, auth, scale.** Model provider registry (BYO
+open-weight, local in-VM serving, non-US via allow-list + host-secret);
+multi-user auth/IAM if the served shape is pursued; TrustGraph re-evaluation
+per ADR-0010 §6 triggers.
+
+Standing invariants for every slice: `./facty selftest` green (byte-identical
+replay from commits); verdict path never touches the LLM, a clock, randomness,
+or Dagster; parity checklist — every CLI op has a `facty serve` endpoint and an
+MCP tool once MCP lands; secrets host-side only.
+
+- **`facty serve`** — one HTTP/JSON gateway inside the image exposing every CLI
+  op; the Web UI and the CLI are both clients of it (parity by construction).
+  Every op is also an MCP tool: TerminusDB's built-in MCP plugin (stdio +
+  `POST /api/mcp`) for DB-level ops, a small facty MCP server for case-level
+  ops, `dagster-mcp` (stdio) for the evidence plane. Machine loop and human
+  harness call the same interfaces; humans answer engine-opened `Question`
+  docs as structured questionnaires in the UI (slot filling).
+- **Turn dispatcher** — reads each step's `mode` (`deterministic` | `ranked` |
+  `free`) from the signed step config on the case branch and routes:
+  engine-only / engine-ranked + recorded pick / LLM sensing. Verdict-path
+  turns are always `deterministic` (ADR-0003). Each turn commits a `Turn` doc
+  `{mode, inputCommit, options?, choice?, outputCommit}`; replay =
+  branch + `FACTY_SENSE=cache`.
+- **Dagster evidence plane** — asset logic stays framework-agnostic
+  (`Original → ExtractedText → EvidenceChunk → Fact` via the TDB client
+  resource, one commit per materialization); pipeline code in git, per-case
+  pipeline config as a signed doc on the branch; headless runner executes the
+  same docs without Dagster. Dagster + dagster-mcp baked into the OCI image at
+  build time (no PyPI at runtime); SQLite run metadata per VM.
+- **Model provider registry** — aliases (`facty-large`, `facty-local`, …) →
+  pydantic-ai providers / Vibe `[[providers]]`; BYO open-weight first-class;
+  local in-VM serving (ollama/llama.cpp/vLLM) = zero egress; non-US hosted via
+  per-deployment egress allow-list + host-secret; US closed models unsupported
+  by default (not allow-listed, no code paths for them).
+- **TrustGraph deferred** — surveyed 2026-11-17 (deps-log): no reasoning
+  engine, no time-travel versioning; revisit on multi-tenant scale, PROV-O
+  evidence-mill lineage, or decider-tier substitution.
+- **Web UI (first spike)**: questionnaire wizard + chat surface (switchable
+  per turn), live bullseye — Proven (facts/clauses with Derivation backing) / Open (open
+  Questions, undecided hypotheses) / Anomalies (Quarantine, versionConflicts,
+  semantic-contradiction candidates, unexplained hypotheses), hypothesis graph (status colors, `prunedBy` labels, Derivation
+  edges, proof-tree panel, turn timeline with mode/surface badges) — all fed
+  by a `facty serve` watch endpoint tailing the case branch's commit log.
+  CLI parity via `facty watch <case>`. See
+  [USE-CASE-DOC-ASSEMBLY.md](USE-CASE-DOC-ASSEMBLY.md).
+- **Worked exemplar**: [USE-CASE-DOC-ASSEMBLY.md](USE-CASE-DOC-ASSEMBLY.md) —
+  legal document assembly (`assembly-` family,
+  [INVESTIGATION-TYPES.md](INVESTIGATION-TYPES.md)): pack = goal + template
+  snippets + rules; engine-opened Questions = UI questionnaires (slot
+  filling); abductive threads prove which clauses apply; deterministic
+  assembly step renders the document as a committed `AssembledDocument` +
+  Dagster data-product asset. Anchors: BC CRT Solution Explorer,
+  Docassemble/Suffolk Assembly Line, Gavel (acquired by Relativity 2026-06).
+
 ## Observability / performance metrics
 
 - Always on, zero egress: every LLM call prints a status line to stderr

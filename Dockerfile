@@ -2,6 +2,18 @@
 # Boot it with:  smolvm --image <this image saved via `docker save`>
 # (smolvm boots local container images as micro-VMs; no daemon inside the VM.)
 # v12 + default storage path per terminusdb.com/llms.txt (see docs/research/deps-log.md)
+#
+# Multi-stage per ADR-0011: the Web UI (web/, Svelte 5 + Vite) is compiled in a
+# builder stage (build-time egress is the host's, incl. registry.npmjs.org and
+# nodejs.org); the runtime image gets only the static web/dist — no node, no npm,
+# no runtime egress beyond the allow-list.
+FROM node:22-bookworm AS ui-builder
+WORKDIR /ui
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web/ ./
+RUN npm run build
+
 FROM terminusdb/terminusdb-server:v12.1.0-rc2
 
 ENV TERMINUSDB_SERVER_DB_PATH=/app/terminusdb/storage \
@@ -29,6 +41,9 @@ COPY src/ ./src/
 RUN uv pip install -e .
 
 COPY .vibe/ /app/.vibe/
+
+# Static Web UI build from the builder stage (ADR-0011) — served by `facty serve`
+COPY --from=ui-builder /ui/dist ./web/dist
 
 EXPOSE 6363
 

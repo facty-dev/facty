@@ -95,6 +95,25 @@ def fact_pattern(var: str, subject=None, predicate=None, value=None) -> dict:
     return and_(*qs)
 
 
+def fact_value_pattern(var: str, subject: str, predicate: str, value_field: str, value_var: str) -> dict:
+    """Match a Fact by subject/predicate and BIND its typed value to value_var.
+
+    `value_field` is "valueString"/"valueBool"/"valueNum" (see suffix_for()).
+    """
+    return and_(
+        triple(var, "source", V(var + "_s")),
+        triple(var, "subject", LIT(subject)),
+        triple(var, "predicate", LIT(predicate)),
+        triple(var, value_field, VV(value_var)),
+    )
+
+
+def compare(op: str, left, right) -> dict:
+    """Comparison query. v12 JSON-LD ops (live-verified + server source
+    src/core/query/json_woql.pl): Less / Greater / Gte / Lte with left/right."""
+    return {"@type": op, "left": left, "right": right}
+
+
 def suffix_for(literal: dict) -> str:
     """Fact stores typed values in valueString/valueBool/valueNum."""
     t = literal["data"]["@type"]

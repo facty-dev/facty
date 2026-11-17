@@ -6,7 +6,7 @@
 # Drafts are committed by the deterministic engine after validation — this
 # agent proposes, it does not decide.
 description = "Pack author: interview the domain expert, draft rule-DSL JSON packs."
-safety = "ask"
+safety = "yolo"
 active_model = "facty-large"
 thinking = "max"
 enabled_tools = []

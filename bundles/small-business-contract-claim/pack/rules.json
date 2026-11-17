@@ -1,0 +1,98 @@
+[
+  {
+    "@type": "Rule",
+    "id": "r-open-intake-questions",
+    "version": "1",
+    "pack": "small-business-contract-claim",
+    "when": [
+      {"@type": "Condition", "subject": "matter", "predicate": "intake", "valueBool": true}
+    ],
+    "then": [
+      {"@type": "Action", "op": "open", "question": {
+        "@type": "Question", "id": "q-written-complaint", "slot": "writtenComplaint",
+        "text": "Did the buyer send any WRITTEN rejection of the goods within 5 days of delivery (email or letter)?",
+        "mandatory": true, "priority": 1, "status": "open",
+        "raisedBy": "rule:r-open-intake-questions", "discriminates": ["H1", "H2", "H3"]}},
+      {"@type": "Action", "op": "open", "question": {
+        "@type": "Question", "id": "q-small-claims-limit", "slot": "smallClaimsLimit",
+        "text": "What is the small-claims court monetary limit for your jurisdiction (CAD)?",
+        "mandatory": true, "priority": 2, "status": "open",
+        "raisedBy": "rule:r-open-intake-questions", "discriminates": ["H1"]}},
+      {"@type": "Action", "op": "open", "question": {
+        "@type": "Question", "id": "q-target", "slot": "targetsEmployee",
+        "text": "Is this claim against the client BUSINESS entity (yes) or against an individual employee (no)? Facty never assembles claims against workers.",
+        "mandatory": true, "priority": 3, "status": "open",
+        "raisedBy": "rule:r-open-intake-questions", "discriminates": ["H1"]}},
+      {"@type": "Action", "op": "open", "question": {
+        "@type": "Question", "id": "q-delivery-date", "slot": "deliveryDate",
+        "text": "On what date were the goods delivered and accepted? (YYYY-MM-DD)",
+        "mandatory": false, "priority": 4, "status": "open",
+        "raisedBy": "rule:r-open-intake-questions", "discriminates": ["H1", "H3"]}}
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-debt-established",
+    "version": "1",
+    "pack": "small-business-contract-claim",
+    "when": [
+      {"@type": "Condition", "subject": "contract", "predicate": "signed", "valueBool": true},
+      {"@type": "Condition", "subject": "delivery", "predicate": "accepted", "valueBool": true},
+      {"@type": "Condition", "subject": "invoice", "predicate": "paid", "valueBool": false}
+    ],
+    "then": [
+      {"@type": "Action", "op": "derive", "fact": {
+        "@type": "FactTemplate", "id": "d1", "type": "derived",
+        "subject": "matter", "predicate": "debtEstablished", "valueBool": true, "confidence": 0.95}},
+      {"@type": "Action", "op": "raise", "hypotheses": ["H1"]}
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-setoff-invalid",
+    "version": "1",
+    "pack": "small-business-contract-claim",
+    "when": [
+      {"@type": "Condition", "subject": "contract", "predicate": "signed", "valueBool": true},
+      {"@type": "Condition", "subject": "buyer", "predicate": "rejectionInWriting", "valueBool": false}
+    ],
+    "then": [
+      {"@type": "Action", "op": "derive", "fact": {
+        "@type": "FactTemplate", "id": "d2", "type": "derived",
+        "subject": "matter", "predicate": "setoffInvalid", "valueBool": true, "confidence": 0.95}},
+      {"@type": "Action", "op": "raise", "hypotheses": ["H1"]}
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-small-claims-ok",
+    "version": "1",
+    "pack": "small-business-contract-claim",
+    "when": [
+      {"@type": "Condition", "subject": "invoice", "predicate": "amount", "cmp": "lt",
+       "compareToSubject": "jurisdiction", "compareToPredicate": "smallClaimsLimit"}
+    ],
+    "then": [
+      {"@type": "Action", "op": "derive", "fact": {
+        "@type": "FactTemplate", "id": "d3", "type": "derived",
+        "subject": "matter", "predicate": "smallClaimsOK", "valueBool": true, "confidence": 1.0}}
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-demand-ready",
+    "version": "1",
+    "pack": "small-business-contract-claim",
+    "when": [
+      {"@type": "Condition", "subject": "matter", "predicate": "debtEstablished", "valueBool": true},
+      {"@type": "Condition", "subject": "matter", "predicate": "setoffInvalid", "valueBool": true},
+      {"@type": "Condition", "subject": "matter", "predicate": "smallClaimsOK", "valueBool": true}
+    ],
+    "then": [
+      {"@type": "Action", "op": "derive", "fact": {
+        "@type": "FactTemplate", "id": "d4", "type": "derived",
+        "subject": "matter", "predicate": "demandReady", "valueBool": true, "confidence": 1.0}},
+      {"@type": "Action", "op": "raise", "hypotheses": ["H1"]}
+    ]
+  }
+]

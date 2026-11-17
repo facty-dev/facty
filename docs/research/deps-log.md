@@ -220,3 +220,172 @@ FACTY_EMBED_MODEL / the schema embedding metadata.)
   (mismatched vectors are skipped, never compared cross-dim). Switching
   FACTY_EMBED_MODEL re-embeds new content under the new model and leaves old
   vectors inert. Tested (test_mixed_model_vectors_never_compared).
+
+## TrustGraph — `trustgraph-ai/trustgraph` v2.11 (Apache-2.0) — surveyed 2026-11-17, DEFERRED (ADR-0010 §6)
+
+Docs read: repo README + `docs/tech-specs/*` (sparql-query, ontology*, entity-centric-graph, extraction-flows, audit-events, knowledge-core-completeness, data-ownership-model); docs site via `trustgraph-ai/docs.trustgraph.ai` repo (architecture/*, learn/*, guides/{knowledge-graphs,structured-processing,context-cores,policy-filtering,flows,decision-scoring}, deployment/{compose,choosing-deployment,production-considerations}, reference/{containers,maturity}, benchmarks). Code read via GitHub API: `trustgraph-flow/trustgraph/{query/sparql,storage/triples,policy,cores,librarian,extract,gateway,tables,direct/cassandra_kg.py}`.
+
+Facts that touch our code/decisions:
+- **No reasoning engine.** SPARQL service (`query/sparql/service.py` + `algebra.py`) = query-only: parse SPARQL 1.1 → triple-pattern lookups → in-memory joins; handler registry has BGP/Join/LeftJoin/Union/Minus/Filter/Group — no Path/recursion, no rules, no fixpoint. Code search for datalog/prolog/HermiT/Pellet/owlrl: zero hits. README: "not a full OWL reasoner". OWL = rdflib parse + structural validation (no circular subClassOf, domain/range reference existing classes) + per-chunk subset selection (fastembed) to guide LLM extraction + reject violating triples. SHACL-AF only for policy filtering (`policy/policy_filter.py`, `sh:SPARQLTarget`/`sh:SPARQLRule` on user context, tri-state Allowed/Filtered/Violation, `urn:graph:policy`).
+- **No time-travel versioning.** Live graph table (`entity_table`: PK `((collection, entity), role, p, otype, s, o, d, dtype, lang)`) has no version column; writes LWW, deletes remove rows; no tombstones/soft-delete. Only timestamped snapshots: `triples` table `(workspace, document_id, id uuid, time, metadata, triples)` = context cores (msgpack/.tgx export/import, 3 states offline/online/loaded). Audit = pub/sub audit-events topic (fire-and-forget, unordered across partitions) + PROV-O lineage in `urn:graph:source` / retrieval traces in `urn:graph:retrieval`. Code search for branch/merge/rebase/squash/commit in storage: empty.
+- **Storage**: pluggable graph store — Cassandra (own entity-centric single-table overlay; maturity page: "not a graph store per se"), Neo4j, Memgraph (prod-ready), FalkorDB (limited); vectors Qdrant/Milvus; rows Cassandra; objects S3/Garage via librarian; **Pulsar is the mandatory message backbone**. Compose baseline 12GB+ RAM / 8 CPU. No MCP server found in-repo.
+- **Ingestion** (the real strength): docling/unstructured decoders, OCR container, chunking, ontology-guided KG extraction, structured rows, turtle/trig import, library docs; flows/blueprints = configurable pipelines. Benchmarks: ingest is LLM-throughput-bound.
+- **IAM/workspaces**: JWT (Ed25519) + API keys, reader/writer/admin roles, workspace-scoped queues + storage partitioning + gateway enforcement; SHACL-AF query policies. Mature — the reason to revisit at served multi-tenant scale.
+- Decision: defer (ADR-0010 §6). TrustGraph is an ingestion/RAG/governance platform, not a verdict store; TerminusDB keeps reasoning + git-for-data. Its deciders (Laya ONNX ~35ms, cloze DistilBERT) overlap our Strom/label tiers.
+
+## Dagster — `dagster` + `dagster-mcp` (Apache-2.0) — surveyed 2026-11-17 (ADR-0010 §1)
+
+Docs read: docs.dagster.io (Dagster Pipes overview, dagster-instance/`dagster.yaml`, deployment guides), PyPI `dagster-mcp`, changelog.
+
+Facts that touch our code:
+- Pure Python, pip-installable; runs anywhere Python runs (containers, SmolVM image, bare metal). **Bake into the OCI image at build time** — the VM has no PyPI egress at runtime (allow-list only).
+- Instance storage pluggable via `$DAGSTER_HOME/dagster.yaml`: SQLite file (default, zero infra, single-writer — fine per VM) → Postgres/MySQL when shared. First natural "app CRUD" DB if one is ever needed.
+- Execution/deployment: local (`dagster dev`/CLI), Docker code locations, Kubernetes (dagster-k8s + official Helm chart, run-per-op pods), gRPC code locations, Dagster Cloud (managed/hybrid). GraphQL API + sensors for triggering from other systems.
+- **Dagster Pipes**: external code in any language/on any machine can be invoked from an asset and report materializations back — external code need not know Dagster. Anti-lock-in hatch for embedding in enterprise workflows.
+- **`dagster-mcp` (PyPI)**: OSS MCP server wrapping a local instance — tools for listing assets/jobs, launching runs, reading logs. Run as stdio in the VM (`vibe mcp add`-style). Officially-supported MCP is the Dagster+ hosted one (`mcp.agent.dagster.cloud/mcp`) — unreachable from the VM (egress allow-list), so OSS stdio is the path.
+- Portability rule adopted (ADR-0010): asset *logic* = plain framework-agnostic functions over the TerminusDB client; Dagster is a thin shell; pipeline code in git, per-case config as signed TDB docs; headless runner can execute the same docs without Dagster. TDB commits = authoritative lineage; Dagster run history = telemetry only. Verdict path never runs inside Dagster.
+
+## TerminusDB MCP — built into the v12 server (`terminusdb/terminusdb` `builtin_plugins/mcp.pl`) — verified 2026-11-17
+
+Docs read: `docs/MCP_UAT_PLAN.md`, `builtin_plugins/mcp.pl`, `src/cli/main.pl` in `terminusdb/terminusdb`; terminusdb.com `ai-agent-setup`, `llms.txt`.
+
+Facts that touch our code:
+- MCP is a **built-in plugin of the server binary**: transport-neutral JSON-RPC 2.0 core (`initialize`, `ping`, `tools/list`, `tools/call`) with two adapters — **stdio** (`run_stdio`) and **HTTP `POST /api/mcp`**.
+- Tools wrap the full API surface: db create/list/delete, schema, document CRUD/patch, **WOQL query**, versioned search, branch create/delete, rebase, squash, log, reset, export/import. Their UAT runbook has an agent run the whole lifecycle over MCP alone.
+- Consequence: in the SmolVM image, run `terminusdb` MCP over **stdio** and attach with `vibe mcp add <name> --transport stdio --command …` (already the plan in ADR-0005/deps-log for the pack-author agent). No extra package, no extra egress.
+- No `terminusdb-mcp` package on PyPI under that name — the server itself is the MCP server.
+
+## TerminusDB v12 WOQL comparisons (Less/Greater/Gte/Lte) — read + live-verified 2026-11-17
+
+Context: Slice 1 demo pack (`bundles/small-business-contract-claim`) needs a numeric
+comparison in a rule (`invoice.amount < jurisdiction.smallClaimsLimit`); the rule DSL
+previously had equality/`var` only.
+
+Read: `terminusdb/terminusdb` tag v12.1.0-rc2, `src/core/query/json_woql.pl`
+(`json_type_to_woql_ast('Less'|'Greater'|'Gte'|'Lte', …)` — operands under `left`/`right`,
+compiled to Prolog `'<'/'>'/'>='/=<`); arithmetic siblings Plus/Minus/Times/Divide/Div.
+Note: the old `terminusdb-client` 10.2.6 PyPI sdist has NO comparison builders (legacy
+WOQL only) — do not use it as a reference for v12 JSON-LD shapes. GitHub release tags
+carry no binary assets; the server runs from the Docker image
+(`terminusdb/terminusdb-server:v12.1.0-rc2`, via `compose.yaml`).
+
+Live-verified against terminusdb-server v12.1.0-rc2 (docker, :6363): with
+`{"@type":"Less","left":{"@type":"Value","variable":"V"},"right":{"@type":"Value","data":{"@type":"xsd:decimal","@value":20000}}}`
+inside an `And` next to the valueNum triple, a fact with valueNum 18500 matches `Less`
+and `Lte`, not `Greater`. Shapes `{"@type":"LessThan","less_than":[…]}`, `Lt/lt`,
+`LessThanOrEqual/…` are REJECTED (HTTP 400 `vio:WOQLSyntaxError`) — v12 renamed them.
+
+Implemented: `woql.compare(op, left, right)` + `woql.fact_value_pattern(...)`;
+`rules._condition_parts` handles `{"cmp": "lt|le|gt|ge", …}` with either a literal
+(`valueNum`/`valueString`/`valueBool` on the condition) or a fact-to-fact comparison
+(`compareToSubject`/`compareToPredicate`, `valueField` default `valueNum`), in
+`compile_when` / `compile_constraint_when` / `compile_claim`. All five paths
+(literal-cmp rule, fact-to-fact rule, negative case, claim-cmp, constraint-cmp)
+verified live on a probe db. Schema: `Condition` gained optional `cmp`,
+`compareToSubject`, `compareToPredicate`, `valueField`.
+
+## Web UI stack survey (ADR-0011) — npm metadata + official docs, 2026-11-17
+
+Constraint recap: SmolVM runtime egress = allow-list only (api.mistral.ai,
+registry.npmjs.org, api.uprelic.com) → no CDN at runtime; all JS must be baked
+into the image at BUILD time (build-time egress is the host's — Dockerfile).
+Base image is Debian 12 bookworm with NO node installed → UI build needs a
+multi-stage Dockerfile: node 22 in a builder stage, only `web/dist` copied to
+the runtime image.
+
+Docs read: svelte.dev/docs/svelte/overview ("a compiler turns declarative
+components … into lean, tightly optimized JavaScript" — Svelte 5 is compile-time,
+no runtime framework; SvelteKit exists but is not needed since `facty serve` is
+the backend); vite.dev/guide/build.html (`vite build` → static bundle servable by
+any static host; `base: "./"` for relative asset paths); htmx.org docs + SSE
+extension page (htmx 2.x moved SSE to the `hx-ext="sse"` / `sse-connect` extension;
+htmx ~14KB min.gz, dependency-free). All read 2026-11-17.
+
+npm registry metadata (latest, registry.npmjs.org, 2026-11-17):
+
+| package | version | license | unpacked | engines | note |
+|---|---|---|---|---|---|
+| svelte | 5.57.3 | MIT | 2.9MB (dev-only) | node >=18 | compiler; runes $state/$derived/$effect |
+| vite | 8.3.8 | MIT | 2.3MB (dev-only) | node ^20.19 \|\| >=22.12 | rolldown-based; static build |
+| react / react-dom | 19.3.1 | MIT | 174KB / 7.9MB | | viable but heavier |
+| htmx.org | 2.0.11 | 0BSD | ~900KB (~14KB min.gz) | none | SSE via extension |
+| lit | 3.3.3 | BSD-3 | 104KB | | web components |
+| d3-force | 3.0.1 | ISC | 53KB | none | chosen for the hypothesis graph |
+| cytoscape | 3.35.0 | MIT | 5.7MB | | rejected: size |
+| elkjs | 0.12.1 | EPL-2.0 OR GPL-3.0 | 8.0MB | | rejected: license + size |
+| marked | 18.2.1 | MIT | 592KB | none | packet preview rendering |
+
+Decision (ADR-0011, proposed): Svelte 5 + Vite 8 static build in a Docker builder
+stage, served by `facty serve` from `web/dist/`; d3-force + SVG for the graph;
+marked for the packet preview; browser print for PDF. No runtime JS deps, no
+node in the runtime image.
+
+## Web UI component layer / app shell survey (ADR-0011 addendum) — 2026-11-17
+
+Method: GitHub search sorted by stars + `api.github.com/repos/...` for
+license/pushed_at + `registry.npmjs.org` for versions/peers, cross-checked with
+2026 "best Svelte UI libraries" lists (dev.to, cssauthor, sveltestarters,
+svgrid). All 2026-11-17.
+
+Facts that touch our code:
+- **shadcn-svelte** (huntabyte/shadcn-svelte): 9,266★, MIT, pushed 2026-11-16.
+  npm `shadcn-svelte` v1.8.1 = the CLI (`npx shadcn-svelte add <comp>` copies
+  SOURCE into the project — no registry dependency at runtime). Built on
+  **bits-ui** v2.21.0 (3,666★, MIT, peers `svelte` — runes/Svelte 5 native) +
+  Tailwind v4. Has a Vite (non-SvelteKit) install guide — matches our plain-Vite
+  setup. Component list includes Sidebar, Command, Data Table, Field, Forms,
+  **Questionnaire**, **Trace**, and AI Elements (Chat, etc.) — maps 1:1 onto
+  our panels. Blocks library ships sidebar app-shell / dashboard blocks.
+- **Skeleton v4** (skeletonlabs/skeleton): 6,092★, MIT, pushed 2026-11-17 —
+  Tailwind-native design system (tokens, dark mode, theme generator). Docs:
+  complements headless libs (bits-ui) but does NOT integrate with Flowbite
+  Svelte / daisyUI (class overlap) → pick one styling approach; we pick
+  Tailwind v4 + shadcn-svelte, Skeleton optional for theming later.
+- Rejected: flowbite-svelte (2,793★ but pushed 2026-06-27 — stale),
+  svelteui/sveltestrap (legacy Svelte ≤4 era), attractions (deprecated),
+  Svelvet node-graph lib (2,779★ but pushed 2025-02-13 — stale; keep our
+  d3-force SVG graph), CMSaasStarter shell (2,377★, active but Supabase/Stripe
+  coupled), flowbite-svelte-admin-dashboard (512★, stale 2025-11),
+  notus-svelte (868★, stale 2024), salvia-kit (477★, stale 2023). No
+  maintained Svelte-native admin shell exists → shell pattern comes from
+  shadcn-svelte sidebar blocks.
+- Tailwind v4 for plain Vite: `@tailwindcss/vite` 4.3.5, MIT, peers
+  `vite ^5.2 || ^6 || ^7 || ^8` (works with our vite 8.3.8). Plus
+  `tw-animate-css` 1.4.0 (45KB), `clsx` 2.1.1, `tailwind-merge` 3.7.0 — all MIT.
+- Cross-framework pattern references only (not imported): AdminLTE 45.7k★,
+  ngx-admin 25.7k★, next-shadcn-dashboard-starter 7.3k★ (all pushed 2026-11).
+
+## Skeleton v4 themes in concert with bits-ui/shadcn-svelte (ADR-0011 theming) — 2026-11-17
+
+Read: skeleton.dev/docs/svelte/design/themes + themes.skeleton.dev + repo tree
+`packages/skeleton/src/themes/*.css` (main branch) + shadcn-svelte.com/docs/theming.
+
+Facts that touch our code:
+- **24 preset themes ship as plain CSS files**: catppuccin, cerberus, concord,
+  crimson, dracula, fennec, hamlindigo, legacy, mint, modern, mona, nosh, nouveau,
+  pine, reign, rocket, rose, rosepine, sahara, seafoam, terminus, vintage, vox,
+  wintry. Import per theme: `@import "@skeletonlabs/skeleton/themes/{name}";`
+  in the global stylesheet; activate with `<html data-theme="{name}">` — a theme
+  switcher is just flipping that attribute. Each theme defines light AND dark
+  variants in one file (dark mode included, no extra work).
+- Themes are pure CSS custom properties under `[data-theme=...]` overriding
+  **Tailwind v4's `--color-*` scale** (`--color-primary-500`, `--color-surface-*`,
+  plus `--spacing`, `--radius-*`, `--typo-*` tokens). Skeleton's core import sets
+  the defaults for the Tailwind `@theme` directive, themes override them → any
+  Tailwind-v4-classed component (bits-ui primitives, shadcn-svelte components)
+  is themed automatically where it uses the standard scale.
+- shadcn-svelte uses its own var convention (`--background`/`--foreground`/
+  `--primary`, `background`/`foreground` naming) — to let a Skeleton theme drive
+  shadcn-svelte components, map a few lines in our global CSS, e.g.
+  `--primary: var(--color-primary-500); --background: var(--color-surface-50);`
+  (per theme, inside the same `[data-theme]` scope). tweakcn.com (9.8k★) is the
+  shadcn-native visual theme editor exporting Tailwind v4 CSS — drops straight
+  into shadcn-svelte; 16+ presets. Both systems are plain CSS, MIT.
+- **Theme generator**: themes.skeleton.dev (create + copy CSS into project);
+  themes.skeleton.dev also indexes community themes for import.
+- Cost note from docs: each registered theme adds CSS bundle size — import only
+  the themes actually shipped (we'd register 1–2 + a custom Facty brand theme).
+- Fonts via Fontsource (Skeleton's recommendation) — npm, baked at build.
+- Candidate presets for a forensic/legal tool: `terminus` (Avenir/Montserrat,
+  technical), `sahara` (warm paper — legal-document feel), `cerberus` (neutral
+  default); dark variants included in each.

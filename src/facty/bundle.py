@@ -175,7 +175,8 @@ class Bundle:
         """Instantiate the bundle layer from a TerminusDB ref: all pack-level
         docs on the ref (Facts/Verdicts/Derivations/OpenQuestions excluded)."""
         docs = [d for d in client.get_all_docs()
-                if d.get("@type") in ("Rule", "Hypothesis", "Constraint", "Question")]
+                if d.get("@type") in ("Rule", "Hypothesis", "Constraint", "Question",
+                                      "Goal", "Snippet")]
         return cls({"id": name, "version": "db", "kind": "domain", "source": "terminusdb"}, docs)
 
     def load_into(self, client, name: str | None = None, dev: bool = False) -> dict:

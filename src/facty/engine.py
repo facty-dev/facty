@@ -82,6 +82,17 @@ def prove(client, goal: dict, seen: set | None = None, depth: int = 0) -> dict |
                  if d.get("subject") == goal.get("subject")
                  and d.get("predicate") == goal.get("predicate")]
         fid = facts[0]["id"] if facts else "?"
+        # a DERIVED fact expands through its rule (fact ← rule ← premises);
+        # only evidence facts are leaves
+        der = next((d for d in _docs_of(client, "Derivation") if d.get("fact") == fid), None)
+        if der:
+            r = next((r for r in sorted(_docs_of(client, "Rule"), key=lambda d: d["id"])
+                      if r["id"] == der["rule"]), None)
+            if r is not None:
+                premises = [prove(client, c, seen, depth + 1) for c in r.get("when", [])]
+                if all(premises):
+                    return {"goal": {k: goal[k] for k in ("subject", "predicate") if k in goal},
+                            "by": "rule", "rule": r["id"], "fact": fid, "premises": premises}
         return {"goal": {k: goal[k] for k in ("subject", "predicate") if k in goal},
                 "by": "fact", "fact": fid, "source": next((d.get("source") for d in facts), "")}
     for r in sorted(_docs_of(client, "Rule"), key=lambda d: d["id"]):
@@ -280,6 +291,61 @@ def rank_questions(client, alive: set[str]) -> list[dict]:
         out.append({**q, "_alive": alive_disc})
     out.sort(key=lambda q: (-q["_alive"], q.get("priority", 99), q["id"]))
     return out
+
+
+def answer_question(client, question_id: str, value, actor: str = "human") -> dict:
+    """Slot filling (human loop): answer an OpenQuestion → typed Fact written to
+    the slot's (subject, predicate) with source `answer:<slot>`, question closed.
+    An input to the engine, not part of the verdict path."""
+    oqs = [q for q in _docs_of(client, "OpenQuestion") if q["id"] == question_id]
+    if not oqs:
+        raise ValueError(f"no open question {question_id}")
+    oq = oqs[0]
+    slot_name = oq["slot"]
+    goal = next(iter(_docs_of(client, "Goal")), None)
+    spec = next((s for s in (goal or {}).get("requiredSlots", []) if s.get("name") == slot_name), None)
+    subject = spec["producesSubject"] if spec else "answer"
+    predicate = spec["producesPredicate"] if spec else slot_name
+    stype = (spec or {}).get("type", "string")
+    doc = {"@type": "Fact", "id": f"ans-{question_id}", "type": "case",
+           "subject": subject, "predicate": predicate, "confidence": 1.0,
+           "source": f"answer:{slot_name}"}
+    if stype == "bool" or isinstance(value, bool):
+        doc["valueBool"] = bool(value) if not isinstance(value, str) else value.lower() in ("true", "yes", "1")
+    elif stype == "num" or isinstance(value, (int, float)):
+        doc["valueNum"] = float(value)
+    else:
+        doc["valueString"] = str(value)
+    client.insert_docs([doc], message=f"answer {question_id} ({slot_name}={value!r}) by {actor}")
+    oq["status"] = "answered"
+    client.insert_docs([oq], message=f"close {question_id}")
+    return doc
+
+
+def assemble(client, case: str, goal_id: str | None = None) -> dict:
+    """Deterministic assembly (the `assembly-` family verdict output): select the
+    pack's Snippets whose `when` conditions are all proven, render in `order`,
+    commit an AssembledDocument. Pure function of committed state — replayable."""
+    import hashlib
+    goals = _docs_of(client, "Goal")
+    goal = next((g for g in goals if g["id"] == goal_id), goals[0] if goals else None)
+    if goal is None:
+        raise ValueError("no Goal doc on this ref — nothing to assemble")
+    snippets = sorted(_docs_of(client, "Snippet"), key=lambda d: (d.get("order", 99), d["id"]))
+    chosen = []
+    for s in snippets:
+        conds = list(s.get("when", []))
+        if all(_exists(client, rules.compile_claim(c)) for c in conds):
+            chosen.append(s)
+    content = f"# {goal.get('name', goal['id'])}\n\n" + "\n".join(s["body"].rstrip() for s in chosen) + "\n"
+    verdict = next((v for v in sorted(_docs_of(client, "Verdict"), key=lambda d: d["id"])), None)
+    doc = {"@type": "AssembledDocument", "id": f"assembled-{case}", "case": case,
+           "goal": goal["id"], "format": "markdown", "content": content,
+           "snippets": [s["id"] for s in chosen],
+           **({"verdict": verdict["id"]} if verdict else {}),
+           "sha256": hashlib.sha256(content.encode()).hexdigest()}
+    client.insert_docs([doc], message=f"assemble {case} → {doc['id']} ({len(chosen)} snippets)")
+    return doc
 
 
 def run_phase(client, case: str, phase: str) -> dict:
