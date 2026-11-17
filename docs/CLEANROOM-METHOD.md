@@ -34,7 +34,7 @@ against terminusdb-server v12.0.9 (`./facty selftest`, `scripts/e2e.sh`).
 | T3 | Non-stratified negation / paraconsistent constraints | WOQL negation is stratified only | pack-load-time stratification check with a clear error; non-stratified packs route to the ASP tier (T2) | P3 |
 | T4 | Bitemporal edges (`validAt`/`invalidAt`, explicit retraction — the Graphiti model) | TerminusDB time-travel gives transaction time (commit) but not per-edge validity intervals; facts carry `observedAt` only | add optional `validAt`/`invalidAt` to Fact/Derivation + WOQL interval filters; commit time covers transaction time | P2 |
 | T5 | Incremental / semi-naive re-evaluation as facts stream in | engine re-runs to fixpoint per phase | delta evaluation: only re-run rules whose premises changed; v12 WOQL has `AddedTriple`/`DeletedTriple` for delta queries | P3 |
-| T6 | Principled uncertainty propagation (noisy-OR, calibration) beyond the fixed score | the 0.6/0.3/0.1 formula is fixed by ADR-0003 | keep the formula; feed calibrated confidences from the Strom decider tier as fact inputs (already possible); revisit only if the PO wants full probabilistic logic | P3 |
+| T6 | Principled uncertainty propagation (noisy-OR, calibration) beyond the fixed score | the 0.6/0.3/0.1 formula is fixed by ADR-0003 | keep the formula; feed calibrated confidences from the sensing layer as fact inputs (already possible); revisit only if the PO wants full probabilistic logic | P3 |
 | T7 | Cross-pack shared ontology, multi-tenant isolation + access control | TerminusDB is per-database; capabilities/roles exist but aren't wired | pack-registry database + role capabilities (see USE-CASES.md scenarios); per-tenant db or scoped branches | P2 |
 | T8 | Vector/hybrid retrieval over large evidence corpora | TerminusDB VectorLink exists but isn't wired | embed evidence chunks at sense time, retrieve top-k before the LLM read | P3 |
 | T9 | Pack-factory interview as an explicit state machine (meta-Facty loop) | Vibe CLI session + MCP works, but there's no in-code FSM/checkpointing | pydantic-graph (or LangGraph) FSM for the interview, checkpoints in TerminusDB commits; engine validates + commits the drafted pack | P2 |
@@ -50,4 +50,4 @@ performance, scale, or UX.
 - Vision/method (unchanged): [PHILOSOPHY.md](PHILOSOPHY.md), [vision.md](vision.md), ADR-0003 (superseded in part by ADR-0005)
 - Decision: [ADR-0005](adr/0005-cleanroom-stack-replaces-poc.md); survey: [docs/research/stack-survey.md](research/stack-survey.md); dependency docs log: [docs/research/deps-log.md](research/deps-log.md)
 - Implementation: [docs/IMPLEMENTATION.md](../docs/IMPLEMENTATION.md), this repo's `./facty`
-- Legacy: [ARCHITECTURE.md](ARCHITECTURE.md) (gondolin model — pack-factory runtime until ported), `engine/README.md` (PoC oracle)
+- Legacy: [ARCHITECTURE.md](ARCHITECTURE.md) (gondolin model — retired with the PoC); the PoC's golden case data survives in `tests/golden/cases/`

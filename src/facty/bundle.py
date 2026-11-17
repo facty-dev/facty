@@ -20,7 +20,7 @@ v2 directory layout:
   bundle.sig      {"fingerprint": ..., "signature": b64}
   fixtures/ conformance/ ...   any extra files, covered by manifest.contents
 
-Legacy v1 dirs (a bare pack.json, e.g. the PoC oracle cases under engine/cases)
+Legacy v1 dirs (a bare pack.json, e.g. the golden cases under tests/golden/cases)
 are readable in --dev mode only: unsigned bundles are refused otherwise.
 
 Env: FACTY_DEV=1 is the global escape hatch; --dev on the CLI commands.

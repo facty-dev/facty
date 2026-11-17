@@ -8,7 +8,7 @@
   facty run <case> [--add-facts <drop.json>] [--phase <name>] [--ref <branch>]
   facty compile-rules <case-dir>               # dump WOQL (debug)
   facty log | verdict | metrics | cases
-  facty selftest                               # golden-compare vs PoC
+  facty selftest                               # golden acceptance vs tests/golden
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ def engine_fact_doc(f: dict) -> dict:
 
 
 REPO = Path(__file__).resolve().parents[2]  # src/facty/cli.py → repo root
-CASES = REPO / "engine" / "cases"
+CASES = REPO / "tests" / "golden" / "cases"  # golden case data (packs + fact fixtures + expected.md)
 
 
 def _client(ref: Optional[str]) -> Client:
@@ -493,7 +493,7 @@ def verdict(ref: OptRef = None):
 
 @app.command("cases")
 def cases():
-    """List bundles (v2 manifests) and legacy PoC oracle cases."""
+    """List bundles (v2 manifests) and golden cases (tests/golden/cases)."""
     bdir = REPO / "bundles"
     if bdir.is_dir():
         for d in sorted(bdir.iterdir()):
@@ -504,10 +504,11 @@ def cases():
     if CASES.is_dir():
         for d in sorted(CASES.iterdir()):
             if (d / "terminusdb" / "pack.json").exists():
-                typer.echo(f"case(legacy)\t{d.name}")
+                typer.echo(f"case(golden)\t{d.name}")
 
 
-# Golden expectations transcribed from each case's expected.md (the PoC oracle).
+# Golden expectations live in tests/golden/cases/<case>/expected.md (transcribed
+# from the retired PoC oracle, ADR-0005).
 # ranking: [(hypothesis, approx score)] in expected order; pruned: set of hypothesis ids.
 SELFTEST_CASES = [
     {"name": "attribution-silver-blaze", "dir": CASES / "attribution-silver-blaze",
@@ -538,8 +539,9 @@ SELFTEST_CASES = [
 
 @app.command("selftest")
 def selftest():
-    """Golden-compare every migrated case against its PoC expected.md assertions,
-    plus a determinism replay per case. Runs against a scratch db."""
+    """Golden-compare every golden case (tests/golden/cases, transcribed from the
+    retired PoC oracle) against its expected.md assertions, plus a determinism
+    replay per case. Runs against a scratch db."""
     from .schema import SCHEMA
 
     c = Client(db=os.environ.get("TERMINUSDB_DB", "facty-selftest"))
@@ -609,7 +611,7 @@ def selftest():
     if failures:
         typer.echo("SELFTEST FAIL")
         raise typer.Exit(1)
-    typer.echo("SELFTEST PASS — all cases match the PoC golden expectations, deterministic replay")
+    typer.echo("SELFTEST PASS — all cases match the golden expectations, deterministic replay")
 
 
 def main() -> None:

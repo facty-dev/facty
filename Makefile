@@ -2,11 +2,12 @@
 #
 # The product: a domain-agnostic abductive decision-support engine —
 # evidence in, ranked hypotheses out, full reasoning trace. Domains are
-# bundles (bundles/, plus the PoC oracle cases under engine/cases/).
+# bundles (bundles/); golden case data for the acceptance test lives in
+# tests/golden/cases/.
 #
-# Implementation (ADR-0005): TerminusDB-backed engine in src/facty, SmolVM
-# image (Dockerfile), Vibe CLI + pydantic-ai for the LLM half. The PoC under
-# engine/ stays as the golden oracle (make poc-oracle).
+# Implementation (ADR-0005, the only stack): TerminusDB-backed engine in
+# src/facty, SmolVM image (Dockerfile), Vibe CLI + pydantic-ai for the LLM
+# half. The PoC engine is retired; tests/golden/cases keeps its case data.
 #
 # ── Quick start ──────────────────────────────────────────────────────────────
 #
@@ -19,7 +20,7 @@
 # See docs/IMPLEMENTATION.md and docs/CLEANROOM-METHOD.md.
 
 # ── Help ─────────────────────────────────────────────────────────────────────
-.PHONY: help info cases selftest e2e e2e-live poc-oracle
+.PHONY: help info cases selftest e2e e2e-live demo-ui
 
 help:
 	@echo "Facty — the detective DSS"
@@ -29,8 +30,7 @@ help:
 	@echo "  make cases              ./facty cases — migrated cases/packs"
 	@echo "  make selftest           ./facty selftest — golden acceptance, all cases"
 	@echo "  make e2e / e2e-live     scripts/e2e.sh [--live] — end-to-end demo"
-	@echo "  make poc-oracle         python3 engine/engine.py selftest (PoC oracle)"
-	@echo "  make deps-sensors       optional label-sensor deps (host/CI only)"
+	@echo "  make demo-ui            scripts/demo-ui.sh — served UI demo (assembly-unpaid-invoice)"
 	@echo ""
 	@echo "═══ Assets / SDLC pipeline ═══"
 	@echo "  make asset-status · sdlc-status · sdlc-new FEATURE=<slug> · audit-trail"
@@ -45,13 +45,6 @@ info:
 OP ?= facts
 deps:
 	uv sync
-
-# The optional sensor layer (engine/label.py): the label sensor (a small
-# CPU-only zero-shot classifier). Host/CI-only — the SmolVM image
-# has no pypi egress (by design); see requirements-sensors.txt.
-deps-sensors:
-	uv sync
-	uv pip install -r requirements-sensors.txt
 
 # ── Facty engine (TerminusDB-backed; see docs/IMPLEMENTATION.md) ────────────
 # TerminusDB on :6363 first: docker compose -f compose.yaml up -d
@@ -70,8 +63,8 @@ demo:
 e2e-live:
 	TERMINUSDB_DB=facty-e2e bash scripts/e2e.sh --live
 
-poc-oracle:
-	python3 engine/engine.py selftest
+demo-ui:
+	bash scripts/demo-ui.sh
 
 # ── Agentic Runtime (SDLC) ──────────────────────────────────────────────────
 # Asset-oriented SDLC: OST → PRD → BDD → Implementation → ADRs
@@ -139,9 +132,10 @@ sdlc-start:
 	@echo "Or in CI/CD: label a PR with 'sdlc'"
 
 # ── Pack factory (the meta-Facty loop) ─────────────────────────────────────
-# Author a pack (a domain's knowledge engine) with pi + ask_questions.
-# The engine generates questions; the user answers; pi generates the
-# symbolic representations; the engine validates. See the pack-factory skill.
+# Author a pack (a domain's knowledge engine) with the Vibe CLI pack-author
+# profile + ask_questions. The engine generates questions; the user answers;
+# the LLM drafts the symbolic representations; the engine validates and signs.
+# See the pack-factory skill.
 
 .PHONY: pack-factory
 audit-trail:

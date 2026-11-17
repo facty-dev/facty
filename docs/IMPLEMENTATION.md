@@ -69,7 +69,7 @@ case run       branch case/<id> from main
   1 sense      vibe -p (mistral-large-4) → Fact documents {id,subject,predicate,value,confidence,source,observedAt}
   2 chain      for each Rule: compile when→WOQL, run; then-actions insert derived Facts + Derivation edges; fixpoint
   3 prune      Constraint eliminate = WOQL negation (stratified); support = match count
-  4 rank       score = 0.6·claims_proven + 0.3·min(support,3)/3 + 0.1·prior  (same formula as the PoC engine)
+  4 rank       score = 0.6·claims_proven + 0.3·min(support,3)/3 + 0.1·prior  (formula fixed by ADR-0003)
   5 questions  rank open Questions by (alive discriminations, priority, id)
   6 verdict    commit Verdict + full trace in ONE transaction → immutable, time-travelable
 replay         query any commit → same documents → same query results → byte-identical verdict
@@ -228,10 +228,9 @@ Loading is a plain insert — the DB's schema validation is the only gate.
 - Polymorphic values are typed, not stringly-normalized: exactly one of
   `valueString` / `valueBool` / `valueNum` (or `var` for a bind-any existence
   condition). `confidence`/`prior`/scores are `xsd:decimal` numbers.
-- `python -m facty.migrate <case-dir> [facts.json ...]` converts the PoC's
-  `pack/*.json` + facts **once** into `<case-dir>/terminusdb/{pack.json, facts-*.json}`.
-  PoC files are untouched. Migrated so far: `bundles/insurance-claim-fraud`,
-  `engine/cases/attribution-silver-blaze`.
+- Golden fixtures from the retired PoC live in `tests/golden/cases/<case>/`
+  (pack + sensed facts + `expected.md`); `./facty selftest` runs them as
+  branches and asserts the expected verdicts. Live packs live in `bundles/`.
 - Derive blueprints are `FactTemplate` **subdocuments** (a Fact reference would
   materialize the conclusion as a premise). `Fact` is discriminated in WOQL by
   its unique `source` field (Isa/@type triples don't parse in v12).
@@ -257,16 +256,20 @@ Loading is a plain insert — the DB's schema validation is the only gate.
 │   ├── schema.py              # artifact model as TerminusDB schema
 │   ├── woql.py                # WOQL AST builders
 │   ├── rules.py               # rule DSL → WOQL compiler (closed template set)
-│   ├── engine.py              # deterministic run loop
-│   ├── sensing.py             # vibe -p one-shot calls + disk cache
-│   └── cli.py                 # python -m facty …
+│   ├── engine.py              # deterministic run loop (chain→prune→rank→verdict)
+│   ├── sensing.py             # pydantic-ai typed calls + disk cache
+│   ├── serve.py               # HTTP/JSON gateway + SSE watch (the Web UI's backend)
+│   └── cli.py                 # python -m facty … (headless driver)
+├── web/                       # Svelte 5 + Vite static UI (shadcn-svelte + wintry theme)
+├── bundles/                   # signed packs (Ed25519 manifest): insurance-claim-fraud, …
+├── tests/
+│   ├── golden/cases/          # retired PoC's golden case data (pack + facts + expected.md)
+│   └── test_*.py              # pytest suite
 ├── scripts/
-│   └── e2e.sh                 # end-to-end demo: bundles/insurance-claim-fraud, offline or --live
-├── demos/
-│   └── fraud-phase2-drop.json # discriminating-test evidence drop for the e2e demo
-└── spikes/
-    ├── spike-01-terminusdb-sherlock.md
-    └── e2e-insurance-fraud.md # the e2e demo: what it shows, expected output, acceptance
+│   ├── e2e.sh                 # end-to-end demo: bundles/insurance-claim-fraud, offline or --live
+│   └── demo-ui.sh             # headless Web UI e2e demo (case assembly-unpaid-invoice)
+└── demos/
+    └── fraud-phase2-drop.json # discriminating-test evidence drop for the e2e demo
 ```
 
 ## Running
@@ -288,8 +291,9 @@ pip install -e
 python -m facty init-db                 # create db + install schema
 python -m facty bundle load bundles/insurance-claim-fraud   # signed gate; --dev for legacy
 FACTY_SENSE=cache python -m facty run attribution-silver-blaze   # offline replay
-python -m facty run attribution-silver-blaze --add-facts engine/cases/attribution-silver-blaze/facts-ledger.json
-python -m facty selftest                # golden-compare vs the PoC expected.md
+python -m facty run attribution-silver-blaze --add-facts tests/golden/cases/attribution-silver-blaze/facts-ledger.json
+python -m facty selftest                # golden acceptance vs tests/golden/cases/*/expected.md
+python -m facty serve                   # Web UI on http://127.0.0.1:8080
 ```
 
 Env: `TERMINUSDB_URL` (default `http://127.0.0.1:6363`), `TERMINUSDB_USER`

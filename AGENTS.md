@@ -13,7 +13,7 @@ system (the "detective DSS"). *Evidence in, verdict out.* Evidence in →
 ranked hypotheses with confidence → discriminating tests → verdict with a
 full reasoning trace. Two halves, never swapping jobs:
 
-- **The brain — the symbolic engine** (`engine/`): forward + backward
+- **The brain — the symbolic engine** (`src/facty/`): forward + backward
   chaining rules engine with a constraint layer. Plain deterministic
   code. Rules beat vibes; every verdict replays without the LLM.
 - **The senses — the LLM** (Mistral Large 4): reads messy evidence into
@@ -26,8 +26,8 @@ bundle is the costume. (Sherlock was a detective, not a doctor.)
 
 The repo is the engine + typed demo cases + the pack factory:
 
-- `engine/` — the PoC engine, golden oracle post-ADR-0005 (`make poc-oracle`) + demo case data
-- `src/facty/` — the implementation (ADR-0005): TerminusDB-backed engine + CLI
+- `src/facty/` — the implementation (ADR-0005, the only stack): TerminusDB-backed engine + CLI
+- `tests/golden/cases/` — golden case data (packs + sensed-fact fixtures + expected.md) driving `./facty selftest`; the PoC engine itself is retired (ADR-0005)
 - `scripts/*.sh` — git-native pipeline, asset sync, e2e demo (bash)
 - `templates/sdlc/` — pack-factory templates + agent role prompts (`agents/decision.md`, `agents/coding.md`)
 - `docs/` — architecture, discovery, PRDs, ADRs (heavily cross-referenced — follow links)
@@ -52,8 +52,8 @@ three projections (git JSON files now, JSONB rows later, codegen TS/Datalog):
 | Question | `{id, text, slot, mandatory, status, raisedBy, discriminates}` | opened by the engine, filled by the senses |
 | Derivation | lineage edge `fact ← rule ← facts` | the trace (engine output) |
 
-Schemas: `engine/schemas/*.schema.json`. Codegen: `engine/emit.py` →
-`engine/emit/` (TypeScript types, Datalog).
+Schema: `src/facty/schema.py` (the artifact model as a TerminusDB ontology —
+schema = ontology, enforced on every write).
 
 ## Critical rules — read before running anything
 
@@ -91,8 +91,7 @@ Schemas: `engine/schemas/*.schema.json`. Codegen: `engine/emit.py` →
    `docs/prd/`, `docs/discovery/`, `docs/adr/` when acting as the coding
    agent — unless the PO directs a rename or reframe. Coding agents
    report to `.agentic/messages/coding-to-decision/<NNN>-result.md`.
-7. **VM egress is an explicit allow-list** (api.mistral.ai, api.uprelic.com
-   for the Strom decider tier,
+7. **VM egress is an explicit allow-list** (api.mistral.ai,
    registry.npmjs.org). Don't add network features that assume open
    egress — and don't add web-search tooling (ddgr or similar): cases
    handle sensitive data, so nothing leaves the VM except LLM calls.
@@ -112,10 +111,9 @@ Schemas: `engine/schemas/*.schema.json`. Codegen: `engine/emit.py` →
 
 ```bash
 # The engine (the product) — primary interface: ./facty (see `./facty --help`).
-# Since ADR-0005, ./facty runs the CLEANROOM stack (, TerminusDB-backed,
-# SmolVM + Vibe CLI + pydantic-ai); engine/ is the retired PoC, kept as the
-# golden oracle: python3 engine/engine.py selftest.
-./facty cases                # list migrated cases/packs (terminusdb/ dirs)
+# ./facty runs the cleanroom stack (TerminusDB-backed, SmolVM + Vibe CLI +
+# pydantic-ai, ADR-0005) — the only stack; the PoC engine is retired.
+./facty cases                # list bundles and golden cases (tests/golden/cases)
 ./facty selftest             # golden acceptance: every migrated case, asserted + replay
 ./facty init-db              # create db + install schema (needs TerminusDB on :6363)
 ./facty keys init            # Ed25519 keypair in ~/.facty/keys (never committed)
@@ -132,17 +130,12 @@ Schemas: `engine/schemas/*.schema.json`. Codegen: `engine/emit.py` →
 ```
 
 ```bash
-# PoC oracle (engine/, JSON artifacts) — kept for cross-checking until the PoC
-# is retired (ADR-0005):
-python3 engine/engine.py run --case <case>           # run a case (phase 1)
-python3 engine/engine.py run --case <case> --add-facts <drop>   # phase 2
-python3 engine/engine.py selftest                    # PoC acceptance test
-
 # Make wrappers:
-make selftest               # acceptance test (every case, asserted)
+make selftest               # acceptance test (every golden case, asserted + replay)
+make demo-ui                # served UI demo (scripts/demo-ui.sh)
 
 
-# Pack factory (exec into the VM session via socket-path IPC; every run audited)
+# Pack factory (Vibe CLI pack-author profile in the SmolVM; every run audited)
 
 # Assets
 make asset-init / asset-status / asset-lineage KEY=<key>
@@ -173,28 +166,14 @@ Phase vocabularies differ by surface: the decision agent uses
   dependency-free so they run in the SmolVM image snapshot (no pip
   guarantees there) — optional layers import lazily and degrade gracefully. The root
   `pyproject.toml` holds the deps (`make deps` = `uv sync`, uv-managed, Python 3.14).
-  The optional sensors (`engine/label.py`) import lazily and degrade
-  gracefully; their deps live in
-  `requirements-sensors.txt` (`make deps-sensors`) — heavy-ish and
-  host/CI-only, never the SmolVM image. Sensor-sourced evidence
-  (the `classify.json` file) is excluded from the LLM's phase-1 files.
-- The label sensor is a **ladder** (`classify.json` `backend`):
-  `strom` (default — the Strom decider tier scores every row, the local
-  classifier is the automatic fallback), `hybrid` (the classifier
-  scores the bulk, the decider adjudicates the gated rows — the demo
-  case pins this to show the ladder), `local` (the local NLI classifier
-  only — the offline mode). The Strom decider (`engine/strom.py`,
-  stdlib-only) is Uprelic's hosted decision model (`strom-1.0.7`,
-  EU/Paris GPUs, calibrated probabilities, ~$0.04 per 1M input tokens,
-  500 req/min); its key rides `UPRELIC_API_KEY` (env / host-side secret injection — never logged, never committed), its question
-  set is drafted per pack by the LLM (`--op decide` →
-  `sensor/decisions.json`, judged, committed), and its responses cache
-  like any sensing response. All tiers are induction-only — never in
-  the verdict path. The decider tier is probabilistic (re-asked rows
-  wobble past the 4th decimal; rows near the gate can flip) — the
-  recorded facts + cache are the deterministic layer. `--offline` /
-  `FACTY_OFFLINE=1` runs the local tier live and replays the LLM ops
-  from cache.
+  Optional layers (sensing, search, codemode) import lazily and degrade
+  gracefully — they are baked into the image at build time, never installed
+  at runtime (the SmolVM image has no pypi egress by design).
+- Sensing is pydantic-ai only (`src/facty/sensing.py`): typed structured
+  output, `tools=[]`, disk-cached — `FACTY_SENSE=cache` replays with no LLM.
+  The PoC-era label-sensor ladder (`engine/label.py`, `engine/strom.py`,
+  `classify.json`, `requirements-sensors.txt`) is retired with the PoC engine
+  (ADR-0005); its golden case data survives in `tests/golden/cases/`.
 - **Secrets**: real keys live in `~/.facty/.env` (machine-local, never
   committed); the real environment always wins. `MISTRAL_API_KEY` set in the
   env wins (production); otherwise export the subscription token from
@@ -202,12 +181,8 @@ Phase vocabularies differ by surface: the decision agent uses
   `pi auth` does not recognise extension providers). Same
   `Authorization: Bearer` header, so pydantic-ai's `mistral:` provider picks
   it up unchanged. In the SmolVM the guest only ever sees a placeholder; the
-  host substitutes the real value on egress (open item, ADR-0005). The Strom
-  decider key rides `UPRELIC_API_KEY` the same way (never logged, never
-  committed); its question sets live in `sensor/decisions.json`.
-- `engine/engine.py` is the PoC oracle: library + CLI (`run`, `selftest`),
-  `make poc-oracle`. The primary interface is the `facty` CLI (`./facty` →
-  `src/facty`, ADR-0005).
+  host substitutes the real value on egress (open item, ADR-0005).
+- The primary interface is the `facty` CLI (`./facty` → `src/facty`, ADR-0005).
 - The engine core (`src/facty/`: client/engine/rules/woql) is stdlib-only and
   runs anywhere; sensing is pydantic-ai (programmatic, `src/facty/sensing.py`,
   `tools=[]`, typed output, disk cache — `FACTY_SENSE=cache` replays with no
@@ -228,12 +203,11 @@ Phase vocabularies differ by surface: the decision agent uses
 
 | Artifact | Path | Numbering |
 |---|---|---|
-| Case evidence (raw) | `engine/cases/<case>/evidence/` | — |
-| Pack (rules/constraints/hypotheses) | `engine/cases/<case>/pack/` | — |
-| Sensor config + drafted artifacts | `engine/cases/<case>/classify.json` + `sensor/` (`extract.py` + tests, `decisions.json`) | — |
-| Sensed facts | `engine/cases/<case>/facts.json` (+ `facts-<drop>.json`) | — |
-| Sensing record | `engine/cases/<case>/SENSING.md` | — |
-| Expected outcome | `engine/cases/<case>/expected.md` | — |
+| Golden case evidence (raw) | `tests/golden/cases/<case>/evidence/` | — |
+| Golden pack (rules/constraints/hypotheses) | `tests/golden/cases/<case>/pack/` | — |
+| Golden sensed facts | `tests/golden/cases/<case>/facts.json` (+ `facts-<drop>.json`) | — |
+| Golden expected outcome | `tests/golden/cases/<case>/expected.md` | — |
+| Signed live bundles | `bundles/<bundle>/` (manifest + Ed25519 sig + pack docs) | — |
 | Discovery assets | `docs/discovery/{problems,solutions,assumptions,ost,verticals}.md` | — |
 | PRDs | `docs/prd/PRD-NNN-<slug>.md` | 3-digit (`PRD-001`) |
 | ADRs | `docs/adr/NNNN-<slug>.md` | **4-digit** (`0001-`) |
@@ -310,4 +284,4 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
 | [docs/research/stack-survey.md](docs/research/stack-survey.md) | backend survey + cleanroom proposal |
 | [docs/research/deps-log.md](docs/research/deps-log.md) | dependency docs log (rule 8): versions, what was read, live-verified divergences |
 | [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | the cleanroom implementation: layout, run, e2e demo, observability |
-| [engine/README.md](engine/README.md) | the PoC engine — golden oracle post-ADR-0005 |
+| [tests/golden/](tests/golden) | the retired PoC's golden case data driving `./facty selftest` |

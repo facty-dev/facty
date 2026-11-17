@@ -2,11 +2,12 @@
 
 *Evidence in, verdict out.*
 
-> **Implementation note (ADR-0005):** the primary implementation is the
-> **cleanroom stack** in [``]() — TerminusDB as store/schema/
+> **Implementation note (ADR-0005):** the implementation is the
+> **cleanroom stack** in [`src/facty/`](src/facty) — TerminusDB as store/schema/
 > rule engine (WOQL), SmolVM for isolation, pydantic-ai + Vibe CLI for the LLM
-> half, `./facty` as the headless CLI. The original PoC under `engine/` is kept
-> as the golden oracle during migration. See [ADR-0005](docs/adr/0005-cleanroom-stack-replaces-poc.md),
+> half, `./facty` as the headless CLI and `facty serve` + `web/` as the Web UI.
+> The retired PoC's golden case data lives on in `tests/golden/cases/`.
+> See [ADR-0005](docs/adr/0005-cleanroom-stack-replaces-poc.md),
 > [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md), and the methodology mapping +
 > triage in [docs/CLEANROOM-METHOD.md](docs/CLEANROOM-METHOD.md).
 >
@@ -127,11 +128,11 @@ See [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) for the full stance:
 determinism as product, LLM liability, the reverse-centaur warning, and
 the human role as knowledge engineer and soundness critic.
 
-## Status: PoC — working end-to-end
+## Status: cleanroom stack, working end-to-end
 
-Three typed demo cases, end to end, from JSON files and schemas — no
-database yet. Each proves the abductive skeleton on a different kind of
-judgement (see [docs/INVESTIGATION-TYPES.md](docs/INVESTIGATION-TYPES.md)):
+Typed demo cases run end to end on TerminusDB — each proves the abductive
+skeleton on a different kind of judgement (see
+[docs/INVESTIGATION-TYPES.md](docs/INVESTIGATION-TYPES.md)):
 
 - **attribution** — `attribution-silver-blaze`: the horse that vanished
   and the dog that didn't bark (the classic).
@@ -139,18 +140,20 @@ judgement (see [docs/INVESTIGATION-TYPES.md](docs/INVESTIGATION-TYPES.md)):
   to a vendor that doesn't exist.
 - **causation** — `causation-three-am-outage`: checkout degrades at
   3 a.m. — our deploy, our cert, an attack, or the provider?
+- **assembly** — `assembly-unpaid-invoice`: an unpaid-invoice demand
+  letter assembled clause by clause (the Web UI demo case).
 
-The primary interface is the `facty` CLI: bare `./facty` opens the
-Textual workbench; the subcommands are the scriptable control plane.
+The interfaces are the `facty` CLI (headless — Dagster/CI driver) and the
+Web UI (`facty serve` + `web/`, http://127.0.0.1:8080); both are clients of
+the same gateway, so they stay at parity.
 
 ```bash
-./facty                  # the workbench (Textual TUI — the primary interface)
-./facty cases            # the demo cases (type · pack · phase-2 drop)
-./facty run <case>       # run a case (--add-facts <drop> = phase 2 · --json)
-./facty selftest         # acceptance test — every case, asserted
-./facty test             # all tests: selftest + retry loop + the TUI (headless)
-./facty walkthrough <case>   # terminal step-through (VMs, no-TTY)
-make deps                # install the optional deps (Textual — the workbench)
+./facty cases            # the demo cases (golden fixtures + bundles)
+./facty run <case>       # deterministic verdict on a case branch
+./facty serve            # HTTP gateway + Web UI on :8080
+./facty selftest         # acceptance test — every case, asserted + replayed
+bash scripts/demo-ui.sh  # headless e2e demo of the Web UI flow
+make deps                # install the deps (uv sync)
 ```
 
 ## Where things live
@@ -167,10 +170,9 @@ make deps                # install the optional deps (Textual — the workbench)
 
 ## Notes
 
-- **Security model (later):** the gondolin micro-VM pipeline is how cases
-  with sensitive data get run — agents never see real secrets, only
-  placeholders substituted host-side. The PoC runs in the dev session; VM
-  isolation is a deployment requirement, not a dev requirement.
+- **Security model:** the SmolVM micro-VM is how cases with sensitive data
+  get run — agents never see real secrets, only placeholders substituted
+  host-side (ADR-0005; the host-secret path is the open item).
 - **The SDLC is a future vertical.** This repo started as an agentic SDLC
   framework (proven end-to-end, audited). That machinery is now the *pack
   factory* — and SDLC management itself is a candidate pack, not the

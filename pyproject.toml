@@ -14,8 +14,6 @@ requires-python = ">=3.14"
 # no-dependency fallback and the human-facing surface.
 dependencies = [
     "pydantic-ai[mistral]>=1.0",
-    "textual",
-    "pyte",  # PoC oracle workbench (engine/tui.py), until the PoC is retired
     "cryptography>=50.0.2",  # M1 trust spine: Ed25519 bundle signatures, Fernet export encryption
     "typer>=0.27.3",
     "pypdf>=6.21.4",
