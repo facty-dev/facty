@@ -226,4 +226,11 @@ SCHEMA: list[dict] = [
      "inputCommit": OPT_STR, "outputCommit": OPT_STR,
      "options": STR_SET, "choice": OPT_STR,
      "@key": {"@type": "Hash", "@fields": ["id"]}},
+    # Feedback: a user comment anchored to a screen/case, committed as a doc
+    # (the audit-friendly feedback channel — `facty feedback list` reads them).
+    # Not part of the verdict path; `at` is client-supplied input, not an engine clock.
+    {"@type": "Class", "@id": "Feedback",
+     "id": "xsd:string", "scope": "xsd:string",      # case id, or "app"
+     "author": "xsd:string", "text": "xsd:string", "screen": OPT_STR, "at": OPT_STR,
+     "@key": {"@type": "Hash", "@fields": ["id"]}},
 ]

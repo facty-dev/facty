@@ -37,11 +37,32 @@ app = typer.Typer(
 keys_app = typer.Typer(name="keys", help="Ed25519 signing keys (live in ~/.facty/keys, never committed).", no_args_is_help=True)
 bundle_app = typer.Typer(name="bundle", help="Signed bundle v2: sign / verify / load (the trust gate).", no_args_is_help=True)
 case_app = typer.Typer(name="case", help="Case lifecycle: a case IS a TerminusDB branch — real, deletable.", no_args_is_help=True)
+feedback_app = typer.Typer(name="feedback", help="User comments as committed Feedback docs (the in-UI comment channel).", no_args_is_help=True)
 vm_app = typer.Typer(name="vm", help="SmolVM sandbox lifecycle: one reused machine, stopped when done (image persists).", no_args_is_help=True)
 app.add_typer(keys_app)
 app.add_typer(bundle_app)
 app.add_typer(case_app)
 app.add_typer(vm_app)
+app.add_typer(feedback_app)
+
+
+@feedback_app.command("add")
+def feedback_add(text: Annotated[str, typer.Argument()],
+                 case: Annotated[Optional[str], typer.Option("--case", help="anchor to a case branch (default: app scope on main)")] = None,
+                 screen: Annotated[str, typer.Option("--screen", help="which screen/view the comment is about")] = "",
+                 author: Annotated[str, typer.Option("--author")] = "user"):
+    """Commit a feedback comment as a Feedback doc (audit-friendly, queryable)."""
+    c = _client(None)
+    doc = ops_mod.feedback_add(c, text, case, screen, author)
+    typer.echo(f"saved {doc['id']} (scope {doc['scope']})")
+
+
+@feedback_app.command("list")
+def feedback_list(case: Annotated[Optional[str], typer.Option("--case")] = None):
+    """List feedback comments (case scope, or app scope)."""
+    c = _client(None)
+    for d in ops_mod.feedback_list(c, case)["feedback"]:
+        typer.echo(f"{d['id']}  [{d.get('screen') or '-'}]  {d['author']}: {d['text']}")
 
 
 @vm_app.command("status")

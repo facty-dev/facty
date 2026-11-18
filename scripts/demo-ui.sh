@@ -68,6 +68,8 @@ curl -sf "http://127.0.0.1:$PORT/api/ops" | grep -q '"turn"' || { echo "FAIL: op
 curl -sf -X POST -H 'Content-Type: application/json' -d "{\"case\":\"$CASE\"}" "http://127.0.0.1:$PORT/api/turn" | grep -q '"done": true' || { echo "FAIL: /api/turn"; exit 1; }
 curl -sf "http://127.0.0.1:$PORT/api/state?case=$CASE" | grep -q AssembledDocument || { echo "FAIL: state"; exit 1; }
 curl -sf "http://127.0.0.1:$PORT/api/state?case=$CASE" | grep -q '"@type": "Turn"' || { echo "FAIL: state has no Turn docs"; exit 1; }
+curl -sf -X POST -H 'Content-Type: application/json' -d "{\"case\":\"$CASE\",\"text\":\"demo comment\",\"screen\":\"bullseye\"}" "http://127.0.0.1:$PORT/api/feedback" | grep -q '"@type": "Feedback"' || { echo "FAIL: feedback add"; exit 1; }
+curl -sf "http://127.0.0.1:$PORT/api/feedback?case=$CASE" | grep -q "demo comment" || { echo "FAIL: feedback list"; exit 1; }
 curl -sf -N --max-time 2 "http://127.0.0.1:$PORT/api/watch?case=$CASE" | grep -q "event: state" || { echo "FAIL: SSE"; exit 1; }
 curl -sf "http://127.0.0.1:$PORT/" | grep -q "<div id=\"app\">" || { echo "FAIL: UI not served"; exit 1; }
 

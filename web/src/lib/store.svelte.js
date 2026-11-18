@@ -12,6 +12,8 @@ class UI {
   proofs = $state({});              // hypothesis id → [{claim, proof}]
   chat = $state([]);                // {who:"user"|"sys", text, intent?, slots?}
   error = $state("");
+  notice = $state("");              // transient friendly confirmation
+  feedback = $state([]);            // Feedback docs for the current case
   intent = $state(null);            // matched Goal
   es = null;
 
@@ -68,17 +70,28 @@ class UI {
     this.case = c; this.chat = []; this.proofs = {}; this.selected = null; this.intent = null;
     if (this.es) { this.es.close(); this.es = null; }
     if (!c) return;
-    const [s, l] = await Promise.all([api.state(c), api.log(c)]);
-    this.docs = s.docs; this.commits = l;
+    const [s, l, fb] = await Promise.all([api.state(c), api.log(c), api.feedbackList(c)]);
+    this.docs = s.docs; this.commits = l; this.feedback = fb.feedback || [];
     this.es = new EventSource(`/api/watch?case=${encodeURIComponent(c)}`);
     this.es.addEventListener("state", (e) => { this.docs = JSON.parse(e.data).docs; });
     this.es.addEventListener("commit", (e) => { this.commits = [JSON.parse(e.data), ...this.commits]; });
   }
 
   async op(fn, ...args) {
-    this.error = "";
+    this.error = ""; this.notice = "";
     try { await fn(...args); await this.selectCase(this.case); }
     catch (e) { this.error = String(e.message || e); }
+  }
+
+  // in-UI comment channel: committed as a Feedback doc on the case branch,
+  // readable via `facty feedback list --case <id>` (audit-friendly)
+  async addFeedback(text, screen) {
+    this.error = ""; this.notice = "";
+    try {
+      await api.feedbackAdd(this.case, text, screen);
+      this.feedback = (await api.feedbackList(this.case)).feedback || [];
+      this.notice = "comment saved — it is stored with the case (facty feedback list)";
+    } catch (e) { this.error = String(e.message || e); }
   }
 
   // deterministic-first intent recognition (rules before LLM, ADR-0010):

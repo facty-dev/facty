@@ -139,6 +139,8 @@ schema = ontology, enforced on every write).
 ./facty interview <case> [--answers q=v,...] [--chooser script|llm]  # questionnaire loop as a pydantic-graph (interview.py); every turn commits a Turn doc
 ./facty mcp                  # facty MCP server over stdio — one tool per `facty serve` case op (parity, ADR-0010 §4)
 ./facty serve [--port 8080]  # the one HTTP/JSON gateway + SSE watch + Web UI (web/dist); UI and CLI are both clients of it
+./facty feedback add "<text>" --case <id> --screen <view>   # leave a comment (committed Feedback doc)
+./facty feedback list [--case <id>]                           # read comments (the in-UI feedback channel)
 ./facty verdict|log|metrics  # inspect outputs, audit trail, LLM latency/tokens
 ./facty sense <dir> --out f.json             # live LLM sensing (pydantic-ai)
 # e2e demo: make e2e / make e2e-live   (scripts/e2e.sh [--live], bundles/insurance-claim-fraud)

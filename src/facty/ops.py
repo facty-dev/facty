@@ -278,6 +278,29 @@ def strip_ids(x):
     return x
 
 
+def feedback_add(client, text: str, case: str | None = None, screen: str = "",
+                 author: str = "user", at: str = "") -> dict:
+    """Commit a user comment as a Feedback doc (on the case branch, or main for
+    scope="app"). Deterministic id from content, so replays are idempotent."""
+    import hashlib
+    scope = case or "app"
+    c = _work_ref(client, case)
+    fid = "fb-" + hashlib.sha1(f"{scope}|{author}|{screen}|{at}|{text}".encode()).hexdigest()[:12]
+    doc = {"@type": "Feedback", "id": fid, "scope": scope, "author": author,
+           "text": text, **({"screen": screen} if screen else {}),
+           **({"at": at} if at else {})}
+    c.insert_docs([doc], message=f"feedback {fid} ({scope})")
+    return doc
+
+
+def feedback_list(client, case: str | None = None) -> dict:
+    c = _work_ref(client, case)
+    scope = case or "app"
+    docs = [d for d in c.get_all_docs()
+            if d.get("@type") == "Feedback" and d.get("scope") == scope]
+    return {"feedback": sorted(docs, key=lambda d: d["id"])}
+
+
 def verdict(client, case: str | None = None) -> dict:
     """Verdict docs, @id-stripped and ranking-sorted (stable hashing)."""
     c = _work_ref(client, case)

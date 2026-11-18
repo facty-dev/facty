@@ -22,3 +22,6 @@ export const ingest = (c, dir, source = "ui") => api("/api/ingest", { case: c, d
 export const loadFacts = (c, path) => api("/api/load-facts", { case: c, path });
 export const caseInit = (id, bundle) => api("/api/case/init", { id, bundle });
 export const turn = (c, opts = {}) => api("/api/turn", { case: c, ...opts });
+export const feedbackAdd = (c, text, screen) =>
+  api("/api/feedback", { case: c, text, screen, author: "ui-user", at: new Date().toISOString() });
+export const feedbackList = (c) => api(`/api/feedback?case=${encodeURIComponent(c ?? "")}`);

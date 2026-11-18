@@ -57,13 +57,17 @@ POST_ROUTES = {
                                                        b.get("chooser", "script"), b.get("surface", "wizard"),
                                                        b.get("actor", "human"), b.get("max_turns", 20),
                                                        b.get("pipeline")),
+    "/api/feedback":    lambda c, b: ops_mod.feedback_add(c, b["text"], b.get("case"),
+                                                         b.get("screen", ""), b.get("author", "user"),
+                                                         b.get("at", "")),
 }
 
 GET_ROUTES = {
     "/api/cases":   lambda c, q: ops_mod.case_list(c),
     "/api/state":   lambda c, q: ops_mod.state(c, q["case"][0]),
     "/api/log":     lambda c, q: ops_mod.log(c, q["case"][0]),
-    "/api/verdict": lambda c, q: ops_mod.verdicts(c, q.get("case", [None])[0]),
+    "/api/verdict": lambda c, q: ops_mod.verdict(c, q.get("case", [None])[0]),
+    "/api/feedback": lambda c, q: ops_mod.feedback_list(c, q.get("case", [None])[0]),
     "/api/ops":     lambda c, q: {"post": POST_OPS, "get": GET_OPS},
 }
 

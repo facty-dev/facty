@@ -6,7 +6,9 @@
   import { Badge } from "$lib/components/ui/badge/index.js";
   import { Separator } from "$lib/components/ui/separator/index.js";
   import { Card, CardContent, CardHeader, CardTitle } from "$lib/components/ui/card/index.js";
-  import { Play, Hammer, Sun, Moon, ListChecks, MessagesSquare, Search, StepForward } from "@lucide/svelte";
+  import { Play, Hammer, Sun, Moon, ListChecks, MessagesSquare, Search, StepForward, MessageSquare, HelpCircle } from "@lucide/svelte";
+  import * as Dialog from "$lib/components/ui/dialog/index.js";
+  import { Textarea } from "$lib/components/ui/textarea/index.js";
   import { ui } from "./lib/store.svelte.js";
   import * as api from "./lib/api.js";
   import Bullseye from "./lib/Bullseye.svelte";
@@ -20,6 +22,9 @@
   let newCase = $state("");
   let newBundle = $state("bundles/small-business-contract-claim");
   let intentText = $state("");
+  let commentOpen = $state(false);
+  let helpOpen = $state(false);
+  let commentText = $state("");
   // dark-mode toggle: `.dark` class on <html> (Tailwind variant + Skeleton's
   // light-dark()); data-theme stays reserved for the Skeleton preset ("wintry")
   let dark = $state(true);
@@ -97,6 +102,39 @@
         <StepForward class="size-4" /> next turn
       </Button>
       <Button size="sm" onclick={() => ui.op(api.assemble, ui.case)}><Hammer class="size-4" /> assemble</Button>
+      <Dialog.Root bind:open={helpOpen}>
+        <Dialog.Trigger><Button variant="ghost" size="sm"><HelpCircle class="size-4" /> what am I looking at?</Button></Dialog.Trigger>
+        <Dialog.Content class="max-w-lg">
+          <Dialog.Header><Dialog.Title>What you're looking at</Dialog.Title></Dialog.Header>
+          <div class="space-y-3 text-sm">
+            <p><b>Live state (the rings)</b> — the inner ring is what's <b>proven</b> (backed by evidence or a rule). The middle ring is what's still <b>open</b>: questions to answer and explanations still in play. The outer ring is <b>anomalies</b>: things that don't fit together and need a look.</p>
+            <p><b>Hypothesis graph</b> — each node is a possible explanation. Grey nodes are ruled out, with the check that ruled them out written on the edge. Click a node to see its proof tree.</p>
+            <p><b>Questionnaire / chat</b> — the same questions in two shapes; switch any time with the wizard/chat toggle. Answers are saved with the case.</p>
+            <p><b>Assembled packet</b> — the document built from the parts that are proven. Print it to PDF.</p>
+            <p><b>Turn timeline</b> — every step of the run is saved on the case's history, so anyone can replay exactly what happened.</p>
+            <p class="text-muted-foreground">Use the <MessageSquare class="inline size-3" /> comment button to leave feedback on any screen — it's stored with the case and the team reads it with <code>facty feedback list</code>.</p>
+          </div>
+        </Dialog.Content>
+      </Dialog.Root>
+      <Dialog.Root bind:open={commentOpen}>
+        <Dialog.Trigger>
+          <Button variant="ghost" size="sm">
+            <MessageSquare class="size-4" /> comment
+            {#if ui.feedback.length}<Badge variant="secondary" class="ml-1">{ui.feedback.length}</Badge>{/if}
+          </Button>
+        </Dialog.Trigger>
+        <Dialog.Content class="max-w-lg">
+          <Dialog.Header><Dialog.Title>Leave a comment on this screen</Dialog.Title>
+            <Dialog.Description>Saved with the case — the team reads these via <code>facty feedback list</code>.</Dialog.Description></Dialog.Header>
+          <Textarea bind:value={commentText} placeholder="what's confusing, missing, or wrong here?" rows={4} />
+          <Dialog.Footer>
+            <Button size="sm" disabled={!commentText.trim()}
+                    onclick={() => { ui.addFeedback(commentText, `case:${ui.case} surface:${ui.surface}`); commentText = ""; commentOpen = false; }}>
+              save comment
+            </Button>
+          </Dialog.Footer>
+        </Dialog.Content>
+      </Dialog.Root>
     </header>
 
     {#if ui.intent}
@@ -106,7 +144,10 @@
       </div>
     {/if}
     {#if ui.error}
-      <div class="border-b bg-destructive/10 px-4 py-1.5 text-sm text-destructive">error: {ui.error}</div>
+      <div class="border-b bg-destructive/10 px-4 py-1.5 text-sm text-destructive">Something went wrong: {ui.error}</div>
+    {/if}
+    {#if ui.notice}
+      <div class="border-b bg-primary/10 px-4 py-1.5 text-sm">{ui.notice}</div>
     {/if}
 
     <main class="grid grid-cols-1 gap-3 p-4 lg:grid-cols-2">

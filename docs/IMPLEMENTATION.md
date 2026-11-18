@@ -247,6 +247,14 @@ per-step modes and per-turn surface.
   `tests/test_turn.py` (modes, choice recording, enforcement, cross-branch
   replay determinism). `scripts/demo-ui.sh --check` drives the pipeline
   headless (stops at the ranked answer, then completes with the recorded pick).
+- **In-UI feedback channel — done 2026-11-17.** `Feedback` docs (schema) +
+  `ops.feedback_add`/`feedback_list` + `facty feedback add|list` +
+  `POST/GET /api/feedback` + MCP `feedback_add`/`feedback_list`. The Web UI
+  header has a comment button (badge = count) anchored to the current
+  case/surface; comments commit to the case branch and are read with
+  `./facty feedback list --case <id>`. Also: a "what am I looking at?" help
+  dialog in plain language (rings = Proven / Open / Anomalies, graph, wizard
+  vs chat, packet, timeline) and friendlier error/notice banners.
 - **facty MCP server — done 2026-11-17.** `src/facty/mcp_server.py` + `facty mcp`:
   MCP over stdio implemented in **stdlib only** (newline-delimited JSON-RPC 2.0;
   spec 2025-06-18 verified + logged in deps-log) so it runs in the SmolVM image

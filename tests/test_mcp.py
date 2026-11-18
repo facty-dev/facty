@@ -138,6 +138,20 @@ def test_query_op_read_only_guard(scratch_db):
             ops.query(Client(db="facty-mcptest"), "q1", bad)
 
 
+def test_feedback_roundtrip(scratch_db):
+    """The comment channel: add commits a Feedback doc; list reads it back;
+    same content → same deterministic id (idempotent replay)."""
+    mcp_server.call_tool("case_init", {"case_id": "fb1", "bundle_dir": str(BUNDLE)})
+    d1 = mcp_server.call_tool("feedback_add", {"case": "fb1", "text": "graph is confusing",
+                                               "screen": "hypothesis-graph", "author": "marisol"})
+    d2 = mcp_server.call_tool("feedback_add", {"case": "fb1", "text": "graph is confusing",
+                                               "screen": "hypothesis-graph", "author": "marisol"})
+    assert d1["id"] == d2["id"], "feedback id must be content-deterministic"
+    r = mcp_server.call_tool("feedback_list", {"case": "fb1"})
+    assert len(r["feedback"]) == 1 and r["feedback"][0]["text"] == "graph is confusing"
+    assert r["feedback"][0]["scope"] == "fb1"
+
+
 def test_tools_call_case_flow(scratch_db, monkeypatch):
     # hermetic: never a live LLM call, even if a free-mode step is reached
     monkeypatch.setattr("facty.sensing.sense_json",
