@@ -42,29 +42,67 @@ flowchart LR
     E --> F[Analyst feedback] --> B
 ```
 
-## Current architecture (technical readers)
+## Execution model (technical readers)
 
-One store, one engine, one signed artifact kind. Everything runs headless via
-the `facty` CLI (Typer); TerminusDB v12.1 is the single database — schema
-enforced at every write, and its branch/commit history **is** the audit trail.
+One store, one engine, one signed artifact kind, **one op layer**. TerminusDB
+v12.1 is the single database — schema enforced at every write, and its
+branch/commit history **is** the audit trail. Every facty operation exists
+exactly once in [`src/facty/ops.py`](src/facty/ops.py); all surfaces are thin
+clients of it, so they can never diverge (parity by construction, ADR-0010 §4).
+
+```mermaid
+flowchart TB
+    subgraph VM["SmolVM image — the one portable artifact (ADR-0005)"]
+      subgraph SURF["Surfaces — thin clients, no op logic"]
+        CLI["facty CLI<br/>(headless: Dagster / CI driver)"]
+        UI["Web UI<br/>web/ via facty serve :8080"]
+        HARN["LLM harness<br/>Vibe CLI / any MCP client"]
+      end
+      OPS["ops.py — the ONE op layer<br/>case · ingest · sense · run · turn<br/>interview · prove · query · …"]
+      TDB[("TerminusDB case branch<br/>schema gate · WOQL engine<br/>commits = audit · replay")]
+    end
+    CLI --> OPS
+    UI -->|HTTP/JSON + SSE| OPS
+    HARN -.->|MCP stdio — facty mcp + TDB MCP| OPS
+    OPS <-->|docs + read-only WOQL| TDB
+    B["bundles/ signed v2<br/>manifest + Ed25519"] -->|verify gate| OPS
+```
+
+Reads vs writes (the ratchet): the LLM's tightest read surface is the
+**read-only WOQL passthrough** (`facty query`, `/api/query`, MCP `query` —
+write operators in the AST are rejected). **All writes** go through gated ops
+that commit typed artifacts with `confidence`+`source`, or signed bundles —
+LLM output becomes knowledge only at a gate, never by direct mutation.
+
+## Data flow & the turn model
+
+Evidence in, verdict out — and every step of the run is a committed **turn**
+with an explicit determinism mode (ADR-0010 §3):
 
 ```mermaid
 flowchart LR
-    subgraph HOST[Facty CLI — facty case/ingest/sense/run/search]
-      ING[ingest: SHA-256 object store<br/>+ custody + parsers]
-      SEN[sense / extract: pydantic-ai<br/>typed output, BYO-key, cached]
-      ENG[engine: WOQL rule compiler<br/>chain → prune → rank → verdict]
-    end
-    TDB[(TerminusDB v12.1<br/>case = branch · commits = trace<br/>+ versioned semantic index)]
-    OBJ[(.facty/objects<br/>content-addressed originals)]
-    VM[SmolVM sandbox<br/>codemode: LLM-written code runs here]
-    ING --> OBJ
-    ING --> TDB
-    SEN --> TDB
-    ENG <--> TDB
-    SEN -. codemode .-> VM
-    B[bundles/ signed v2<br/>manifest + Ed25519 sig] -->|verify gate| ENG
+    ING["ingest<br/>Original + custody +<br/>ExtractedText + chunks"]
+    SEN["sense — mode: free<br/>pydantic-ai typed, cached"]
+    FACT["Fact docs<br/>confidence + source"]
+    ENG["engine run — mode: deterministic<br/>chain → prune → rank"]
+    OUT["Verdict + Derivation trace<br/>+ AssembledDocument"]
+    Q["OpenQuestion → questionnaire<br/>interview graph / wizard<br/>answer — mode: ranked"]
+    ING --> SEN --> FACT --> ENG --> OUT
+    ENG -.->|gap analysis| Q
+    Q -.->|slot fill, pick recorded| FACT
 ```
+
+| Turn mode | Who acts | Replay |
+|---|---|---|
+| `deterministic` | rules engine over committed state — verdict-path turns are **always** this (ADR-0003) | byte-identical from the branch |
+| `ranked` | engine produces the ranked option set (e.g. open questions); human/LLM picks within it; pick recorded in the `Turn` doc | same options + recorded pick |
+| `free` | LLM sensing only (facts carry confidence+source) | from the disk cache (`FACTY_SENSE=cache`) |
+
+The questionnaire loop itself is a typed pydantic-graph
+([`src/facty/interview.py`](src/facty/interview.py)): gap analysis → ask →
+slot-fill → engine run → assemble — no ReAct, no LLM-as-judge; the LLM may act
+only in the designated answer-pick node, and every node still commits its
+`Turn` doc to the branch (TerminusDB stays the system of record).
 
 Determinism contract: the verdict path (engine) never calls an LLM, a clock, or
 a random source — same committed graph state → byte-identical verdict (asserted
@@ -72,38 +110,8 @@ by `./facty selftest`). Semantic search (embeddings) is used on the sensing
 side and, logged and recorded, for contradiction candidates in the trace — it
 never decides anything by itself (ADR-0008/0009).
 
-## The case loop
-
-New facts don't just add conclusions — they open questions: *what else should
-I check? what evidence is missing?* The engine keeps a list of open slots and
-the senses go fill them. Its favorite trick is cutting the strings that
-don't survive the evidence — the Pepe Silvias, the connections with
-nothing behind them.
-
-```mermaid
-flowchart LR
-    A[Facts] --> B[Forward chain<br/>derive facts + open questions]
-    B --> C[Hypotheses<br/>who/what explains it]
-    C --> D[Constraints<br/>prune + rank]
-    D --> E[Verdict + trace]
-    D -.->|test needed| F[LLM: propose + collect evidence] --> A
-```
-
-## Agents
-
-Plan / decide / code agents work the case. Each can call both halves, and
-they all speak one shared language: the case artifacts (facts, rules,
-hypotheses, questions) — the same objects whether they live in files today or
-database rows later.
-
-```mermaid
-flowchart LR
-    A[Plan / Decide / Code agents] --> B[Symbolic tools<br/>rules + constraints]
-    A --> C[Probabilistic tools<br/>LLM sensing + proposals]
-    B --> D[Case artifacts<br/>one common protocol]
-    C --> D
-    D --> E[Audit trail] --> F[Human review gate]
-```
+Agents (the pack factory: plan/decide/code roles) drive the same op layer
+through the harness plane — see [docs/AGENTIC-RUNTIME.md](docs/AGENTIC-RUNTIME.md).
 
 ## Domains are bundles
 
