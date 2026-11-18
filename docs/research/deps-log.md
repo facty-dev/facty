@@ -438,3 +438,17 @@ the SmolVM image with no PyPI at runtime; spawned via `facty mcp`):
 - Parity registry: `TOOLS[*].serve` maps every MCP tool onto its `facty serve`
   path; `tests/test_mcp.py` asserts the serve op registry (`serve.POST_OPS` /
   `GET_OPS`, minus SSE `watch` and meta `ops`) is exactly covered by MCP tools.
+
+## SWI-Prolog inside the TerminusDB image — live-verified 2026-11-17 (ADR-0012)
+
+- `docker exec <terminusdb-container> swipl --version` → **SWI-Prolog 10.0.2
+  (aarch64-linux)** at `/usr/bin/swipl`. The terminusdb-server is itself a
+  SWI-Prolog saved state, so the image ships the exact runtime the server uses.
+- Consequence: a Prolog-dialect translator can run in-image via
+  `swipl -l <module>.pl` with **zero new dependencies** — "the same thing
+  Terminus itself uses" is literally available as a binary.
+- Caveat (already logged in the v12 entry): the server exposes no Prolog-source
+  query endpoint — WOQL enters as JSON AST (or GraphQL); Prolog unification
+  appears only in variable binding. So a Prolog dialect must be *compiled* to
+  WOQL JSON, never executed directly by the server. Design recorded in
+  ADR-0012.

@@ -90,6 +90,15 @@ builder (`woql.py`) → server-side validation at bind time. Dialect errors are
 impossible by construction; retry loops exist only for sensing semantics, never
 for query syntax.
 
+LLMs write SWI-Prolog text better than WOQL JSON (training-data abundance), so
+[ADR-0012](adr/0012-prolog-authoring-dialect.md) adds an optional **Prolog
+authoring dialect** for bundle authoring and chat mode: a restricted stratified
+subset, compiled to WOQL JSON by a Prolog module run on the SWI-Prolog 10.0.2
+binary shipped inside the TerminusDB image (same runtime as the server —
+verified, deps-log). WOQL JSON-LD remains the only stored/executed form; all
+external APIs (`facty serve`, MCP) stay JSON. Nothing uncompiled ever reaches
+the verdict path.
+
 ## Triadic glue roadmap (ADR-0010, proposed 2026-11-17)
 
 Planned components — none exist yet; this section is the spec, not a layout.
@@ -179,7 +188,11 @@ per-step modes and per-turn surface.
   framework-agnostic asset functions (`Original → ExtractedText → EvidenceChunk
   → Fact`) over a TDB resource with a commit per materialization, per-case
   pipeline config executed by a headless runner without Dagster, `dagster-mcp`
-  baked into the OCI image, CLI as headless driver inside Dagster/CI.
+  baked into the OCI image, CLI as headless driver inside Dagster/CI. Plus the
+  [ADR-0012](adr/0012-prolog-authoring-dialect.md) Prolog authoring dialect:
+  a `swipl`-module translator (in-image SWI-Prolog 10.0.2) from a restricted
+  stratified Prolog subset to WOQL JSON, with round-trip tests — authoring/chat
+  surface only, never stored or executed directly.
 
 **Slice 3 — providers, auth, scale.** Model provider registry (BYO
 open-weight, local in-VM serving, non-US via allow-list + host-secret);
