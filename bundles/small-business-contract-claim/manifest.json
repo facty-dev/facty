@@ -1,6 +1,6 @@
 {
   "contents": {
-    "bundle.json": "d7c18e0c3695006dbc8b5379b39879f8d600b67425fcbb89369d38e0ee4b5866",
+    "bundle.json": "9b371f2275d3aad6d892cdddc12f9f1ebbcec0ce644940a9118a89146e9f3861",
     "evidence/contract.txt": "3d167c9c908c6151b277264e632f07416ff77a6f08d0264ea857d73e0c6ccfb8",
     "evidence/delivery-receipt.txt": "4e8892d313c033bb008a6b939121281bf29558e1fe50490352f1fc11ccc245ac",
     "evidence/email-thread.eml": "728c2ba041e2c2d4b047bbd654939e5c739f7263c4a9d112166fb9d8971eadc4",
@@ -12,7 +12,7 @@
     "pack/rules.json": "9465ee85f51c34be4b73fa4d13f9ce9112098ef592b1af655936c4f0edbdab18",
     "pack/snippets.json": "b67d1d36bcc8dec4a3745ff1ec9dbdc56382008ef3ae5869adf9e592411acd90"
   },
-  "created": "2026-11-17T16:16:41+00:00",
+  "created": "2026-11-18T00:48:51+00:00",
   "engine": {
     "name": "facty",
     "version": "0.2.0"

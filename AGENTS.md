@@ -55,6 +55,8 @@ three projections (git JSON files now, JSONB rows later, codegen TS/Datalog):
 | Constraint | `{id, type: eliminate\|support, hypothesis, when:[conds], reason}` | `cases/<case>/pack/constraints.json` |
 | Question | `{id, text, slot, mandatory, status, raisedBy, discriminates}` | opened by the engine, filled by the senses |
 | Derivation | lineage edge `fact ← rule ← facts` | the trace (engine output) |
+| Pipeline/Step | signed per-case step config `{id, steps:[{id, op, mode, surface, order, params}]}` on the case branch | the turn dispatcher's plan (ADR-0010 §3) |
+| Turn | `{id, case, pipeline, step, op, mode, surface, actor, inputCommit, options?, choice?, outputCommit}` | per-turn audit record — replay = branch + `FACTY_SENSE=cache` |
 
 Schema: `src/facty/schema.py` (the artifact model as a TerminusDB ontology —
 schema = ontology, enforced on every write).
@@ -128,6 +130,9 @@ schema = ontology, enforced on every write).
 ./facty extract <file> --out f.json --bundle <dir>  # codemode: LLM writes extractor, sandbox runs it (induction only)
 ./facty load-facts <file>    # insert fact docs
 ./facty run <case> --phase 1 --ref <branch>   # deterministic verdict on a branch
+./facty turn <case> [--all] [--choice q --value v]  # turn dispatcher: next signed-pipeline step under its mode (ADR-0010 §3); commits a Turn doc
+./facty mcp                  # facty MCP server over stdio — one tool per `facty serve` case op (parity, ADR-0010 §4)
+./facty serve [--port 8080]  # the one HTTP/JSON gateway + SSE watch + Web UI (web/dist); UI and CLI are both clients of it
 ./facty verdict|log|metrics  # inspect outputs, audit trail, LLM latency/tokens
 ./facty sense <dir> --out f.json             # live LLM sensing (pydantic-ai)
 # e2e demo: make e2e / make e2e-live   (scripts/e2e.sh [--live], bundles/insurance-claim-fraud)

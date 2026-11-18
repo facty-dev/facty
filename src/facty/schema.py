@@ -199,4 +199,31 @@ SCHEMA: list[dict] = [
      "format": "xsd:string", "content": "xsd:string", "snippets": STR_SET,
      "verdict": OPT_STR, "sha256": "xsd:string",
      "@key": {"@type": "Hash", "@fields": ["id"]}},
+    # ── turn dispatcher (ADR-0010 §3: per-turn determinism modes) ────────────
+    # Step: one step of a signed pipeline config (lives in the bundle's
+    # bundle.json → arrives signature-covered on the case branch).
+    #   op:    ingest | load-facts | sense | run | prove | assemble | answer
+    #   mode:  deterministic | ranked | free   (STEP_MODES in turn.py enforces
+    #          which op may carry which mode — verdict-path ops are always
+    #          deterministic, ADR-0003)
+    #   params: optional JSON-object string (op arguments: phase, path, dir, …)
+    {"@type": "Class", "@id": "Step", "@subdocument": [],
+     "@key": {"@type": "Random"},
+     "id": "xsd:string", "name": OPT_STR, "op": "xsd:string",
+     "mode": "xsd:string", "surface": OPT_STR, "order": "xsd:integer",
+     "params": OPT_STR},
+    # Pipeline: signed per-case step config, a top-level doc on the case branch.
+    {"@type": "Class", "@id": "Pipeline",
+     "id": "xsd:string", "case": OPT_STR, "pack": "xsd:string", "version": "xsd:string",
+     "name": OPT_STR,
+     "steps": {"@type": "Set", "@class": "Step"},
+     "@key": {"@type": "Hash", "@fields": ["id"]}},
+    # Turn: the per-turn audit record — {mode, inputCommit, options?, choice?,
+    # outputCommit} plus surface + actor. Replay = branch + FACTY_SENSE=cache.
+    {"@type": "Class", "@id": "Turn",
+     "id": "xsd:string", "case": "xsd:string", "pipeline": "xsd:string", "step": "xsd:string",
+     "op": "xsd:string", "mode": "xsd:string", "surface": OPT_STR, "actor": OPT_STR,
+     "inputCommit": OPT_STR, "outputCommit": OPT_STR,
+     "options": STR_SET, "choice": OPT_STR,
+     "@key": {"@type": "Hash", "@fields": ["id"]}},
 ]

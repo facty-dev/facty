@@ -23,6 +23,8 @@ class UI {
   }
   get ranking() { return (this.verdict?.ranking || []).slice().sort((a, b) => b.score - a.score); }
   get openQuestions() { return this.byType("OpenQuestion").filter((q) => q.status === "open"); }
+  get turns() { return this.byType("Turn"); }              // per-turn audit: mode/surface/actor
+  get pipeline() { return this.byType("Pipeline")[0] || null; }
 
   slotFilled(slot) {
     return this.byType("Fact").some(

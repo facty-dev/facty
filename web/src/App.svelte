@@ -6,7 +6,7 @@
   import { Badge } from "$lib/components/ui/badge/index.js";
   import { Separator } from "$lib/components/ui/separator/index.js";
   import { Card, CardContent, CardHeader, CardTitle } from "$lib/components/ui/card/index.js";
-  import { Play, Hammer, Sun, Moon, ListChecks, MessagesSquare, Search } from "@lucide/svelte";
+  import { Play, Hammer, Sun, Moon, ListChecks, MessagesSquare, Search, StepForward } from "@lucide/svelte";
   import { ui } from "./lib/store.svelte.js";
   import * as api from "./lib/api.js";
   import Bullseye from "./lib/Bullseye.svelte";
@@ -93,6 +93,9 @@
         <MessagesSquare class="size-4" /> chat
       </Button>
       <Button variant="outline" size="sm" onclick={() => ui.op(api.run, ui.case)}><Play class="size-4" /> run engine</Button>
+      <Button variant="outline" size="sm" onclick={() => ui.op(api.turn, ui.case, { all: true, surface: ui.surface })}>
+        <StepForward class="size-4" /> next turn
+      </Button>
       <Button size="sm" onclick={() => ui.op(api.assemble, ui.case)}><Hammer class="size-4" /> assemble</Button>
     </header>
 

@@ -21,3 +21,4 @@ export const answer = (c, question, value) => api("/api/answer", { case: c, ques
 export const ingest = (c, dir, source = "ui") => api("/api/ingest", { case: c, dir, source });
 export const loadFacts = (c, path) => api("/api/load-facts", { case: c, path });
 export const caseInit = (id, bundle) => api("/api/case/init", { id, bundle });
+export const turn = (c, opts = {}) => api("/api/turn", { case: c, ...opts });

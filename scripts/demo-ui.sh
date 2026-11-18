@@ -49,13 +49,25 @@ step "backward proof"
 step "deterministic assembly"
 "$FACTY" assemble "$CASE" --ref "$BR" | head -3
 
+step "turn dispatcher (ADR-0010 §3): signed pipeline, per-turn determinism modes"
+T1="$("$FACTY" turn "$CASE" --all)"
+echo "$T1" | grep -q '"awaiting": "choice"' || { echo "FAIL: ranked step should await a choice"; exit 1; }
+CHOICE="$(printf '%s' "$T1" | .venv/bin/python -c 'import json,sys; print(json.load(sys.stdin)["options"][0])')"
+echo "  ranked options offered by the engine, top pick: $CHOICE"
+T2="$("$FACTY" turn "$CASE" --choice "$CHOICE" --value true --all)"
+echo "$T2" | grep -q '"done": true' || { echo "FAIL: turn --all should complete"; exit 1; }
+echo "$T2" | grep -q '"mode": "ranked"' || { echo "FAIL: ranked turn not recorded"; exit 1; }
+
 step "serve API smoke (same ops the UI calls)"
 "$FACTY" serve --port "$PORT" >/tmp/facty-serve.log 2>&1 &
 SRV=$!
 trap 'kill $SRV 2>/dev/null || true' EXIT
 sleep 2
 curl -sf "http://127.0.0.1:$PORT/api/cases" | grep -q "$CASE" || { echo "FAIL: cases"; exit 1; }
+curl -sf "http://127.0.0.1:$PORT/api/ops" | grep -q '"turn"' || { echo "FAIL: ops registry"; exit 1; }
+curl -sf -X POST -H 'Content-Type: application/json' -d "{\"case\":\"$CASE\"}" "http://127.0.0.1:$PORT/api/turn" | grep -q '"done": true' || { echo "FAIL: /api/turn"; exit 1; }
 curl -sf "http://127.0.0.1:$PORT/api/state?case=$CASE" | grep -q AssembledDocument || { echo "FAIL: state"; exit 1; }
+curl -sf "http://127.0.0.1:$PORT/api/state?case=$CASE" | grep -q '"@type": "Turn"' || { echo "FAIL: state has no Turn docs"; exit 1; }
 curl -sf -N --max-time 2 "http://127.0.0.1:$PORT/api/watch?case=$CASE" | grep -q "event: state" || { echo "FAIL: SSE"; exit 1; }
 curl -sf "http://127.0.0.1:$PORT/" | grep -q "<div id=\"app\">" || { echo "FAIL: UI not served"; exit 1; }
 

@@ -26,6 +26,7 @@ import typer
 from . import bundle as bundle_mod
 from . import cases as cases_mod
 from . import codemode, engine, ingest, keys, rules, sandbox, search, sensing, serve as serve_mod
+from . import turn as turn_mod
 from .client import Client, TerminusError
 
 app = typer.Typer(
@@ -417,6 +418,34 @@ def answer_cmd(case: Annotated[str, typer.Argument()],
             pass
     doc = engine.answer_question(c, question, value)
     typer.echo(json.dumps(doc, indent=2, default=str))
+
+
+@app.command("turn")
+def turn_cmd(case: Annotated[str, typer.Argument()],
+             pipeline: Annotated[Optional[str], typer.Option("--pipeline", help="pipeline doc id (default: first on the case branch)")] = None,
+             choice: Annotated[Optional[str], typer.Option("--choice", help="ranked pick — must be within the engine's option set")] = None,
+             value: Annotated[Optional[str], typer.Option("--value", help="value for an answer turn")] = None,
+             surface: Annotated[Optional[str], typer.Option("--surface", help="chat | wizard — recorded on the Turn doc")] = None,
+             actor: Annotated[str, typer.Option("--actor", help="human | llm | pipeline — who made the pick")] = "human",
+             all: Annotated[bool, typer.Option("--all", help="run until done or a ranked step awaits a choice")] = False,
+             ref: OptRef = None):
+    """Turn dispatcher (ADR-0010 §3): execute the next step of the case's signed
+    pipeline config under its determinism mode (deterministic | ranked | free);
+    commits one Turn doc per turn. Verdict-path steps are always deterministic."""
+    c = _client(ref)
+    c.ref = cases_mod._slug(case)
+    r = turn_mod.run_turn(c, case, pipeline_id=pipeline, choice=choice, value=value,
+                          surface=surface, actor=actor, run_all=all)
+    typer.echo(json.dumps(r, indent=2, default=str))
+
+
+@app.command("mcp")
+def mcp_cmd():
+    """Run the facty MCP server (MCP over stdio, stdlib JSON-RPC): one tool per
+    `facty serve` case op, so machine loops and the human harness call the same
+    interfaces (ADR-0010 §4.2). A harness spawns this as a subprocess."""
+    from . import mcp_server
+    mcp_server.serve_stdio()
 
 
 @app.command("serve")

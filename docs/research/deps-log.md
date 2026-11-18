@@ -411,3 +411,30 @@ Facts that touch our code/config:
 - **Our repo settings** (`.vibe/config.toml`): ONE `[[models]]` entry — `name = "mistral-large-4-0"` (the catalogue id; a valid API id), `alias = "facty-large"` (= `active_model`), `thinking = "high"`, `max_context_length = 1048576`, `auto_compact_threshold = 800000`. The map is keyed by alias, so the routed row `mistral-large-4-0-3` keeps Mistral's own 400k threshold if picked manually — accepted, CLI users are devs. The alias exists as the project's stable default name, decoupled from Mistral's dated routed aliases. Verified via the export pattern: `facty-large` → session runtime-state `context_window: 1048576, compaction_threshold: 800000`, no warnings.
 - **Machine loops don't read vibe config at all**: pydantic-ai takes the model from code (`mistral:` + `FACTY_MODEL`, default `mistral-large-4`) and per-request settings from `model_settings` — `MistralModelSettings` (pydantic-ai 2.63.0) supports `thinking: bool | 'minimal'|'low'|'medium'|'high'|'xhigh'|'max'`; `src/facty/sensing.py` pins `FACTY_THINKING` (default `"low"`). Only the `vibe -p` fallback backend (`FACTY_SENSE_BACKEND=vibe`) uses the project config, via the `sensing` agent profile (`thinking = "low"` pinned there).
 - Env overrides: any setting via `VIBE_` prefix (e.g. `VIBE_ACTIVE_MODEL=facty-large` — used by the sensing fallback).
+
+## MCP (Model Context Protocol) — spec 2025-06-18, implemented by hand in stdlib
+
+Sources read (2026-11-17, via firecrawl scrape of modelcontextprotocol.io):
+- `/specification/2025-06-18/basic/transports` — **stdio transport**: client spawns
+  the server as a subprocess; JSON-RPC 2.0 messages on stdin/stdout, **delimited by
+  newlines, MUST NOT contain embedded newlines**.
+- `/specification/2025-06-18/basic/lifecycle` — `initialize` request → response
+  `{protocolVersion, capabilities, serverInfo}` (server answers with a version it
+  supports if the requested one is unknown); `notifications/initialized` gets **no
+  response**; `ping` → `{}`.
+- `/specification/2025-06-18/server/tools` — `tools/list` →
+  `{tools: [{name, description, inputSchema (JSON Schema, required)}]}`;
+  `tools/call {name, arguments}` → result `{content: [{type:"text", text}],
+  structuredContent?, isError?}` — **tool execution errors are results with
+  `isError: true`, not protocol errors**; unknown method → JSON-RPC `-32601`.
+
+Facts that touch our code (`src/facty/mcp_server.py`, stdlib-only so it runs in
+the SmolVM image with no PyPI at runtime; spawned via `facty mcp`):
+- One newline-delimited JSON-RPC loop on stdin/stdout; non-JSON lines ignored;
+  notifications (no `id`) never answered.
+- `initialize` echoes the client's `protocolVersion` if in
+  `["2024-11-05","2025-03-26","2025-06-18","2025-11-25"]`, else answers `2025-06-18`.
+- `tools/call` wraps `call_tool()`; exceptions → `isError: true` result.
+- Parity registry: `TOOLS[*].serve` maps every MCP tool onto its `facty serve`
+  path; `tests/test_mcp.py` asserts the serve op registry (`serve.POST_OPS` /
+  `GET_OPS`, minus SSE `watch` and meta `ops`) is exactly covered by MCP tools.

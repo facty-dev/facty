@@ -551,5 +551,123 @@
       }
     ],
     "body": "\n## BLOCKED\n\nThis assembly path targets an individual employee. Facty's ethics guard prunes any claim against workers \u2014 this document is never produced.\n"
+  },
+  {
+    "@type": "Pipeline",
+    "id": "assembly-unpaid-invoice",
+    "pack": "small-business-contract-claim",
+    "version": "1.0.0",
+    "name": "Unpaid-invoice demand packet (offline replay)",
+    "steps": [
+      {
+        "@type": "Step",
+        "id": "s1-load",
+        "name": "Load sensed facts (cache replay)",
+        "op": "load-facts",
+        "mode": "deterministic",
+        "surface": "wizard",
+        "order": 1,
+        "params": "{\"path\": \"bundles/small-business-contract-claim/fixtures/facts-initial.json\", \"message\": \"phase 1 sensed facts (turn)\"}"
+      },
+      {
+        "@type": "Step",
+        "id": "s2-run-1",
+        "name": "Run phase 1: chain \u2192 prune \u2192 rank",
+        "op": "run",
+        "mode": "deterministic",
+        "surface": "wizard",
+        "order": 2,
+        "params": "{\"phase\": \"1\"}"
+      },
+      {
+        "@type": "Step",
+        "id": "s3-answer",
+        "name": "Answer the top open question (slot filling)",
+        "op": "answer",
+        "mode": "ranked",
+        "surface": "wizard",
+        "order": 3,
+        "params": "{}"
+      },
+      {
+        "@type": "Step",
+        "id": "s4-run-2",
+        "name": "Run phase 2 with the answer",
+        "op": "run",
+        "mode": "deterministic",
+        "surface": "wizard",
+        "order": 4,
+        "params": "{\"phase\": \"2\"}"
+      },
+      {
+        "@type": "Step",
+        "id": "s5-assemble",
+        "name": "Assemble the demand packet",
+        "op": "assemble",
+        "mode": "deterministic",
+        "surface": "wizard",
+        "order": 5,
+        "params": "{}"
+      }
+    ]
+  },
+  {
+    "@type": "Pipeline",
+    "id": "assembly-unpaid-invoice-live",
+    "pack": "small-business-contract-claim",
+    "version": "1.0.0",
+    "name": "Unpaid-invoice demand packet (live LLM sensing first)",
+    "steps": [
+      {
+        "@type": "Step",
+        "id": "s1-sense",
+        "name": "Sense facts from the ingested evidence (LLM, cached)",
+        "op": "sense",
+        "mode": "free",
+        "surface": "chat",
+        "order": 1,
+        "params": "{}"
+      },
+      {
+        "@type": "Step",
+        "id": "s2-run-1",
+        "name": "Run phase 1: chain \u2192 prune \u2192 rank",
+        "op": "run",
+        "mode": "deterministic",
+        "surface": "wizard",
+        "order": 2,
+        "params": "{\"phase\": \"1\"}"
+      },
+      {
+        "@type": "Step",
+        "id": "s3-answer",
+        "name": "Answer the top open question (slot filling)",
+        "op": "answer",
+        "mode": "ranked",
+        "surface": "wizard",
+        "order": 3,
+        "params": "{}"
+      },
+      {
+        "@type": "Step",
+        "id": "s4-run-2",
+        "name": "Run phase 2 with the answer",
+        "op": "run",
+        "mode": "deterministic",
+        "surface": "wizard",
+        "order": 4,
+        "params": "{\"phase\": \"2\"}"
+      },
+      {
+        "@type": "Step",
+        "id": "s5-assemble",
+        "name": "Assemble the demand packet",
+        "op": "assemble",
+        "mode": "deterministic",
+        "surface": "wizard",
+        "order": 5,
+        "params": "{}"
+      }
+    ]
   }
 ]

@@ -151,6 +151,36 @@ headless driver inside Dagster/CI, `dagster-mcp` + TerminusDB built-in MCP +
 facty MCP server over stdio in the VM, turn dispatcher + `Turn` docs with
 per-step modes and per-turn surface.
 
+- **Turn dispatcher — done 2026-11-17.** `src/facty/turn.py`: schema gained
+  `Step`/`Pipeline`/`Turn`; pipeline config is a signed doc (lives in the
+  bundle's `bundle.json`, arrives signature-covered on the case branch; the
+  demo bundle carries `assembly-unpaid-invoice` + `-live` pipelines). `facty
+  turn <case> [--pipeline …] [--choice …] [--value …] [--surface chat|wizard]
+  [--actor human|llm|pipeline] [--all]` executes the next un-executed step and
+  commits a `Turn` doc `{mode, inputCommit, options?, choice?, outputCommit,
+  surface, actor}`. Mode map enforced (`STEP_MODES`): verdict-path ops
+  (run/prove/assemble) are **always deterministic** (ADR-0003), `ranked` only
+  fills slots (answer — engine's ranked option set, pick recorded), `free`
+  only senses/ingests. Default = first pipeline on the branch. Same op behind
+  CLI + `/api/turn` + MCP `turn` tool; Web UI header has "next turn" and the
+  timeline renders Turn docs with mode/surface/actor badges. Tests:
+  `tests/test_turn.py` (modes, choice recording, enforcement, cross-branch
+  replay determinism). `scripts/demo-ui.sh --check` drives the pipeline
+  headless (stops at the ranked answer, then completes with the recorded pick).
+- **facty MCP server — done 2026-11-17.** `src/facty/mcp_server.py` + `facty mcp`:
+  MCP over stdio implemented in **stdlib only** (newline-delimited JSON-RPC 2.0;
+  spec 2025-06-18 verified + logged in deps-log) so it runs in the SmolVM image
+  with no PyPI at runtime. One tool per `facty serve` case op — the parity
+  registry (`serve.POST_OPS`/`GET_OPS` ↔ `mcp_server.TOOLS[*].serve`, asserted
+  by `tests/test_mcp.py`, incl. a real stdio subprocess handshake). TerminusDB's
+  built-in MCP plugin covers DB-level ops; `dagster-mcp` covers the evidence
+  plane once Slice 2's Dagster part lands.
+- **Remaining in Slice 2:** the Dagster evidence plane itself —
+  framework-agnostic asset functions (`Original → ExtractedText → EvidenceChunk
+  → Fact`) over a TDB resource with a commit per materialization, per-case
+  pipeline config executed by a headless runner without Dagster, `dagster-mcp`
+  baked into the OCI image, CLI as headless driver inside Dagster/CI.
+
 **Slice 3 — providers, auth, scale.** Model provider registry (BYO
 open-weight, local in-VM serving, non-US via allow-list + host-secret);
 multi-user auth/IAM if the served shape is pursued; TrustGraph re-evaluation

@@ -37,13 +37,21 @@ from . import engine, ingest
 REPO = Path(__file__).resolve().parents[2]
 WEB_DIST = REPO / "web" / "dist"
 
+# The op registry — one op set behind CLI / `facty serve` / MCP (parity by
+# construction, ADR-0010 §4). `/api/ops` exposes it; the MCP server maps its
+# tool names onto these.
+POST_OPS = ["case/init", "case/show", "case/branch", "case/delete", "ingest",
+            "load-facts", "sense", "run", "prove", "assemble", "answer", "turn",
+            "search"]
+GET_OPS = ["cases", "state", "log", "watch", "ops", "verdict"]
+
 
 def _state(client, case: str) -> dict:
     client.ref = cases_mod._slug(case)
     docs = client.get_all_docs()
     keep = ("Fact", "Hypothesis", "Constraint", "OpenQuestion", "Derivation",
             "Verdict", "Goal", "Snippet", "AssembledDocument", "Case",
-            "Original", "Quarantine", "ExtractedText")
+            "Original", "Quarantine", "ExtractedText", "Pipeline", "Turn")
     return {"case": case, "branch": client.ref,
             "docs": [d for d in docs if d.get("@type") in keep]}
 
@@ -79,6 +87,19 @@ def make_handler(get_client):
             q = parse_qs(u.query)
             if u.path == "/api/cases":
                 return self._json({"cases": cases_mod.case_list(get_client())})
+            if u.path == "/api/ops":
+                return self._json({"post": POST_OPS, "get": GET_OPS})
+            if u.path == "/api/verdict":
+                c = get_client()
+                if q.get("case"):
+                    c.ref = cases_mod._slug(q["case"][0])
+                from .cli import _strip_ids
+                vs = [d for d in c.get_all_docs() if d.get("@type") == "Verdict"]
+                vs = _strip_ids(sorted(vs, key=lambda d: d["id"]))
+                for v in vs:
+                    if isinstance(v.get("ranking"), list):
+                        v["ranking"] = sorted(v["ranking"], key=lambda r: str(r.get("hypothesis")))
+                return self._json({"verdicts": vs})
             if u.path == "/api/state":
                 case = q["case"][0]
                 return self._json(_state(get_client(), case))
@@ -97,6 +118,12 @@ def make_handler(get_client):
                     c = get_client()
                     r = cases_mod.case_init(c, b["id"], b["bundle"])
                     return self._json(r)
+                if u.path == "/api/case/show":
+                    return self._json(cases_mod.case_show(get_client(), b["case"]))
+                if u.path == "/api/case/branch":
+                    return self._json(cases_mod.case_branch(get_client(), b["case"], b["name"]))
+                if u.path == "/api/case/delete":
+                    return self._json(cases_mod.case_delete(get_client(), b["case"]))
                 if u.path == "/api/ingest":
                     c = self._case_client(b["case"])
                     s = ingest.ingest_dir(c, Path(b["dir"]), b.get("source", "ui"),
@@ -157,6 +184,19 @@ def make_handler(get_client):
                 if u.path == "/api/answer":
                     c = self._case_client(b["case"])
                     return self._json(engine.answer_question(c, b["question"], b["value"]))
+                if u.path == "/api/turn":
+                    from . import turn as turn_mod
+                    c = self._case_client(b["case"])
+                    r = turn_mod.run_turn(c, b["case"], pipeline_id=b.get("pipeline"),
+                                          choice=b.get("choice"), value=b.get("value"),
+                                          surface=b.get("surface"), actor=b.get("actor", "human"),
+                                          run_all=b.get("all", False))
+                    return self._json(r)
+                if u.path == "/api/search":
+                    from . import search as search_mod
+                    c = self._case_client(b["case"])
+                    return self._json({"hits": search_mod.search_case(
+                        c, b["query"], top_k=b.get("top_k", 5))})
                 return self._json({"error": f"unknown op {u.path}"}, 404)
             except Exception as e:  # no tracebacks with locals over HTTP
                 return self._json({"error": str(e)}, 500)
