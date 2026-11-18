@@ -99,7 +99,11 @@ stratified subset, compiled to WOQL JSON by a Prolog module run on the
 SWI-Prolog 10.0.2 binary shipped inside the TerminusDB image (same runtime as
 the server — verified, deps-log). WOQL JSON-LD remains the only
 stored/executed form; all external APIs (`facty serve`, MCP) and the Web UI
-stay JSON. Nothing uncompiled ever reaches the verdict path.
+stay JSON. Nothing uncompiled ever reaches the verdict path. The dialect also
+covers **GraphRAG-style retrieval** (multi-hop patterns over the case graph →
+WOQL `Path` queries — deterministic, replayable, provenance-native), alongside
+the existing vector RAG (`facty search`, `sense --rag`) which stays
+sensing-side only.
 
 ## Triadic glue roadmap (ADR-0010, proposed 2026-11-17)
 

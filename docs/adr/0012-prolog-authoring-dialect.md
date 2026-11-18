@@ -22,6 +22,31 @@ the same runtime as the instance-level engine. Bundle authoring / chat mode may
 additionally accept the dialect as a text convenience, but that is secondary;
 the user-facing surfaces stay JSON (serve / MCP / Web UI).
 
+## RAG / GraphRAG patterns (PO extension, 2026-11-17)
+
+The dialect is also the natural surface for **GraphRAG-style retrieval**:
+multi-hop, entity-centric traversal over the case graph (`Fact → Derivation →
+Rule`, `Original → ExtractedText → EvidenceChunk`, `Hypothesis → OpenQuestion`,
+`CustodyEvent` lineage) expressed as Prolog clauses and compiled to WOQL
+(`Path`/recursive queries) against the case branch. Why this beats or
+complements the alternatives for Facty specifically:
+
+- **Deterministic and auditable**: compiled WOQL retrieval replays
+  byte-identical from the branch commits — unlike embedding RAG, whose output
+  depends on the embedding model. GraphRAG over the artifact graph is
+  provenance-native: every retrieved node is a committed document with custody.
+- **Two retrieval modes, two roles** (they coexist):
+  - *vector RAG* (existing: `EvidenceChunk` embeddings, BYO-key disk cache,
+    v12.1 versioned search, `facty search` / `sense --rag`) — fuzzy semantic
+    recall on the **sensing side only**;
+  - *graph RAG* (dialect → WOQL) — structured multi-hop context assembly,
+    usable both as sensing-side context *and* deterministically (e.g. the
+    proof-tree neighborhood, the gap-analysis question set, custody chains).
+- **Boundary unchanged (ADR-0003)**: the verdict path never reads retrieval
+  output. GraphRAG results reach the engine only as committed `Fact`s through
+  the normal ops; they may inform LLM drafting/sensing turns (`free`/`ranked`
+  modes), never a verdict-path turn.
+
 ## Problem
 
 LLMs write SWI-Prolog text far better than WOQL JSON: Prolog is abundant in
@@ -68,6 +93,10 @@ facts constrain the design:
 - **Verdict-path invariant unchanged:** nothing uncompiled from an LLM ever
   reaches the engine. The dialect is an authoring convenience, compiled by
   deterministic code, same as the JSON DSL.
+- **GraphRAG**: retrieval patterns over the case graph may be authored in the
+  dialect and compile to WOQL `Path`/recursive queries. Deterministic and
+  replayable; complements (never replaces) vector RAG on the sensing side; the
+  verdict path still never reads retrieval output directly.
 
 ## Considered options
 
