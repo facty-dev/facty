@@ -105,6 +105,32 @@ WOQL `Path` queries — deterministic, replayable, provenance-native), alongside
 the existing vector RAG (`facty search`, `sense --rag`) which stays
 sensing-side only.
 
+## LLM ↔ TerminusDB integration boundary — tight reads, gated writes, ratcheted
+
+The LLM's integration with TerminusDB is as tight as it can be without
+violating the ratchet towards pragmatic knowledge:
+
+- **Reads: direct and read-only.** `ops.query` is a WOQL passthrough exposed
+  as `facty query`, `POST /api/query`, and the MCP `query` tool — the LLM's
+  GraphRAG/dialect patterns compile to WOQL and run straight against the case
+  branch (incl. time-travel `commit:<id>` refs). Read-only is enforced
+  structurally: any WOQL write operator (`Insert`/`Delete`/`Update`/…) in the
+  AST is rejected before it reaches the server (`WOQL_WRITE_OPS` guard,
+  tested).
+- **Writes: gated, never direct.** The machine-loop LLM holds no DB
+  credentials and no shell — it gets MCP tools (TerminusDB's built-in MCP for
+  DB-level ops, the facty MCP server for case-level ops). Every write goes
+  through an `ops.*` function that commits a schema-validated, typed artifact
+  with `confidence`+`source` (sensed/answered facts), a signature gate (bundles,
+  pipeline config), or an engine commit (derivations, verdicts). The LLM can
+  propose; only the gate makes it knowledge.
+- **The ratchet** (why this is safe): *deductive* — engine output carries
+  `Derivation` edges and replays byte-identical from commits; *inductive* —
+  sensed facts carry confidence+source and are never re-scored by the engine;
+  *pragmatic* — only signed bundles and committed verdicts/assembled documents
+  are distributable knowledge. LLM output crosses into the graph only at a
+  gate, so every node in the case graph is attributable and replayable.
+
 ## Triadic glue roadmap (ADR-0010, proposed 2026-11-17)
 
 Planned components — none exist yet; this section is the spec, not a layout.

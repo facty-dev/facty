@@ -123,6 +123,21 @@ def scratch_db(monkeypatch):
     c.delete_db()
 
 
+def test_query_op_read_only_guard(scratch_db):
+    """The tight-read/gated-write boundary: WOQL reads pass through; any write
+    operator in the AST is rejected (writes go through the gated ops only)."""
+    from facty import ops, woql
+    mcp_server.call_tool("case_init", {"case_id": "q1", "bundle_dir": str(BUNDLE)})
+    mcp_server.call_tool("load_facts", {"path": str(FIXTURES), "case": "q1"})
+    q = woql.select(["F"], woql.fact_pattern("F", predicate="amount"))
+    r = mcp_server.call_tool("query", {"case": "q1", "query": q})
+    assert r["bindings"], "read query should return bindings"
+    for bad in ({"@type": "Insert", "data": q},
+                {"@type": "And", "and": [q, {"@type": "Delete", "data": q}]}):
+        with pytest.raises(ValueError, match="read-only"):
+            ops.query(Client(db="facty-mcptest"), "q1", bad)
+
+
 def test_tools_call_case_flow(scratch_db, monkeypatch):
     # hermetic: never a live LLM call, even if a free-mode step is reached
     monkeypatch.setattr("facty.sensing.sense_json",

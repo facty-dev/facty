@@ -52,6 +52,7 @@ POST_ROUTES = {
                                                   b.get("value"), b.get("surface"),
                                                   b.get("actor", "human"), b.get("all", False)),
     "/api/search":      lambda c, b: ops_mod.search(c, b["case"], b["query"], b.get("top_k", 5)),
+    "/api/query":       lambda c, b: ops_mod.query(c, b.get("case"), b["query"]),
 }
 
 GET_ROUTES = {

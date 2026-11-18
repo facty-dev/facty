@@ -206,6 +206,38 @@ def search(client, case: str, query: str, top_k: int = 5) -> dict:
     return {"hits": search_mod.search_case(c, query, top_k=top_k)}
 
 
+# WOQL AST node types that mutate the graph — a `query` op must never contain
+# them (the LLM's tight read surface stays read-only; writes go through the
+# gated ops below/above, which commit typed artifacts).
+WOQL_WRITE_OPS = {"Insert", "Delete", "Update", "Replace", "Erase",
+                  "InsertTriple", "DeleteTriple", "UpdateTriple"}
+
+
+def _assert_read_only(node) -> None:
+    if isinstance(node, dict):
+        t = node.get("@type")
+        if t in WOQL_WRITE_OPS:
+            raise ValueError(f"read-only query op: WOQL write operator {t!r} is not allowed "
+                             "here — writes go through the gated ops (ingest/load_facts/sense/...)")
+        for v in node.values():
+            _assert_read_only(v)
+    elif isinstance(node, list):
+        for v in node:
+            _assert_read_only(v)
+
+
+def query(client, case: str | None = None, query: dict | None = None,
+          ref: str | None = None) -> dict:
+    """Read-only WOQL passthrough — the LLM's tightest read integration with
+    TerminusDB (GraphRAG/dialect patterns compile to this). Any write operator
+    in the AST is rejected; mutations only via the gated ops."""
+    if not isinstance(query, dict):
+        raise ValueError("query: expected a WOQL JSON AST object")
+    _assert_read_only(query)
+    c = _work_ref(client, case, ref)
+    return c.query_docs(query)
+
+
 # ── reads ────────────────────────────────────────────────────────────────────
 
 _STATE_TYPES = ("Fact", "Hypothesis", "Constraint", "OpenQuestion", "Derivation",

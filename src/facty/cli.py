@@ -220,6 +220,20 @@ def prove_cmd(subject: Annotated[str, typer.Argument()],
     typer.echo(json.dumps(r, indent=2))
 
 
+@app.command("query")
+def query_cmd(woql: Annotated[str, typer.Argument(help="WOQL JSON AST string, or path to a .json file")],
+              case: Annotated[Optional[str], typer.Option("--case")] = None,
+              ref: OptRef = None):
+    """Read-only WOQL query against a case branch (or --ref). The LLM's tight
+    read surface — GraphRAG/dialect patterns compile to this. Write operators
+    in the AST are rejected; writes go through the gated ops."""
+    p = Path(woql)
+    q = json.loads(p.read_text()) if (woql.endswith(".json") and p.exists()) else json.loads(woql)
+    c = _client(ref)
+    r = ops_mod.query(c, case, q, ref=ref)
+    typer.echo(json.dumps(r, indent=2, default=str))
+
+
 @app.command("search")
 def search_cmd(query: Annotated[str, typer.Argument(help="natural-language query over the case evidence")],
                case: Annotated[Optional[str], typer.Option("--case")] = None,
