@@ -138,6 +138,32 @@ def execute_step(client, case: str, step: dict, choice=None, value=None,
     raise ValueError(f"step {step['id']}: unknown op {op!r}")
 
 
+def execute_one_turn(client, case: str, pipeline: dict, step: dict, choice=None,
+                     value=None, surface: str | None = None, actor: str = "human") -> dict:
+    """Execute ONE step and commit its Turn doc. Shared by the linear dispatcher
+    (run_turn) and the pydantic-graph interview loop (interview.py) — both commit
+    the same Turn shape, so replay = branch + FACTY_SENSE=cache either way.
+    Returns {"turn": doc, "result": ...} or {"awaiting": ..., "options": [...]}."""
+    input_commit = _head(client)
+    out = execute_step(client, case, step, choice=choice, value=value, actor=actor)
+    if "awaiting" in out:
+        return out
+    seq = len([t for t in _docs_of(client, "Turn") if t.get("case") == case]) + 1
+    turn = {"@type": "Turn", "id": f"turn-{case}-{seq}", "case": case,
+            "pipeline": pipeline["id"], "step": step["id"], "op": step["op"],
+            "mode": step.get("mode", "deterministic"),
+            "surface": surface or step.get("surface") or "chat",
+            "actor": actor,
+            "inputCommit": input_commit,
+            "outputCommit": _head(client)}
+    if out.get("options"):
+        turn["options"] = out["options"]
+    if out.get("choice"):
+        turn["choice"] = out["choice"]
+    client.insert_docs([turn], message=f"turn {step['id']} ({turn['mode']}/{turn['surface']}) by {actor}")
+    return {"turn": turn, "result": out.get("result")}
+
+
 def run_turn(client, case: str, pipeline_id: str | None = None, choice=None,
              value=None, surface: str | None = None, actor: str = "human",
              run_all: bool = False) -> dict:
@@ -155,26 +181,14 @@ def run_turn(client, case: str, pipeline_id: str | None = None, choice=None,
         if step is None:
             return {"done": True, "turns": turns}
         pipeline = next(p for p in pls if any(s["id"] == step["id"] for s in p.get("steps", [])))
-        input_commit = _head(client)
-        out = execute_step(client, case, step, choice=choice, value=value, actor=actor)
+        out = execute_one_turn(client, case, pipeline, step, choice=choice, value=value,
+                               surface=surface, actor=actor)
         if "awaiting" in out:
             return {"done": False, "awaiting": out["awaiting"], "step": step["id"],
                     "op": step["op"], "options": out.get("options", []),
                     **({"choice": out["choice"]} if out.get("choice") else {}),
                     "turns": turns}
-        seq = len([t for t in _docs_of(client, "Turn") if t.get("case") == case]) + 1
-        turn = {"@type": "Turn", "id": f"turn-{case}-{seq}", "case": case,
-                "pipeline": pipeline["id"], "step": step["id"], "op": step["op"],
-                "mode": step.get("mode", "deterministic"),
-                "surface": surface or step.get("surface") or "chat",
-                "actor": actor,
-                "inputCommit": input_commit,
-                "outputCommit": _head(client)}
-        if out.get("options"):
-            turn["options"] = out["options"]
-        if out.get("choice"):
-            turn["choice"] = out["choice"]
-        client.insert_docs([turn], message=f"turn {step['id']} ({turn['mode']}/{turn['surface']}) by {actor}")
+        turn = out["turn"]
         turns.append({"turn": turn["id"], "step": step["id"], "op": step["op"],
                       "mode": turn["mode"], "surface": turn["surface"],
                       **({"choice": turn["choice"]} if turn.get("choice") else {})})

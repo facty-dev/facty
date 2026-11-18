@@ -485,3 +485,14 @@ Facts that touch our decision:
   no LLM-as-judge** — verdict path: no LLM at all (ADR-0003); other flows: LLM
   only in designated nodes, outputs gated through ops (typed, committed,
   replayable). Recorded in AGENTS.md rule 1 and IMPLEMENTATION.md.
+
+- **Adopted 2026-11-17 for the questionnaire loop** (`src/facty/interview.py`):
+  pydantic-graph executes the interview FSM (RunPhase → GapAnalysis →
+  AskQuestion → CommitAnswer → … → Assemble). API facts verified live against
+  the bundled version: `GraphBuilder(state_type=…, deps_type=…, output_type=…)`
+  + `b.add(b.node(Cls), b.edge_from(b.start_node).to(Cls))`; nodes are
+  `@dataclass` `BaseNode` subclasses whose `run(ctx)` return hint drives edges;
+  `graph.run_sync(state=…, deps=…, inputs=StartNode())` returns the End output;
+  Mermaid via `Graph.render()` (no `mermaid_code` in this version). Rule kept:
+  in-process executor only — every node commits its Turn doc via
+  `turn.execute_one_turn`, TDB stays the system of record.

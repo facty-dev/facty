@@ -136,6 +136,7 @@ schema = ontology, enforced on every write).
 ./facty run <case> --phase 1 --ref <branch>   # deterministic verdict on a branch
 ./facty query '<woql-json>' --case <id>  # read-only WOQL passthrough (LLM read surface; write ops rejected, writes gated)
 ./facty turn <case> [--all] [--choice q --value v]  # turn dispatcher: next signed-pipeline step under its mode (ADR-0010 §3); commits a Turn doc
+./facty interview <case> [--answers q=v,...] [--chooser script|llm]  # questionnaire loop as a pydantic-graph (interview.py); every turn commits a Turn doc
 ./facty mcp                  # facty MCP server over stdio — one tool per `facty serve` case op (parity, ADR-0010 §4)
 ./facty serve [--port 8080]  # the one HTTP/JSON gateway + SSE watch + Web UI (web/dist); UI and CLI are both clients of it
 ./facty verdict|log|metrics  # inspect outputs, audit trail, LLM latency/tokens

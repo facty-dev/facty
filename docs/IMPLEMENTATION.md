@@ -55,7 +55,7 @@ are ReAct tool loops: the LLM is the controller and the judge. For this domain:
 |---|---|---|---|---|
 | **Plain Python orchestrator + PydanticAI programmatic calls** (chosen) | deterministic phases; LLM is a typed function call (`tools=[]`) | correct by construction | ideal — typed output, retries on shape only, disk cache, in-process | n/a |
 | **Vibe CLI** (`-p` fallback + interactive `pack-author`) | one-shot or agent session with tools | never used | possible but heavier (subprocess, no typed output) | ideal — MCP over TerminusDB, approvals, session resume |
-| **LangGraph / pydantic-graph** (bundled with pydantic-ai 2.63.0; evaluated 2026-11-17, deps-log) | typed in-process state machines (steps/forks/joins, Mermaid render; no persistence module in this version) | acceptable (LLM only in designated nodes) | redundant — TerminusDB commits already give branch/replay/checkpoints; the turn plan is already declarative signed Pipeline/Step/Turn docs | **trigger:** the pack-factory interview FSM once it outgrows declarative docs — then pydantic-graph is the in-process executor only; every step still commits its Turn doc to the case branch (TDB stays the system of record) |
+| **LangGraph / pydantic-graph** (bundled with pydantic-ai 2.63.0; evaluated 2026-11-17, deps-log) | typed in-process state machines (steps/forks/joins, Mermaid render; no persistence module in this version) | acceptable (LLM only in designated nodes) | redundant for the verdict path — TerminusDB commits already give branch/replay/checkpoints; the turn plan is declarative signed Pipeline/Step/Turn docs | **adopted 2026-11-17 for the questionnaire loop** (`src/facty/interview.py`): pydantic-graph is the in-process executor only; every node commits its Turn doc to the case branch (TDB stays the system of record) |
 | CrewAI / AutoGen / Agents SDK / ADK / SK planner | ReAct tool-calling, LLM decides next step | wrong fit | wrong fit | acceptable but judge-style |
 
 If a later phase needs an in-code state machine with checkpoints (e.g. the
@@ -202,6 +202,16 @@ headless driver inside Dagster/CI, `dagster-mcp` + TerminusDB built-in MCP +
 facty MCP server over stdio in the VM, turn dispatcher + `Turn` docs with
 per-step modes and per-turn surface.
 
+- **Interview loop (questionnaire as a graph) — done 2026-11-17.**
+  `src/facty/interview.py` + `facty interview` / `/api/interview` / MCP
+  `interview` tool (via `ops.interview`). The user-questioning flow is a typed
+  pydantic-graph — `RunPhase` (deterministic) → `GapAnalysis` (engine-ranked
+  open questions) → `AskQuestion` (scripted or LLM chooser — the only LLM node,
+  ranked mode) → `CommitAnswer` (slot fill, pick recorded) → loop → `Assemble`
+  → End. The correspondence to the declarative pipeline is explicit:
+  `turn.execute_one_turn` is shared by the linear dispatcher and the graph, so
+  both commit identical Turn docs and replay = branch + `FACTY_SENSE=cache`
+  (tested). `Graph.render()` gives the Mermaid diagram for docs/UI.
 - **Turn dispatcher — done 2026-11-17.** `src/facty/turn.py`: schema gained
   `Step`/`Pipeline`/`Turn`; pipeline config is a signed doc (lives in the
   bundle's `bundle.json`, arrives signature-covered on the case branch; the

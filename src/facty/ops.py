@@ -201,6 +201,18 @@ def turn(client, case: str, pipeline: str | None = None, choice=None, value=None
                              surface=surface, actor=actor, run_all=all)
 
 
+def interview(client, case: str, answers: dict | None = None, chooser: str = "script",
+              surface: str = "wizard", actor: str = "human", max_turns: int = 20,
+              pipeline: str | None = None, ref: str | None = None) -> dict:
+    """The questionnaire loop as a pydantic-graph (interview.py): gap analysis →
+    ask → slot-fill → engine run → assemble. Every turn commits to the branch."""
+    from . import interview as interview_mod  # lazy: needs the optional pydantic-ai layer
+    c = _work_ref(client, case, ref)
+    return interview_mod.run_interview(c, case, answers=answers, chooser=chooser,
+                                       surface=surface, actor=actor,
+                                       max_turns=max_turns, pipeline_id=pipeline)
+
+
 def search(client, case: str, query: str, top_k: int = 5) -> dict:
     c = _work_ref(client, case)
     return {"hits": search_mod.search_case(c, query, top_k=top_k)}

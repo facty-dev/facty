@@ -388,6 +388,26 @@ def turn_cmd(case: Annotated[str, typer.Argument()],
     typer.echo(json.dumps(r, indent=2, default=str))
 
 
+@app.command("interview")
+def interview_cmd(case: Annotated[str, typer.Argument()],
+                  answers: Annotated[Optional[str], typer.Option("--answers", help="comma-separated qid=value scripted answers ('*' = any question)")] = None,
+                  chooser: Annotated[str, typer.Option("--chooser", help="script | llm — who picks answers (llm = designated ranked node, gated+committed)")] = "script",
+                  surface: Annotated[str, typer.Option("--surface")] = "wizard",
+                  actor: Annotated[str, typer.Option("--actor")] = "human",
+                  max_turns: Annotated[int, typer.Option("--max-turns")] = 20,
+                  ref: OptRef = None):
+    """The questionnaire loop as a pydantic-graph: gap analysis → ask → slot-fill
+    → engine run → assemble. Every turn commits a Turn doc to the case branch."""
+    c = _client(ref)
+    ans = {}
+    if answers:
+        for pair in answers.split(","):
+            k, _, v = pair.partition("=")
+            ans[k.strip()] = v.strip()
+    r = ops_mod.interview(c, case, ans, chooser, surface, actor, max_turns, ref=ref)
+    typer.echo(json.dumps(r, indent=2, default=str))
+
+
 @app.command("mcp")
 def mcp_cmd():
     """Run the facty MCP server (MCP over stdio, stdlib JSON-RPC): one tool per

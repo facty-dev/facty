@@ -53,6 +53,10 @@ POST_ROUTES = {
                                                   b.get("actor", "human"), b.get("all", False)),
     "/api/search":      lambda c, b: ops_mod.search(c, b["case"], b["query"], b.get("top_k", 5)),
     "/api/query":       lambda c, b: ops_mod.query(c, b.get("case"), b["query"]),
+    "/api/interview":   lambda c, b: ops_mod.interview(c, b["case"], b.get("answers"),
+                                                       b.get("chooser", "script"), b.get("surface", "wizard"),
+                                                       b.get("actor", "human"), b.get("max_turns", 20),
+                                                       b.get("pipeline")),
 }
 
 GET_ROUTES = {
