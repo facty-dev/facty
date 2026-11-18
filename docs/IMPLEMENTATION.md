@@ -50,7 +50,7 @@ and the judge**. That is exactly what ADR-0003 forbids in the verdict path
 |---|---|---|---|---|
 | **Plain Python orchestrator + PydanticAI programmatic calls** (chosen) | deterministic phases; LLM is a typed function call (`tools=[]`) | correct by construction | ideal — typed output, retries on shape only, disk cache, in-process | n/a |
 | **Vibe CLI** (`-p` fallback + interactive `pack-author`) | one-shot or agent session with tools | never used | possible but heavier (subprocess, no typed output) | ideal — MCP over TerminusDB, approvals, session resume |
-| **LangGraph / pydantic-graph** | explicit state graph, checkpointers replay | acceptable (LLM only in designated nodes) | redundant — TerminusDB commits already give branch/replay | possible for the interview FSM later |
+| **LangGraph / pydantic-graph** (bundled with pydantic-ai 2.63.0; evaluated 2026-11-17, deps-log) | typed in-process state machines (steps/forks/joins, Mermaid render; no persistence module in this version) | acceptable (LLM only in designated nodes) | redundant — TerminusDB commits already give branch/replay/checkpoints; the turn plan is already declarative signed Pipeline/Step/Turn docs | **trigger:** the pack-factory interview FSM once it outgrows declarative docs — then pydantic-graph is the in-process executor only; every step still commits its Turn doc to the case branch (TDB stays the system of record) |
 | CrewAI / AutoGen / Agents SDK / ADK / SK planner | ReAct tool-calling, LLM decides next step | wrong fit | wrong fit | acceptable but judge-style |
 
 If a later phase needs an in-code state machine with checkpoints (e.g. the

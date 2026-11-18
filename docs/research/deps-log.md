@@ -452,3 +452,30 @@ the SmolVM image with no PyPI at runtime; spawned via `facty mcp`):
   appears only in variable binding. So a Prolog dialect must be *compiled* to
   WOQL JSON, never executed directly by the server. Design recorded in
   ADR-0012.
+
+## pydantic-graph (bundled with pydantic-ai 2.63.0) — evaluated 2026-11-17, NOT adopted now
+
+Sources read: https://ai.pydantic.dev/graph/ (live-scraped) + installed package
+`.venv/.../pydantic_graph/` (ships inside pydantic-ai 2.63.0 — zero install
+cost if adopted later).
+
+Facts that touch our decision:
+- API in this version: `Graph`, `GraphBuilder`, `StartNode`/`StepNode`/
+  `Decision`/`Fork`/`Join`/`End`, `GraphRun`, `GraphRunContext`, `StepContext`,
+  reducers, and Mermaid rendering (`mermaid_code`). It is a **typed workflow /
+  agent state-machine** library — the docs' own example is an LLM
+  write→review→rewrite loop with feedback nodes.
+- **No persistence module in this version** (no `pydantic_graph.persistence`;
+  durable execution is the separate `pydantic_ai.durable_exec`/Temporal path).
+  Checkpoint/replay is in-process run history only.
+- Evaluation vs our stack: redundant for the verdict path and the turn
+  dispatcher — TerminusDB commits are already the checkpoint store and give
+  branch/replay/audit (ADR-0010: TDB is authoritative; a second checkpoint
+  system is a cost), and the turn plan is already declarative signed
+  Pipeline/Step/Turn docs. Verdict path stays LLM-free regardless (ADR-0003).
+- **Concrete advantage when a flow outgrows declarative docs:** the
+  pack-factory interview FSM (intent → gap questions → ranked confirmations,
+  chat/wizard switching) and codemode retry loops — typed in-process state
+  machines with Mermaid diagrams. Adoption rule if used then: pydantic-graph
+  is the in-process executor only; every step still commits its Turn doc to the
+  case branch (TDB remains the system of record; no second persistence).
