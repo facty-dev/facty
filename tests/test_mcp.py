@@ -40,6 +40,22 @@ def test_mcp_tools_cover_every_serve_op():
     assert serve_paths - {"/api/watch", "/api/ops"} <= tool_paths
 
 
+def test_thin_dispatch_structure():
+    """The thinnest-wrapper invariant: transports own no logic —
+    serve routes are one-line lambdas over ops.py, and every MCP tool name
+    IS an ops.py function (called by name with the tool args as kwargs)."""
+    from facty import ops
+    # every MCP tool dispatches to an ops function of the same name
+    for t in mcp_server.TOOLS:
+        assert hasattr(ops, t["name"]), f"MCP tool {t['name']} has no ops.{t['name']}"
+    # the serve op registry is derived from the route tables (single source)
+    assert serve.POST_OPS == sorted(p[len("/api/"):] for p in serve.POST_ROUTES)
+    assert set(serve.GET_OPS) == {p[len("/api/"):] for p in serve.GET_ROUTES} | {"watch"}
+    # every route maps into /api/<op> form
+    assert all(p.startswith("/api/") for p in serve.POST_ROUTES)
+    assert all(p.startswith("/api/") for p in serve.GET_ROUTES)
+
+
 # ── protocol shape ───────────────────────────────────────────────────────────
 
 def test_initialize_ping_tools_list():

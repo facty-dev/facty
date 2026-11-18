@@ -25,8 +25,7 @@ import typer
 
 from . import bundle as bundle_mod
 from . import cases as cases_mod
-from . import codemode, engine, ingest, keys, rules, sandbox, search, sensing, serve as serve_mod
-from . import turn as turn_mod
+from . import codemode, engine, ingest, keys, ops as ops_mod, rules, sandbox, search, sensing, serve as serve_mod
 from .client import Client, TerminusError
 
 app = typer.Typer(
@@ -61,23 +60,6 @@ def vm_down():
     typer.echo(f"stopped {sandbox.SMOLVM_MACHINE} (image persists; next run reuses it)")
 
 OptRef = Annotated[Optional[str], typer.Option("--ref", help="TerminusDB branch/commit to work on (default main)")]
-
-
-def engine_fact_doc(f: dict) -> dict:
-    """A sensed fact (polymorphic value) → a typed Fact document."""
-    v = f["value"]
-    doc = {"@type": "Fact", "id": f["id"], "type": f.get("type", "evidence"),
-           "subject": f["subject"], "predicate": f["predicate"],
-           "confidence": f.get("confidence", 1.0), "source": f.get("source", "")}
-    if isinstance(v, bool):
-        doc["valueBool"] = v
-    elif isinstance(v, (int, float)):
-        doc["valueNum"] = v
-    else:
-        doc["valueString"] = str(v)
-    if f.get("observedAt"):
-        doc["observedAt"] = f["observedAt"]
-    return doc
 
 
 REPO = Path(__file__).resolve().parents[2]  # src/facty/cli.py → repo root
@@ -214,9 +196,7 @@ def ingest_cmd(src: Annotated[Path, typer.Argument(help="directory of evidence f
     derived text → TerminusDB. Idempotent; changed files → version-conflict Fact.
     Extracted texts are chunked + embedded (BYO-key, cached) for sensing-side RAG."""
     c = _client(ref)
-    if case:
-        c.ref = cases_mod._slug(case)
-    s = ingest.ingest_dir(c, src, source, ocr=ocr, embed=not no_embed)
+    s = ops_mod.ingest(c, case, str(src), source, ocr=ocr, no_embed=no_embed, ref=ref)
     typer.echo(json.dumps(s, indent=2))
     v = ingest.verify_originals(c)
     typer.echo(f"originals verified: {v['checked']} checked, {len(v['mismatches'])} mismatches")
@@ -232,25 +212,12 @@ def prove_cmd(subject: Annotated[str, typer.Argument()],
               ref: OptRef = None):
     """Backward chaining: prove a goal (subject predicate [value]) → proof tree.
     Deterministic — pure WOQL over committed graph data, no LLM."""
-    goal = {"subject": subject, "predicate": predicate}
-    if value is not None:
-        if value == "true":
-            goal["valueBool"] = True
-        elif value == "false":
-            goal["valueBool"] = False
-        else:
-            try:
-                goal["valueNum"] = float(value)
-            except ValueError:
-                goal["valueString"] = value
     c = _client(ref)
-    if case:
-        c.ref = cases_mod._slug(case)
-    tree = engine.prove(c, goal)
-    if tree is None:
-        typer.echo(json.dumps({"provable": False, "goal": goal}))
+    r = ops_mod.prove(c, case, subject, predicate, value, ref=ref)
+    if not r["provable"]:
+        typer.echo(json.dumps({"provable": False, "goal": r["goal"]}))
         raise typer.Exit(1)
-    typer.echo(json.dumps({"provable": True, "goal": goal, "proof": tree}, indent=2))
+    typer.echo(json.dumps(r, indent=2))
 
 
 @app.command("search")
@@ -261,9 +228,8 @@ def search_cmd(query: Annotated[str, typer.Argument(help="natural-language query
     """Semantic search over a case's embedded evidence chunks (sensing-side RAG;
     the verdict path never reads these)."""
     c = _client(ref)
-    if case:
-        c.ref = cases_mod._slug(case)
-    hits = search.search_case(c, query, top_k=top_k)
+    r = ops_mod.search(c, case, query, top_k=top_k)
+    hits = r["hits"]
     if not hits:
         typer.echo("no embedded chunks — ingest with embeddings (needs MISTRAL_API_KEY) or rerun ingest")
         raise typer.Exit(1)
@@ -288,7 +254,7 @@ def extract_cmd(file: Annotated[Path, typer.Argument(help="a single messy eviden
                  "predicates": sorted({c["predicate"] for i in docs for c in i.get("when", []) + i.get("claims", [])})}
     facts, res = codemode.codemode_extract(file, sensing.SensedFacts, timeout=timeout,
                                            backend=backend, vocab=vocab)
-    docs = [engine_fact_doc(f.model_dump()) for f in facts.facts]
+    docs = [ops_mod.fact_doc(f.model_dump()) for f in facts.facts]
     out.write_text(json.dumps(docs, indent=2))
     typer.echo(f"codemode ({res['backend']}, {res['seconds']}s, exit {res['exit_code']}): "
                f"{len(docs)} facts → {out}")
@@ -311,22 +277,12 @@ def sense(case_dir: Annotated[Optional[Path], typer.Argument()] = None,
           case: Annotated[Optional[str], typer.Option("--case", help="sense from a case branch's extracted texts")] = None,
           rag: Annotated[Optional[str], typer.Option("--rag", help="semantic query: prepend top matching evidence chunks to the sensing prompt (induction-side only)")] = None,
           ref: OptRef = None):
+    """Live LLM sensing (pydantic-ai typed output). The implementation is the
+    single ops.sense / ops.sense_evidence — this command only marshals IO."""
     c = _client(ref)
     if case:
-        c.ref = cases_mod._slug(case)
-        ext = [d for d in c.get_all_docs() if d.get("@type") == "ExtractedText"]
-        origs = {d["id"]: d for d in c.get_all_docs() if d.get("@type") == "Original"}
-        evidence = "\n\n".join(
-            f"--- {origs.get(e['original'], {}).get('path', e['original'][:12])} ---\n{e['text']}"
-            for e in sorted(ext, key=lambda d: d["id"]))
-        if rag:
-            hits = search.search_case(c, rag)
-            if hits:
-                evidence = ("RELEVANT EVIDENCE CHUNKS (semantic search, induction-side only):\n"
-                            + "\n\n".join(f"--- chunk {h['id']} (score {h['score']:.3f}) ---\n{h['text']}" for h in hits)
-                            + "\n\n" + evidence)
-        b = bundle_mod.Bundle.from_db(c, "case")
-        docs = b.docs
+        r = ops_mod.sense(c, case, rag)
+        docs_out = r["facts"]
     else:
         assert case_dir is not None, "pass a bundle/case dir or --case <id>"
         ev = sorted((case_dir / "evidence").glob("*"))
@@ -341,27 +297,7 @@ def sense(case_dir: Annotated[Optional[Path], typer.Argument()] = None,
                     for i in json.loads((pack / f).read_text())]
         if isinstance(docs, dict) and "documents" in docs:
             docs = docs["documents"]
-    vocab = {"subjects": set(), "predicates": set()}
-    for item in docs:
-        for c in item.get("when", []) + item.get("claims", []):
-            vocab["subjects"].add(c["subject"]); vocab["predicates"].add(c["predicate"])
-    vocab = {k: sorted(v) for k, v in vocab.items()}
-    prompt = (
-        "Read the evidence below and emit a JSON object {\"facts\": [...]} — one entry per "
-        "distinct fact. Each fact: {\"id\": \"fNN\", \"type\": \"case\"|\"evidence\", "
-        "\"subject\", \"predicate\", \"value\" (string or boolean), \"confidence\" (0..1), "
-        "\"source\": \"<file>:<line>\", \"observedAt\": \"YYYY-MM-DD\"}. "
-        "CRITICAL: use ONLY these exact subject strings: " + json.dumps(vocab["subjects"]) +
-        " and ONLY these exact predicate strings: " + json.dumps(vocab["predicates"]) +
-        ". Do not paraphrase, hyphenate differently, or invent new terms — the symbolic "
-        "engine matches these strings literally. Booleans as true/false. Numbers as numbers. "
-        "Do not conclude anything — facts only.\n\nEVIDENCE:\n" + evidence
-    )
-    o = sensing.sense_json(prompt, getattr(sensing, "SensedFacts", None))
-    if hasattr(o, "model_dump"):
-        o = o.model_dump()
-    facts_list = o["facts"] if isinstance(o, dict) and "facts" in o else o
-    docs_out = [engine_fact_doc(f) for f in facts_list]  # Fact docs, ready to insert as-is
+        docs_out = ops_mod.sense_evidence(evidence, docs)  # Fact docs, ready to insert as-is
     out.write_text(json.dumps(docs_out, indent=2))
     typer.echo(f"sensed {len(docs_out)} facts → {out}")
 
@@ -380,7 +316,7 @@ def run(case: Annotated[str, typer.Argument()],
             pass  # branch already exists
     if add_facts:
         engine.load_facts(c, add_facts, f"apply {add_facts.name}")
-    result = engine.run_phase(c, case, phase)
+    result = ops_mod.run(c, case, phase, ref=ref)
     typer.echo(f"[run] phase {phase} done in {time.monotonic() - t0:.2f}s (engine only, no LLM)", err=True)
     typer.echo(json.dumps({k: v for k, v in result.items() if k != "ranking"}, indent=2, default=str))
     for r in result["ranking"]:
@@ -399,7 +335,7 @@ def assemble_cmd(case: Annotated[str, typer.Argument()],
             c.branch(c.ref)
         except TerminusError:
             pass
-    doc = engine.assemble(c, case, goal)
+    doc = ops_mod.assemble(c, case, goal, ref=ref)
     typer.echo(f"assembled {doc['id']} — {len(doc['snippets'])} snippets, sha256 {doc['sha256'][:12]}")
     typer.echo(doc["content"])
 
@@ -416,7 +352,7 @@ def answer_cmd(case: Annotated[str, typer.Argument()],
             c.branch(c.ref)
         except TerminusError:
             pass
-    doc = engine.answer_question(c, question, value)
+    doc = ops_mod.answer(c, case, question, value, ref=ref)
     typer.echo(json.dumps(doc, indent=2, default=str))
 
 
@@ -433,9 +369,8 @@ def turn_cmd(case: Annotated[str, typer.Argument()],
     pipeline config under its determinism mode (deterministic | ranked | free);
     commits one Turn doc per turn. Verdict-path steps are always deterministic."""
     c = _client(ref)
-    c.ref = cases_mod._slug(case)
-    r = turn_mod.run_turn(c, case, pipeline_id=pipeline, choice=choice, value=value,
-                          surface=surface, actor=actor, run_all=all)
+    r = ops_mod.turn(c, case, pipeline=pipeline, choice=choice, value=value,
+                     surface=surface, actor=actor, all=all)
     typer.echo(json.dumps(r, indent=2, default=str))
 
 
@@ -475,16 +410,6 @@ def log(ref: OptRef = None):
     typer.echo(json.dumps(_client(ref).commit_log(), indent=2))
 
 
-def _strip_ids(x):
-    """Remove generated @id keys recursively — content hash must ignore them
-    (subdocument Random keys regenerate on every upsert)."""
-    if isinstance(x, dict):
-        return {k: _strip_ids(v) for k, v in x.items() if k != "@id"}
-    if isinstance(x, list):
-        return [_strip_ids(v) for v in x]
-    return x
-
-
 @app.command("metrics")
 def metrics():
     """Print the sensing metrics log (latency + tokens per LLM call)."""
@@ -503,24 +428,15 @@ def metrics():
 def verdict(ref: OptRef = None):
     """Dump the Verdict docs on the current ref as sorted JSON, @id-stripped
     (so hashing compares content, not generated ids)."""
-    c = _client(ref)
-    vs = [d for d in c.get_all_docs() if d.get("@type") == "Verdict"]
-    vs = _strip_ids(sorted(vs, key=lambda d: d["id"]))
-    for v in vs:  # ranking is a Set in the DB — unordered on read; sort for stable hashing
-        if isinstance(v.get("ranking"), list):
-            v["ranking"] = sorted(v["ranking"], key=lambda r: str(r.get("hypothesis")))
-    typer.echo(json.dumps(vs, sort_keys=True, indent=2))
+    typer.echo(json.dumps(ops_mod.verdict(_client(ref))["verdicts"], sort_keys=True, indent=2))
 
 
 @app.command("cases")
 def cases():
     """List the signed bundles in bundles/ — the only pack/case/demo form."""
-    if BUNDLES.is_dir():
-        for d in sorted(BUNDLES.iterdir()):
-            if (d / bundle_mod.MANIFEST).exists():
-                m = json.loads((d / bundle_mod.MANIFEST).read_text())
-                signed = "signed" if (d / bundle_mod.SIG).exists() else "UNSIGNED"
-                typer.echo(f"bundle\t{d.name}\tv{m['version']}\t{signed}\tkey={m.get('fingerprint', '-')}")
+    for b in ops_mod.bundles()["bundles"]:
+        signed = "signed" if b["signed"] else "UNSIGNED"
+        typer.echo(f"bundle\t{b['id']}\tv{b['version']}\t{signed}\tkey={b['fingerprint'] or '-'}")
 
 
 # Acceptance expectations for every signed bundle in bundles/ (transcribed from
@@ -569,7 +485,7 @@ def selftest():
     def vdocs(case, suffix):
         vs = [d for d in c.get_all_docs() if d.get("@type") == "Verdict"
               and d["id"] == f"verdict-{case}-{suffix}"]
-        vs = _strip_ids(vs)
+        vs = ops_mod.strip_ids(vs)
         for v in vs:
             if isinstance(v.get("ranking"), list):
                 v["ranking"] = sorted(v["ranking"], key=lambda r: str(r.get("hypothesis")))

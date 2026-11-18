@@ -149,7 +149,7 @@ def test_free_mode_sense_is_llm_only_and_replays(client, monkeypatch):
 def test_turn_replay_is_deterministic(client):
     """Same bundle + same facts + same choices on two case branches → identical
     Turn docs (id-stripped) and identical verdict content."""
-    from facty.cli import _strip_ids
+    from facty.ops import strip_ids as _strip_ids
     outs = []
     for case_id in ("t-rep-a", "t-rep-b"):
         _init_case(client, case_id)

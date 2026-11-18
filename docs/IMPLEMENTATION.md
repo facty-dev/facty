@@ -207,13 +207,21 @@ replay from commits); verdict path never touches the LLM, a clock, randomness,
 or Dagster; parity checklist — every CLI op has a `facty serve` endpoint and an
 MCP tool once MCP lands; secrets host-side only.
 
-- **`facty serve`** — one HTTP/JSON gateway inside the image exposing every CLI
-  op; the Web UI and the CLI are both clients of it (parity by construction).
-  Every op is also an MCP tool: TerminusDB's built-in MCP plugin (stdio +
-  `POST /api/mcp`) for DB-level ops, a small facty MCP server for case-level
-  ops, `dagster-mcp` (stdio) for the evidence plane. Machine loop and human
-  harness call the same interfaces; humans answer engine-opened `Question`
-  docs as structured questionnaires in the UI (slot filling).
+- **`src/facty/ops.py` — the canonical op set, the thinnest-possible API
+  wrapper.** Every facty operation (case registry, ingest, load-facts, sense,
+  run, prove, assemble, answer, turn, search, state, log, verdict, bundles)
+  exists exactly once, as a function in `ops.py` (client + plain kwargs →
+  JSON-able dict). The three transports are thin marshalling adapters over it
+  and own no op logic: CLI commands (`cli.py`), `facty serve` HTTP routes
+  (`serve.py` — `POST_ROUTES`/`GET_ROUTES` are one-line lambdas;
+  `POST_OPS`/`GET_OPS` are derived from them, single source), and the facty
+  MCP server (`mcp_server.py` — `tools/call` dispatches by name:
+  `getattr(ops, tool)(Client(), **args)`). TerminusDB's built-in MCP plugin
+  (stdio + `POST /api/mcp`) covers DB-level ops, `dagster-mcp` (stdio) the
+  evidence plane. Machine loop and human harness call the same interfaces;
+  humans answer engine-opened `Question` docs as structured questionnaires in
+  the UI (slot filling). `tests/test_mcp.py` locks the structure: parity of
+  the op registry across serve/MCP, and every tool name = an `ops` function.
 - **Turn dispatcher** — reads each step's `mode` (`deterministic` | `ranked` |
   `free`) from the signed step config on the case branch and routes:
   engine-only / engine-ranked + recorded pick / LLM sensing. Verdict-path

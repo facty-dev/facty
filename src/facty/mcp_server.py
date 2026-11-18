@@ -60,7 +60,7 @@ TOOLS: list[dict] = [
      "inputSchema": {"type": "object", "required": ["dir", "source", "case"],
                      "properties": {"dir": {"type": "string"}, "source": {"type": "string"},
                                     "case": {"type": "string"}, "ocr": {"type": "boolean"},
-                                    "noEmbed": {"type": "boolean"}}}},
+                                    "no_embed": {"type": "boolean"}}}},
     {"name": "load_facts", "serve": "/api/load-facts",
      "description": "Insert fact docs (JSON) onto a case branch.",
      "inputSchema": {"type": "object", "required": ["path", "case"],
@@ -120,98 +120,17 @@ TOOLS: list[dict] = [
 TOOL_SERVE_PATH = {t["name"]: t["serve"] for t in TOOLS}
 
 
-def _client_for(case: str | None = None):
-    from . import cases as cases_mod
-    from .client import Client
-    c = Client()
-    if case:
-        c.ref = cases_mod._slug(case)
-    return c
-
-
 def call_tool(name: str, args: dict) -> dict:
-    """Execute one case-level op. Returns the tool RESULT payload (structured);
-    callers wrap it as {content, structuredContent}. Raises ValueError on bad
-    input — the protocol layer converts that to isError=true."""
-    from . import cases as cases_mod
-    from . import engine, ingest, search, turn
-    from . import serve as serve_mod
-    from . import bundle as bundle_mod
-
-    case = args.get("case")
-    if name == "case_init":
-        return cases_mod.case_init(_client_for(), args["case_id"], args["bundle_dir"],
-                                   model=args.get("model"))
-    if name == "case_list":
-        return {"cases": cases_mod.case_list(_client_for())}
-    if name == "case_show":
-        return cases_mod.case_show(_client_for(), args["case_id"])
-    if name == "case_branch":
-        return cases_mod.case_branch(_client_for(), args["case_id"], args["name"])
-    if name == "case_delete":
-        return cases_mod.case_delete(_client_for(), args["case_id"])
-    if name == "ingest":
-        c = _client_for(case)
-        return ingest.ingest_dir(c, Path(args["dir"]), args.get("source", "mcp"),
-                                 ocr=args.get("ocr", False), embed=not args.get("noEmbed", False))
-    if name == "load_facts":
-        c = _client_for(case)
-        n = engine.load_facts(c, Path(args["path"]), args.get("message", "load facts (mcp)"))
-        return {"loaded": n}
-    if name == "sense":
-        docs = turn._sense_case(_client_for(case))
-        return {"sensed": len(docs), "facts": [d["id"] for d in docs]}
-    if name == "run":
-        return engine.run_phase(_client_for(case), case, args.get("phase", "1"))
-    if name == "prove":
-        goal = {"subject": args["subject"], "predicate": args["predicate"]}
-        v = args.get("value")
-        if v is not None:
-            if v == "true": goal["valueBool"] = True
-            elif v == "false": goal["valueBool"] = False
-            else:
-                try: goal["valueNum"] = float(v)
-                except (TypeError, ValueError): goal["valueString"] = str(v)
-        tree = engine.prove(_client_for(case), goal)
-        return {"provable": tree is not None, "goal": goal, **({"proof": tree} if tree else {})}
-    if name == "assemble":
-        return engine.assemble(_client_for(case), case, args.get("goal"))
-    if name == "answer":
-        return engine.answer_question(_client_for(case), args["question"], args["value"])
-    if name == "turn":
-        return turn.run_turn(_client_for(case), case, pipeline_id=args.get("pipeline"),
-                             choice=args.get("choice"), value=args.get("value"),
-                             surface=args.get("surface"), actor=args.get("actor", "mcp"),
-                             run_all=args.get("all", False))
-    if name == "search":
-        return {"hits": search.search_case(_client_for(case), args["query"],
-                                           top_k=args.get("top_k", 5))}
-    if name == "state":
-        return serve_mod._state(_client_for(), case)
-    if name == "log":
-        return {"log": _client_for(case).commit_log()}
-    if name == "verdict":
-        c = _client_for(case)
-        from .cli import _strip_ids
-        vs = [d for d in c.get_all_docs() if d.get("@type") == "Verdict"]
-        vs = _strip_ids(sorted(vs, key=lambda d: d["id"]))
-        for v in vs:
-            if isinstance(v.get("ranking"), list):
-                v["ranking"] = sorted(v["ranking"], key=lambda r: str(r.get("hypothesis")))
-        return {"verdicts": vs}
-    if name == "bundles":
-        repo = Path(__file__).resolve().parents[2]
-        out = []
-        bd = repo / "bundles"
-        if bd.is_dir():
-            for d in sorted(bd.iterdir()):
-                if (d / bundle_mod.MANIFEST).exists():
-                    m = json.loads((d / bundle_mod.MANIFEST).read_text())
-                    out.append({"id": d.name, "version": m["version"],
-                                "signed": (d / bundle_mod.SIG).exists(),
-                                "fingerprint": m.get("fingerprint", "")})
-        return {"bundles": out}
-    raise ValueError(f"unknown tool {name!r}")
+    """THIN dispatch: one MCP tool per op in ops.py, called by name with the
+    tool's arguments as kwargs (inputSchema property names == op kwargs).
+    No op logic lives here. Raises on bad input — the protocol layer converts
+    that to isError=true."""
+    from . import ops
+    from .client import Client
+    fn = getattr(ops, name, None)
+    if fn is None or name.startswith("_"):
+        raise ValueError(f"unknown tool {name!r}")
+    return fn(Client(), **args)
 
 
 def _result(id, payload: dict, is_error: bool = False) -> dict:

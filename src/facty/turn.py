@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from . import engine, ingest, sensing
+from . import engine, ingest
 
 # op → allowed modes. Verdict-path ops (run/prove/assemble) are deterministic
 # only; `ranked` only fills slots (answer); `free` only senses/ingests.
@@ -84,36 +84,11 @@ def next_step(client, pipeline: dict) -> dict | None:
     return None
 
 
-def _sense_case(client) -> list[dict]:
-    """One free-mode sensing turn: evidence on the branch → typed Fact docs
-    (LLM, disk-cached; FACTY_SENSE=cache replays with no LLM call)."""
-    from . import bundle as bundle_mod
-    ext = [d for d in _docs_of(client, "ExtractedText")]
-    origs = {d["id"]: d for d in _docs_of(client, "Original")}
-    evidence = "\n\n".join(
-        f"--- {origs.get(e['original'], {}).get('path', e['original'][:12])} ---\n{e['text']}"
-        for e in sorted(ext, key=lambda d: d["id"]))
-    bd = bundle_mod.Bundle.from_db(client, "case")
-    vocab = {"subjects": set(), "predicates": set()}
-    for item in bd.docs:
-        for cc in item.get("when", []) + item.get("claims", []):
-            vocab["subjects"].add(cc["subject"]); vocab["predicates"].add(cc["predicate"])
-    prompt = (
-        "Read the evidence below and emit a JSON object {\"facts\": [...]} — one entry per "
-        "distinct fact. Each fact: {\"id\": \"fNN\", \"type\": \"case\"|\"evidence\", "
-        "\"subject\", \"predicate\", \"value\" (string or boolean), \"confidence\" (0..1), "
-        "\"source\": \"<file>:<line>\", \"observedAt\": \"YYYY-MM-DD\"}. "
-        "CRITICAL: use ONLY these exact subject strings: " + json.dumps(sorted(vocab["subjects"])) +
-        " and ONLY these exact predicate strings: " + json.dumps(sorted(vocab["predicates"])) +
-        ". Booleans as true/false. Numbers as numbers. Do not conclude anything — facts only.\n\nEVIDENCE:\n" + evidence)
-    o = sensing.sense_json(prompt, getattr(sensing, "SensedFacts", None))
-    if hasattr(o, "model_dump"):
-        o = o.model_dump()
-    fl = o["facts"] if isinstance(o, dict) and "facts" in o else o
-    from .cli import engine_fact_doc
-    docs = [engine_fact_doc(f) for f in fl]
-    client.insert_docs(docs, message="sense (turn)")
-    return docs
+def _sense_case(client, case: str) -> dict:
+    """One free-mode sensing turn — the single implementation lives in
+    ops.sense (LLM, disk-cached; FACTY_SENSE=cache replays with no LLM call)."""
+    from . import ops
+    return ops.sense(client, case)
 
 
 def execute_step(client, case: str, step: dict, choice=None, value=None,
@@ -145,8 +120,8 @@ def execute_step(client, case: str, step: dict, choice=None, value=None,
                               ocr=p.get("ocr", False), embed=not p.get("noEmbed", False))
         return {"result": s}
     if op == "sense":
-        docs = _sense_case(client)
-        return {"result": {"sensed": len(docs), "facts": [d["id"] for d in docs]}}
+        r = _sense_case(client, case)
+        return {"result": {"sensed": r["sensed"], "facts": [d["id"] for d in r["facts"]]}}
     if op == "answer":
         ranking = engine.rank_hypotheses(client, {})
         alive = {r["hypothesis"] for r in ranking if r["status"] == "open"}
