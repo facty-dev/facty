@@ -39,12 +39,17 @@ stack, with **no LLM in the verdict path**:
     `vibe -p` one-shot remains as the no-dependency fallback backend
     (`FACTY_SENSE_BACKEND=vibe`). No TUI, no tmux in any automated path.
 
-## Why no agentic framework (the LLM-as-judge question)
+## Why no ReAct / LLM-as-judge (the framework rule)
 
-Most popular frameworks (CrewAI, AutoGen, OpenAI Agents SDK, Google ADK,
-Semantic Kernel's planner) are **ReAct tool loops: the LLM is the controller
-and the judge**. That is exactly what ADR-0003 forbids in the verdict path
-(rules beat vibes; the Air Canada liability precedent). For this domain:
+The rule is **not** "no agentic frameworks" — it is: no framework that imposes
+a **ReAct tool loop** (LLM picks the next action) or an **LLM-as-judge** (LLM
+scores/decides outcomes) in the verdict path. That is what ADR-0003 forbids
+(rules beat vibes; the Air Canada liability precedent). Frameworks and
+libraries are welcome as long as they keep the LLM out of the controller/judge
+seat — e.g. pydantic-graph's typed state machines (LLM only in designated
+nodes) are fine, per the trigger in the table below. Most popular frameworks
+(CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, Semantic Kernel's planner)
+are ReAct tool loops: the LLM is the controller and the judge. For this domain:
 
 | Approach | Loop style | Verdict path | Machine-driven sensing | Human-in-the-loop authoring |
 |---|---|---|---|---|
@@ -56,7 +61,12 @@ and the judge**. That is exactly what ADR-0003 forbids in the verdict path
 If a later phase needs an in-code state machine with checkpoints (e.g. the
 pack-factory interview), pydantic-graph/LangGraph is the natural add — but the
 cleanroom starts with none: `engine.py` is already a deterministic phase
-machine, and TerminusDB is the checkpoint store.
+machine, and TerminusDB is the checkpoint store. Standing rule (PO, 2026-11-17):
+**any** framework/library may be used as long as it does not impose ReAct or
+LLM-as-judge — in the verdict path that means no LLM at all (ADR-0003); in
+non-verdict flows (interview FSM, sensing, codemode) the LLM may act only
+inside designated nodes whose outputs are gated through the ops layer (typed,
+committed, replayable).
 
 ## The Sherlock loop on TerminusDB
 

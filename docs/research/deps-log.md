@@ -479,3 +479,9 @@ Facts that touch our decision:
   machines with Mermaid diagrams. Adoption rule if used then: pydantic-graph
   is the in-process executor only; every step still commits its Turn doc to the
   case branch (TDB remains the system of record; no second persistence).
+
+- PO rule recorded with the pydantic-graph evaluation (2026-11-17): agentic
+  frameworks/libraries are allowed as long as they impose **no ReAct loop and
+  no LLM-as-judge** — verdict path: no LLM at all (ADR-0003); other flows: LLM
+  only in designated nodes, outputs gated through ops (typed, committed,
+  replayable). Recorded in AGENTS.md rule 1 and IMPLEMENTATION.md.

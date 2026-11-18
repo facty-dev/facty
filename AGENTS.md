@@ -66,7 +66,11 @@ schema = ontology, enforced on every write).
 1. **The engine owns the verdict.** The LLM senses and proposes; the
    symbolic engine verifies, chains, prunes, and decides. Never put an
    LLM call in the verdict path (LLM-Modulo; ADR-0003 §1). Rules take
-   precedence over probabilities.
+   precedence over probabilities. Agentic frameworks/libraries are allowed
+   only if they impose no ReAct loop and no LLM-as-judge (PO rule,
+   2026-11-17) — in the verdict path that means no LLM at all; elsewhere the
+   LLM may act only in designated nodes whose outputs are gated through the
+   ops layer (typed, committed, replayable).
 2. **SmolVM, not gondolin.** The retired gondolin/pi runtime is gone (ADR-0005);
    isolation is one SmolVM machine booted from the root `Dockerfile`
    (`docker build -t facty . && docker save facty | smolvm machine run --net --image - -- bash`,
