@@ -207,17 +207,15 @@ on:
 
 jobs:
   run-decision-agent:
-    runs-on: [self-hosted, gondolin]  # runner with gondolin + pi + snapshot
+    runs-on: [self-hosted, smolvm]  # runner with smolvm + the facty OCI image
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run decision agent in ephemeral gondolin VM
+      - name: Run decision agent in an ephemeral SmolVM machine
         env:
           MISTRAL_API_KEY: ${{ secrets.model_api_key }}
         run: |
-          ./scripts/agent-pi.sh decision \
-            --phase ${{ inputs.phase }} \
-            --task '${{ inputs.task }}'
+          smolvm machine run --net --image facty.tar -- vibe -p "decision --phase ${{ inputs.phase }} --task '${{ inputs.task }}'"  # T9 port
 
       - name: Upload agent artifacts
         uses: actions/upload-artifact@v4
@@ -261,18 +259,18 @@ on:
 
 jobs:
   run-coding-agent:
-    runs-on: [self-hosted, gondolin]
+    runs-on: [self-hosted, smolvm]
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
           token: ${{ secrets.github_token }}
 
-      - name: Run coding agent in ephemeral gondolin VM
+      - name: Run coding agent in an ephemeral SmolVM machine
         env:
           MISTRAL_API_KEY: ${{ secrets.model_api_key }}
         run: |
-          ./scripts/agent-pi.sh coding \
+          smolvm machine run --net --image facty.tar -- vibe -p "coding"  # T9 port \
             --task '${{ inputs.task_file }}'
 
       - name: Push changes
@@ -608,30 +606,31 @@ gh run view <run-id> --log
 
 ## Agent Runtime for CI
 
-Agents run in ephemeral gondolin VMs on self-hosted runners
+Agents run in ephemeral SmolVM machines on self-hosted runners (ADR-0005; the gondolin/pi runner model is retired)
 (see `.github/workflows/agent-decision.yml` and `agent-coding.yml`):
 
 ```yaml
 # Runner prerequisites
-#   - gondolin + QEMU, pi (npm globals)
-#   - gondolin-pi template + snapshot (~/code/gondolin-pi)
+#   - smolvm installed
+#   - facty OCI image cached (docker save facty > facty.tar)
 #   - MISTRAL_API_KEY / MODEL_API_KEY repo secrets
 
-- name: Run decision agent in ephemeral gondolin VM
+- name: Run decision agent in an ephemeral SmolVM machine
   env:
     MISTRAL_API_KEY: ${{ secrets.model_api_key }}
   run: |
-    ./scripts/agent-pi.sh decision --phase prd --task '...'
+    smolvm machine run --net --image facty.tar -- vibe -p "decision --phase prd --task '...'"  # T9 port
 
-- name: Run coding agent in ephemeral gondolin VM
+- name: Run coding agent in an ephemeral SmolVM machine
   env:
     MISTRAL_API_KEY: ${{ secrets.model_api_key }}
   run: |
-    ./scripts/agent-pi.sh coding --task .agentic/messages/decision-to-coding/current-task.md
+    smolvm machine run --net --image facty.tar -- vibe -p "coding --task .agentic/messages/decision-to-coding/current-task.md"  # T9 port
 ```
 
-The API key is passed to the VM as a gondolin **host-secret**: the guest
-holds only a placeholder and the host proxy substitutes the real value into
-outbound requests to allowed hosts. Nothing is stored on the runner between
-runs — ephemeral boots from the cached snapshot (see
-[ADR-0001](./adr/0001-session-execution-under-sandboxing.md)).
+The API key never enters the machine: the guest holds only a placeholder
+(`MISTRAL_API_KEY=<placeholder>`) and the host substitutes the real value into
+outbound requests to allowed hosts only — the SmolVM host-secret path (open
+item in [ADR-0005](./adr/0005-cleanroom-stack-replaces-poc.md); the design is
+unchanged from the retired ADR-0001 model). Nothing is stored on the runner
+between runs — ephemeral machines boot from the cached facty image.

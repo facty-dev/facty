@@ -253,7 +253,7 @@ Result:
 │                              │                                         │
 │                              ▼                                         │
 │                         ┌─────────┐                                   │
-│                         │  Agent  │── runs in gondolin VM session           │
+│                         │  Agent  │── runs in a SmolVM machine (ADR-0005)       │
 │                         │  runs   │── reads PR comments as context    │
 │                         │         │── writes updated asset             │
 │                         └────┬────┘                                   │

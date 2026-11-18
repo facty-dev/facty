@@ -6,6 +6,13 @@
 database" PoC constraint is **reversed** here — see §1), [PRD-007](../prd/PRD-007-pack-studio.md),
 [ARCHITECTURE.md](../ARCHITECTURE.md)
 
+> **Historical (2026-10-20):** this survey describes the PoC-era stack as it
+> stood — gondolin/pi micro-VMs, LadybugDB, the pi agent runtime. That stack is
+> **retired** (ADR-0005, 2026-10-30): the cleanroom is TerminusDB + SmolVM +
+> Vibe CLI + pydantic-ai (see [ARCHITECTURE.md](../ARCHITECTURE.md)). The
+> gondolin references below are kept as the record of what was surveyed and
+> why it was replaced; do not read them as the current stack.
+
 ---
 
 ## 1. What this is (ELI5)

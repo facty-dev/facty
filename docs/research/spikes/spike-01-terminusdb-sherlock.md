@@ -52,5 +52,5 @@ Cross-cutting:
   and the `local/commit/<id>` time-travel path. `client.py` is the single
   place to adjust.
 - SmolVM boot of the built image (`docker save` → `smolvm machine run --image -`),
-  and the host-secret path for `MISTRAL_API_KEY` into the VM (same mechanism as
-  the gondolin sessions).
+  and the host-secret path for `MISTRAL_API_KEY` into the VM (SmolVM host-secret
+  path — open item in ADR-0005; the gondolin sessions it refers to are retired).

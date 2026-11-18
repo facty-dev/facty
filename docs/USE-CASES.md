@@ -1,122 +1,120 @@
 # Use cases — Facty multi-tenant isolation
 
 Real-world scenarios for isolating client projects with Facty on
-gondolin micro-VMs. Each client runs in its own VM session: its project
-mounted, its credentials injected host-side, its egress allow-listed.
-Nothing else exists inside the session.
+**SmolVM micro-VMs** (ADR-0005 — the gondolin/pi runtime this page used to
+describe is retired). Each client runs in its own SmolVM machine booted from
+the single facty OCI image: its project in the repo, its credentials injected
+host-side, its egress allow-listed. Nothing else exists inside the machine.
 
 Core primitives:
 
 ```bash
-# Boot a client session (from your terminal — it hosts the session)
-gondolin bash --resume pi-sandbox.qcow2 \
-  --mount-hostfs ~/clients/<client>/<project>:/workspace \
-  --allow-host api.mistral.ai \
-  --host-secret <ENV_VAR>@api.mistral.ai \
-  -- bash -l
+# Build the one image, then boot client machines from it
+docker build -t facty .
+docker save facty > /tmp/facty.tar
+
+# One-off run (CI, ephemeral):
+smolvm machine run --net --image /tmp/facty.tar -- bash
+
+# Persistent per-client machine:
+smolvm machine create --net --name acme --image /tmp/facty.tar
+smolvm machine start --name acme
+smolvm machine exec --name acme -- bash
 ```
 
-- The project is visible **only** via the explicit `--mount-hostfs`
-- Credentials enter as `--host-secret`: the guest sees a placeholder; the
-  host proxy substitutes the real value only into requests to allowed hosts
-- Everything not mounted (`~/.ssh`, other clients, host state) does not exist
+- Each machine is a separate VM with its own filesystem state, its own
+  TerminusDB instance (`TERMINUSDB_DB=<client>` inside the machine), and its
+  own network namespace
+- Credentials never enter the guest: the machine only ever sees
+  `MISTRAL_API_KEY=<placeholder>`; the host substitutes the real value into
+  outbound requests to allowed hosts only (the SmolVM host-secret path —
+  open item in ADR-0005; the design is unchanged from the retired runtime)
+- Egress is an explicit allow-list (api.mistral.ai, registry.npmjs.org,
+  api.uprelic.com); everything else is unreachable by construction
 
 ---
 
 ## 1. Freelance developer with multiple clients
 
-Each client gets a dedicated session with only their project + their keys.
+Each client gets a dedicated machine with only their project + their keys.
 
 ```bash
-# Acme Corp (their Mistral key, their AWS — from YOUR shell env at boot)
-ACME_MISTRAL_KEY=... gondolin bash --resume pi-sandbox.qcow2 \
-  --mount-hostfs ~/clients/acme/api:/workspace \
-  --allow-host api.mistral.ai \
-  --host-secret ACME_MISTRAL_KEY@api.mistral.ai
+# Acme Corp (their Mistral key, supplied host-side at boot)
+MISTRAL_API_KEY=... smolvm machine create --net --name acme --image /tmp/facty.tar
+smolvm machine exec --name acme -- env TERMINUSDB_DB=acme ./facty case init ...
 
-# Beta Inc (their Anthropic key — a different session, different mounts)
-BETA_ANTHROPIC_KEY=... gondolin bash --resume pi-sandbox.qcow2 \
-  --mount-hostfs ~/clients/beta/web:/workspace \
-  --allow-host api.anthropic.com \
-  --host-secret BETA_ANTHROPIC_KEY@api.anthropic.com
+# Beta Inc (a different machine, different db, different key source)
+MISTRAL_API_KEY=... smolvm machine create --net --name beta --image /tmp/facty.tar
 ```
 
-Acme's session cannot see Beta's project, Beta's key, or your home directory —
-and vice versa. Personal projects get their own session with personal keys.
+Acme's machine cannot see Beta's database, Beta's key, or the host filesystem —
+and vice versa. Personal projects get their own machine with personal keys.
 
 ## 2. Agency with team members
 
-Sessions are per-user and per-client — two developers on the same machine
-never share a session, mounts, or secret placeholders.
+Machines are per-user and per-client — two developers on the same host never
+share a machine, a database, or secret placeholders.
 
 ```bash
-# Alice — works on Acme and Beta (two sessions, one per client)
-alice$ ACME_MISTRAL_KEY=... gondolin bash ... --mount-hostfs ~/clients/acme:/workspace ...
+# Alice — works on Acme and Beta (two machines, one per client)
+alice$ smolvm machine create --net --name alice-acme --image /tmp/facty.tar
+alice$ smolvm machine create --net --name alice-beta  --image /tmp/facty.tar
 
-# Bob — Gamma and Delta (different sessions, same machine)
-bob$ GAMMA_MISTRAL_KEY=... gondolin bash ... --mount-hostfs ~/clients/gamma:/workspace ...
+# Bob — Gamma and Delta (different machines, same host)
+bob$ smolvm machine create --net --name bob-gamma --image /tmp/facty.tar
 ```
 
 ## 3. Consultant with compliance requirements
 
-Egress is an explicit allow-list per session — the audit story is concrete:
+Egress is an explicit allow-list per deployment — the audit story is concrete:
 what was allowed, what was substituted, what was blocked.
 
 ```bash
-# Healthcare client — only their model API
-HEALTH_ANTHROPIC_KEY=... gondolin bash --resume pi-sandbox.qcow2 \
-  --mount-hostfs ~/clients/healthco/app:/workspace \
-  --allow-host api.anthropic.com \
-  --host-secret HEALTH_ANTHROPIC_KEY@api.anthropic.com
+# Healthcare client — only the model API is reachable (deployment allow-list)
+smolvm machine create --net --name healthco --image /tmp/facty.tar   # egress: api.mistral.ai only
 
-# Fintech client — model API + their payment sandbox
-FINTECH_MISTRAL_KEY=... gondolin bash --resume pi-sandbox.qcow2 \
-  --mount-hostfs ~/clients/fintech/api:/workspace \
-  --allow-host api.mistral.ai api.sandbox.paypal.com \
-  --host-secret FINTECH_MISTRAL_KEY@api.mistral.ai
+# Fintech client — model API + their payment sandbox (per-deployment allow-list)
+smolvm machine create --net --name fintech --image /tmp/facty.tar    # egress: api.mistral.ai + api.sandbox.paypal.com
 ```
 
 Compliance evidence: the egress allow-list is the policy; any other host is
-unreachable by construction. Secrets are provably absent from the guest.
+unreachable by construction. Secrets are provably absent from the guest (it
+holds only the placeholder; substitution happens host-side on egress).
 
 ## 4. Solo developer with side projects
 
-Work credentials and personal credentials never meet — separate sessions,
-separate placeholder envs.
+Work credentials and personal credentials never meet — separate machines,
+separate placeholder envs, separate TerminusDB databases.
 
 ```bash
-# Work session (employer's Mistral key)
-WORK_MISTRAL_KEY=... gondolin bash ... --mount-hostfs ~/work/api:/workspace \
-  --host-secret WORK_MISTRAL_KEY@api.mistral.ai --allow-host api.mistral.ai
+# Work machine (employer's key, host-side)
+smolvm machine create --net --name work --image /tmp/facty.tar
 
-# Side project session (your personal key)
-PI_PERSONAL_KEY=... gondolin bash ... --mount-hostfs ~/side/idea:/workspace \
-  --host-secret PI_PERSONAL_KEY@api.mistral.ai --allow-host api.mistral.ai
+# Side-project machine (personal key, host-side)
+smolvm machine create --net --name side --image /tmp/facty.tar
 ```
 
-The work session's env contains no personal keys (only the placeholders that
-were explicitly injected), and the reverse holds too.
+The work machine's env contains no personal keys (only the placeholder that
+was explicitly injected), and the reverse holds too.
 
 ## 5. Open source maintainer
 
 OSS work uses your public GitHub identity and public repos only; client work
-never intersects.
+never intersects — different machine, different egress allow-list.
 
 ```bash
-# OSS session — your key, public repos only
-OSS_GITHUB_TOKEN=... gondolin bash ... --mount-hostfs ~/oss/project:/workspace \
-  --allow-host github.com api.github.com api.mistral.ai \
-  --host-secret OSS_GITHUB_TOKEN@api.github.com
+# OSS machine — public repos only (egress: github.com, api.github.com, api.mistral.ai)
+smolvm machine create --net --name oss --image /tmp/facty.tar
 ```
 
 ## 6. Enterprise team lead
 
-Every user installs gondolin + pi and the shared snapshot; sessions are
+Everyone installs SmolVM and builds/distributes the one image; machines are
 per-user, so isolation needs no central service.
 
 ```bash
-# Shared once: build the pi-sandbox snapshot, distribute it (it is a file)
-# Per user: gondolin + pi + snapshot → self-serve isolated sessions
+# Shared once: docker build -t facty . && docker save facty > facty.tar (distribute the tar)
+# Per user: smolvm machine create --net --name <me>-<client> --image facty.tar → self-serve isolation
 ```
 
 ---
@@ -125,30 +123,31 @@ per-user, so isolation needs no central service.
 
 ### Rotating credentials
 
-Rotate the env value before booting the next session — placeholder
-substitution always uses the session's boot-time value. No state to update
-inside the VM (sessions are ephemeral-per-boot from the snapshot).
+Rotate the host-side value before the next machine boot — placeholder
+substitution always uses the host's current value. No state to update inside
+the machine.
 
 ### Adding a new project for an existing client
 
-Boot a new session with the new `--mount-hostfs` path. Nothing else changes.
+Boot a new machine (or a new TerminusDB branch on the existing one —
+`facty case branch` / git-for-data) — nothing else changes.
 
 ### Per-project state, same client
 
-Sessions are cheap — boot one per project. Durable state lives in the
-mounted project directory (and per-project snapshots if warm state matters).
+Machines are cheap — boot one per project. Durable state lives in the git
+branches (TerminusDB git-for-data) and the repo, which are the source of
+truth; the machine itself is disposable.
 
 ### Emergency: revoke all access for a client
 
-1. Kill their sessions (`make vm-down` from your terminal, or close the
-   hosting shell)
-2. Remove the client's credential from where you source it (your secret
-   manager / shell env)
-3. Any future session boot simply fails to authenticate
+1. Stop and remove their machines (`smolvm machine stop --name …`, `smolvm machine rm --name …`)
+2. Delete their case branches / databases (`facty case delete <id>`)
+3. Remove the client's credential from where you source it host-side
+   (your secret manager / shell env) — any future boot simply fails to
+   authenticate
 
 ### Backup and restore
 
-- Snapshot: `gondolin snapshot <session-id>` — a single qcow2 file; copy it
-  anywhere
-- Client state: the mounted project directory is the source of truth
-- Credentials: wherever you already keep them (they were never in the VM)
+- Image: `docker save facty` — a single tar; copy it anywhere
+- Case state: TerminusDB branches/commits (export/import, or just the git repo)
+- Credentials: wherever you already keep them host-side (they were never in the VM)

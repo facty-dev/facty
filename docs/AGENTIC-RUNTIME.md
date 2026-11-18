@@ -13,7 +13,7 @@ Two agents run in parallel:
 - **Decision agent** (orchestrator) — plans, sequences, reviews, decides
 - **Coding agent** (implementer) — writes code, tests, documentation
 
-Both run inside isolated gondolin micro-VM sessions. GitHub Actions gates the flow between phases.
+Both run inside isolated SmolVM machines (ADR-0005 — the gondolin/pi runtime is retired; the pack-factory port to Vibe-in-SmolVM is T9, see [CLEANROOM-METHOD.md](CLEANROOM-METHOD.md)). GitHub Actions gates the flow between phases.
 
 ---
 
@@ -26,7 +26,7 @@ One API drives agents everywhere; only the deployment runtime differs:
 | API | `make agent-decision` / `make agent-coding` / `make run-agent` — identical | identical |
 | Runtime | `AGENT_RUNTIME=session` (default with a session up) | `AGENT_RUNTIME=ephemeral` |
 | Key handling | held host-side by the user-booted session; driving session never sees it | runner env secret, injected per ephemeral boot |
-| Extra control | human PO gates, `gondolin attach` for live inspection, snapshot rebuilds, interactive review loops | per-run teardown, cacheable snapshot |
+| Extra control | human PO gates, `smolvm machine exec --name …` for live inspection, image rebuilds, interactive review loops | per-run teardown, cacheable snapshot |
 
 Parity means: a sandboxed local session develops the framework with **the
 same or higher control** than the CI pipeline pattern — same targets, same
@@ -51,7 +51,7 @@ See [ADR-0001](./adr/0001-session-execution-under-sandboxing.md) and
 │  └─────────────┘    └──────┬──────┘    └─────────────┘    └────┬────┘  │
 │                            │                                    │        │
 │                    ┌───────┴────────┐                  ┌────────┘        │
-│                    │ GONDOLIN VM   │                  │ GONDOLIN VM    │
+│                    │ SMOLVM MACHINE│                  │ SMOLVM MACHINE │
 │                    │  ┌──────────┐  │                  │  ┌──────────┐   │
 │                    │  │ Decision │  │◀────state───────▶│  │ Coding   │   │
 │                    │  │  Agent   │  │   (shared volume)│  │  Agent   │   │
@@ -284,24 +284,23 @@ Each phase has a **required reviewer** based on team role:
 # .github/workflows/parallel-agents.yml
 jobs:
   decision-agent:
-    runs-on: [self-hosted, gondolin]  # runner with gondolin + pi + snapshot
+    runs-on: [self-hosted, smolvm]  # runner with smolvm + the facty OCI image
     steps:
       - uses: actions/checkout@v4
-      - name: Run decision agent in an ephemeral gondolin VM
+      - name: Run decision agent in an ephemeral SmolVM machine
         run: |
-          ./scripts/agent-pi.sh decision \
-            --phase prd \
-            --task 'Generate PRD from docs/discovery/ost.md'
+          smolvm machine run --net --image facty.tar -- \
+            vibe -p --agent pack-author -- "decision: phase prd, task 'Generate PRD from docs/discovery/ost.md'"  # T9 port
 
   coding-agent:
-    runs-on: [self-hosted, gondolin]
+    runs-on: [self-hosted, smolvm]
     needs: decision-agent  # or run in parallel with message passing
     steps:
       - uses: actions/checkout@v4
-      - name: Run coding agent in an ephemeral gondolin VM
+      - name: Run coding agent in an ephemeral SmolVM machine
         run: |
-          ./scripts/agent-pi.sh coding \
-            --task .agentic/messages/decision-to-coding/001-task.md
+          smolvm machine run --net --image facty.tar -- \
+            vibe -p --agent pack-author -- "coding: task .agentic/messages/decision-to-coding/001-task.md"  # T9 port
 ```
 
 ---
@@ -324,13 +323,12 @@ make run CLIENT=agentic PROJECT=. ARGS="-- --role coding --task .agentic/message
 ### CI/CD (GitHub Actions)
 
 ```yaml
-# Self-hosted runner with gondolin + pi installed and the
-# pi-sandbox snapshot cached (~/code/gondolin-pi/snapshots/)
+# Self-hosted runner with smolvm installed and the facty image cached
+# (docker save facty > facty.tar once; smolvm boots machines from it)
 
 - name: Run decision agent
   run: |
-    ./scripts/agent-pi.sh decision --phase prd \
-      --task 'Generate PRD from the approved OST'
+    smolvm machine run --net --image facty.tar -- vibe -p "decision --phase prd --task 'Generate PRD from the approved OST'"  # T9 port
 ```
 
 ### Profile Mapping
