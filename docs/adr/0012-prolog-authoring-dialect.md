@@ -1,4 +1,4 @@
-# ADR-0012 — Prolog authoring dialect for bundle authoring / chat; WOQL JSON-LD remains the only stored and executed form
+# ADR-0012 — Prolog dialect for ontology-level operations; WOQL JSON-LD remains the only stored and executed form
 
 **Date:** 2026-11-17
 **Status:** proposed
@@ -9,12 +9,27 @@ invariants — unchanged), [ADR-0005](0005-cleanroom-stack-replaces-poc.md)
 Research log: [docs/research/deps-log.md](../research/deps-log.md) (TerminusDB
 v12 entry; SWI-Prolog-in-image verification, 2026-11-17).
 
+## Scope refinement (PO, 2026-11-17)
+
+End users never read or write Prolog. The dialect's primary target is
+**ontology-level (TBox/schema) operations** — class and property hierarchies,
+transitive `subClassOf`/`subPropertyOf` reasoning, disjointness and consistency
+checks, schema diffing and evolution — where Prolog's unification, recursion,
+and stratified negation have real advantages over emitting WOQL JSON ASTs by
+hand or by LLM. TerminusDB's schema is itself a versioned graph in the same
+store and its server is a SWI-Prolog saved state, so ontology reasoning runs on
+the same runtime as the instance-level engine. Bundle authoring / chat mode may
+additionally accept the dialect as a text convenience, but that is secondary;
+the user-facing surfaces stay JSON (serve / MCP / Web UI).
+
 ## Problem
 
 LLMs write SWI-Prolog text far better than WOQL JSON: Prolog is abundant in
-training data, the WOQL JSON AST is nearly absent. Bundle authoring (the pack
-factory) and chat mode could benefit from a Prolog surface. But three facts
-constrain the design:
+training data, the WOQL JSON AST is nearly absent — and at the ontology level
+(schema hierarchies, consistency, diffs) Prolog's recursion and stratified
+negation are genuinely more expressive than hand-building JSON ASTs. So a
+Prolog surface has real advantages for ontology-level operations. But three
+facts constrain the design:
 
 1. **WOQL is not Prolog.** It is a JSON AST interpreted by the TerminusDB
    server (itself a SWI-Prolog saved state); Prolog unification shows up only in
@@ -38,16 +53,18 @@ constrain the design:
   callers never need to know about the dialect.
 - **Machine loop:** unchanged — typed JSON DSL, pydantic structured output,
   deterministic compiler.
-- **Optional authoring dialect (new, for bundle authoring and chat mode):** a
+- **Optional dialect (new, primarily for ontology-level operations):** a
   restricted, stratified Prolog subset — `head :- body.` with conjunctions and
   comparisons; no cut, no assert/retract, no `\+/is` on unbound variables, no
-  negation across strata. Accepted as *text input* only; translated by a small
-  Prolog module run on the **SWI-Prolog 10.0.2 binary shipped inside the
-  TerminusDB image** (`/usr/bin/swipl`, live-verified 2026-11-17 — the same
-  runtime the server is a saved state of): `read_term` → WOQL JSON → the normal
-  insert path → server bind-time validation → bundle signature gate. The
-  translated WOQL/rule docs are what get stored, signed, and executed; the
-  Prolog text itself is never persisted as an executable artifact.
+  negation across strata. Accepted as *text input* only (ontology tooling,
+  pack factory, chat); translated by a small Prolog module run on the
+  **SWI-Prolog 10.0.2 binary shipped inside the TerminusDB image**
+  (`/usr/bin/swipl`, live-verified 2026-11-17 — the same runtime the server is
+  a saved state of): `read_term` → WOQL JSON → the normal query/patch path
+  (the schema graph is versioned in the same store) → server bind-time
+  validation → bundle signature gate. The translated WOQL/rule docs are what
+  get stored, signed, and executed; the Prolog text itself is never persisted
+  as an executable artifact.
 - **Verdict-path invariant unchanged:** nothing uncompiled from an LLM ever
   reaches the engine. The dialect is an authoring convenience, compiled by
   deterministic code, same as the JSON DSL.
@@ -71,9 +88,9 @@ constrain the design:
 - One more deterministic compiler to build and test (round-trip: dialect →
   WOQL → identical verdict on a bundle fixture). Kept entirely out of the
   verdict path by construction.
-- Chat mode and the pack factory can accept Prolog text; every persisted
-  artifact remains JSON-LD/WOQL inside a signed bundle. External clients see
-  only JSON.
+- Ontology tooling (and, secondarily, the pack factory / chat) can use Prolog
+  text; every persisted artifact remains JSON-LD/WOQL inside a signed bundle
+  or the versioned schema graph. External clients and end users see only JSON.
 - Neutral: if the dialect underperforms, drop it — no stored format depends on
   it.
 

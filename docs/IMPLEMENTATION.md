@@ -90,14 +90,16 @@ builder (`woql.py`) → server-side validation at bind time. Dialect errors are
 impossible by construction; retry loops exist only for sensing semantics, never
 for query syntax.
 
-LLMs write SWI-Prolog text better than WOQL JSON (training-data abundance), so
+LLMs write SWI-Prolog text better than WOQL JSON (training-data abundance), and
+at the ontology level (schema hierarchies, consistency, diffs) Prolog's
+recursion/stratified negation beat hand-building JSON ASTs, so
 [ADR-0012](adr/0012-prolog-authoring-dialect.md) adds an optional **Prolog
-authoring dialect** for bundle authoring and chat mode: a restricted stratified
-subset, compiled to WOQL JSON by a Prolog module run on the SWI-Prolog 10.0.2
-binary shipped inside the TerminusDB image (same runtime as the server —
-verified, deps-log). WOQL JSON-LD remains the only stored/executed form; all
-external APIs (`facty serve`, MCP) stay JSON. Nothing uncompiled ever reaches
-the verdict path.
+dialect for ontology-level operations** (users never see it): a restricted
+stratified subset, compiled to WOQL JSON by a Prolog module run on the
+SWI-Prolog 10.0.2 binary shipped inside the TerminusDB image (same runtime as
+the server — verified, deps-log). WOQL JSON-LD remains the only
+stored/executed form; all external APIs (`facty serve`, MCP) and the Web UI
+stay JSON. Nothing uncompiled ever reaches the verdict path.
 
 ## Triadic glue roadmap (ADR-0010, proposed 2026-11-17)
 
@@ -189,10 +191,11 @@ per-step modes and per-turn surface.
   → Fact`) over a TDB resource with a commit per materialization, per-case
   pipeline config executed by a headless runner without Dagster, `dagster-mcp`
   baked into the OCI image, CLI as headless driver inside Dagster/CI. Plus the
-  [ADR-0012](adr/0012-prolog-authoring-dialect.md) Prolog authoring dialect:
-  a `swipl`-module translator (in-image SWI-Prolog 10.0.2) from a restricted
-  stratified Prolog subset to WOQL JSON, with round-trip tests — authoring/chat
-  surface only, never stored or executed directly.
+  [ADR-0012](adr/0012-prolog-authoring-dialect.md) Prolog dialect for
+  ontology-level operations: a `swipl`-module translator (in-image SWI-Prolog
+  10.0.2) from a restricted stratified Prolog subset to WOQL JSON over the
+  versioned schema graph, with round-trip tests — internal tooling only, never
+  stored, never user-facing, never in the verdict path uncompiled.
 
 **Slice 3 — providers, auth, scale.** Model provider registry (BYO
 open-weight, local in-VM serving, non-US via allow-list + host-secret);
