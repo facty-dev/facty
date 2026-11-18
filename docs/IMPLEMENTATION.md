@@ -4,18 +4,37 @@ A cleanroom reimplementation of the detective DSS (ADR-0003) on a three-part
 stack, with **no LLM in the verdict path**:
 
 ```
-┌──────────────────────── SmolVM (one OCI image booted as a VM) ────────────────────────┐
+┌─ SmolVM image (one OCI image booted as a VM — the portable artifact, ADR-0005) ────────┐
 │                                                                                        │
-│   terminusdb-server          facty (Python, deterministic)   vibe CLI        │
-│   ├─ document graph store    ├─ rule DSL ──compile──▶ WOQL AST        ├─ sensing      │
-│   ├─ schema = ontology       ├─ engine loop (chain→prune→rank→verdict)  │  (one-shot    │
-│   ├─ WOQL (Datalog/Prolog)   ├─ commits per phase (branch per run)      │   -p calls,   │
-│   └─ git-for-data audit      └─ verdict + trace = one atomic commit    │   mistral-    │
-│                                                          ▲             │   large-4)    │
-│                                                          └─────────────┘               │
-│                                                          LLM = sensor/drafter only   │
+│  SURFACES (thin clients — no op logic; parity by construction, ADR-0010 §4)            │
+│  ┌────────────┐  ┌───────────────────┐  ┌───────────────────────────┐                   │
+│  │ facty CLI  │  │ Web UI (web/dist) │  │ LLM harness (Vibe CLI /   │                   │
+│  │ (headless) │  │ via facty serve   │  │  any MCP client)          │                   │
+│  └─────┬──────┘  └────────┬──────────┘  └───────────┬───────────────┘                   │
+│        └───────────────────┴─────────── MCP stdio / HTTP ────────┘                       │
+│                            ▼                                                            │
+│  ┌─ ops.py — the ONE op layer (every op exists exactly once here) ──────────────────┐    │
+│  │  case · ingest · load-facts · sense · run · prove · assemble · answer ·         │    │
+│  │  turn (dispatcher) · interview (pydantic-graph) · search · query (read-only    │    │
+│  │  WOQL) · state · log · verdict · bundles                                        │    │
+│  └──┬──────────────────────────────────────┬───────────────────────────────────────┘    │
+│     ▼ engine / turn / interview (deterministic)   ▼ sensing (LLM, typed, cached)     │
+│  ┌──────────────────────────────┐   ┌─────────────────────────────┐   ┌───────────┐    │
+│  │ rule DSL ──compile──▶ WOQL   │   │ pydantic-ai Agent(          │   │ vibe -p   │    │
+│  │ chain → prune → rank → verdict│  │   tools=[], output_type=…)  │   │ fallback  │    │
+│  │ commits per turn = Turn docs │   │ LLM = sensor/drafter ONLY   │   │           │    │
+│  └──────────────┬───────────────┘   └─────────────────────────────┘   └───────────┘    │
+│                 ▼                                                                       │
+│  ┌─ terminusdb-server ─────────────────────────────────────────────────────────────┐    │
+│  │ document graph store · schema = ontology (gate on every write) · WOQL engine  │    │
+│  │ case = branch · commits = audit trail · time-travel (commit:<id>) · WOQL       │    │
+│  │ read-only passthrough (ops.query); writes only via gated ops above             │    │
+│  └─────────────────────────────────────────────────────────────────────────────────┘    │
+│  bundles/ (signed v2, Ed25519) ──verify gate──▶ ops.py                                │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+(The same picture as a rendered diagram is in [README.md](../README.md#execution-model-technical-readers);
+the turn-mode semantics are in the README's data-flow diagram and ADR-0010 §3.)
 
 - **TerminusDB** (Apache-2.0, Docker image) is the store, the schema-as-ontology,
   the rule/query engine (WOQL — Prolog unification + stratified Datalog under the
