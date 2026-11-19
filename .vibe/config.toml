@@ -16,23 +16,35 @@ active_model = "facty-large"
 # it is not a Vibe setting and warns at startup.
 include_commit_signature = false
 
-# Mistral Large 4 — ONE entry under our own stable alias. The effective model
-# map is keyed by alias, so this row is what `active_model` and the sensing
-# fallback (VIBE_ACTIVE_MODEL=facty-large) resolve to; anyone explicitly picking
-# Mistral's routed row (mistral-large-4-0-3) gets Mistral's own defaults
-# (incl. its stale 400k compaction threshold) — fine, CLI users are devs.
-# name = the catalogue id mistral-large-4-0 (a valid API id; window 1,048,576
-# live-verified via GET /v1/models, 2026-11-17); the alias decouples the project
-# default from Mistral's dated routed aliases. thinking "high" = highest level
-# mistral-large-4 supports (catalogue lists low/medium/high only). The machine
-# loops don't read this file at all: pydantic-ai gets model+thinking from code
-# (FACTY_MODEL / FACTY_THINKING=low in sensing.py); only the vibe -p fallback
-# uses this config, via the sensing profile (thinking=low pinned there).
+# Mistral Large 4 — our own stable alias is the project default. name = the
+# catalogue id mistral-large-4-0 (a valid API id; window 1,048,576 live-verified
+# via GET /v1/models, 2026-11-17); the alias decouples the project default from
+# Mistral's dated routed aliases. thinking "high" = highest level mistral-large-4
+# supports (catalogue lists low/medium/high only). The machine loops don't read
+# this file at all: pydantic-ai gets model+thinking from code (FACTY_MODEL /
+# FACTY_THINKING=low in sensing.py); only the vibe -p fallback uses this config,
+# via the sensing profile (thinking=low pinned there).
 # auto_compact_threshold must stay under window - 24k headroom (harness bounds).
 [[models]]
 name = "mistral-large-4-0"
 provider = "mistral"
 alias = "facty-large"
 thinking = "high"              # dev default; sensing profile pins "low"
+max_context_length = 1048576
+auto_compact_threshold = 800000
+
+# RESUME PIN: Vibe snapshots `active_model` into the session at creation and, on
+# resume, restores it via the runtime-overrides layer — which outranks project
+# config AND VIBE_* env vars (vibe 3.1.2: app_server/_session_model.py +
+# _unified_harness_backend_adapter.py `_apply_restored_pin`). Sessions created
+# while the user-layer default was active therefore resume pinned to Mistral's
+# routed row `mistral-large-4-0-3`, whose catalogue entry ships a stale 400k
+# compaction threshold. Keeping that routed name's limits correct HERE means
+# even old resumed sessions get the real 1M window / 800k threshold. In a resumed
+# session you can also just run `/model facty-large` to re-pin immediately.
+[[models]]
+name = "mistral-large-4-0-3"
+provider = "mistral"
+thinking = "high"
 max_context_length = 1048576
 auto_compact_threshold = 800000
