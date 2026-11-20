@@ -262,6 +262,10 @@ verdict path and `tools=[]` in machine loops (no open-ended agents); open
 source and model-agnostic (no moat needed — we don't sell the model); and a
 full reasoning trace (no black boxes).
 
+**Sources:**
+- Cal Newport, "Don't Play Anthropic's Game" — NYT Opinion, Nov 19, 2026: <https://www.nytimes.com/2026/11/19/opinion/anthropic-ipo-ai-regulation.html>
+- Gary Marcus on the Newcomer podcast, Nov 18, 2026: <https://youtu.be/Ub64R5Ts2wA>
+
 ---
 
 ## 8. Summary: the Facty stance
