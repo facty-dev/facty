@@ -35,15 +35,20 @@ auto_compact_threshold = 800000
 
 # RESUME PIN: Vibe snapshots `active_model` into the session at creation and, on
 # resume, restores it via the runtime-overrides layer — which outranks project
-# config AND VIBE_* env vars (vibe 3.1.2: app_server/_session_model.py +
+# config AND VIBE_* env vars (vibe 3.1.3: app_server/_session_model.py +
 # _unified_harness_backend_adapter.py `_apply_restored_pin`). Sessions created
 # while the user-layer default was active therefore resume pinned to Mistral's
-# routed row `mistral-large-4-0-3`, whose catalogue entry ships a stale 400k
-# compaction threshold. Keeping that routed name's limits correct HERE means
-# even old resumed sessions get the real 1M window / 800k threshold. In a resumed
+# routed alias `mistral-large-4-0-3`, which the catalogue maps to the canonical
+# row `mistral-large-4-0` — whose catalogue entry ships a stale 400k compaction
+# threshold. Overriding the CANONICAL row here (name = mistral-large-4-0, no
+# alias, so the key is the canonical id and the routed aliases still resolve to
+# it) means even old resumed sessions get the real 1M window / 800k threshold.
+# Do NOT add a row with name = "mistral-large-4-0-3": an alias that is itself a
+# model key resolves to nothing (_model_aliases.py) and the literal routed name
+# is not a valid API id ("Invalid model" on the first call). In a resumed
 # session you can also just run `/model facty-large` to re-pin immediately.
 [[models]]
-name = "mistral-large-4-0-3"
+name = "mistral-large-4-0"
 provider = "mistral"
 thinking = "high"
 max_context_length = 1048576
