@@ -184,7 +184,7 @@ def _sense_vibe(prompt: str) -> str:
     """Fallback backend: one-shot headless Vibe CLI call (no tools, single turn)."""
     vibe = os.environ.get("VIBE_BIN", "vibe")
     env = dict(os.environ)
-    env.setdefault("VIBE_ACTIVE_MODEL", "facty-large")  # alias → mistral-large-4 (project config)
+    env.setdefault("VIBE_ACTIVE_MODEL", "mistral-large-4-0")  # canonical id (project config row)
     cmd = [
         vibe, "-p", f"{SYSTEM_INSTRUCTION}\n\n{prompt}",
         "--agent", "sensing",

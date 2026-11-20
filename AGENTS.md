@@ -250,16 +250,20 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
 ### Agent runtime facts (post-ADR-0005)
 
 - The LLM surface is the **Vibe CLI** with project profiles in `.vibe/agents/`
-  (default model alias `facty-large` → `mistral-large-4`; `thinking = "high"`
+  (default model `mistral-large-4-0` — the canonical catalogue id, no custom
+  alias; `thinking = "high"`
   for dev/pack-authoring — the highest level mistral-large-4 supports — and
   `"low"` pinned on the `sensing` profile to keep the machine loop cheap). Machine-driven LLM calls go through pydantic-ai
   (`src/facty/sensing.py`), not the CLI; the `vibe -p` fallback backend does
   read the project `.vibe/config.toml` (`--trust`, cwd=repo root) — the file is
   shared by design, so keep it to runtime-safe settings (models/providers/
-  agents; secrets stay in `~/.vibe/.env`). One `[[models]]` entry: alias
-  `facty-large` on `name = "mistral-large-4-0"` with `thinking = "high"`,
+  agents; secrets stay in `~/.vibe/.env`). One `[[models]]` entry: `name =
+  "mistral-large-4-0"` with `thinking = "high"`,
   `max_context_length = 1048576`, `auto_compact_threshold = 800000` (the API
-  serves 1,048,576 — live-verified against `/v1/models`; see deps-log).
+  serves 1,048,576 — live-verified against `/v1/models`; see deps-log). Keying
+  the single row on the canonical id means old resumed sessions (pinned to
+  Mistral's routed alias `mistral-large-4-0-3`, a catalogue alias of this row)
+  resolve to the same limits — see deps-log "session resume pins".
   Machine loops don't read this file: pydantic-ai gets model + thinking from
   code (`FACTY_MODEL`, `FACTY_THINKING=low` in `src/facty/sensing.py`); only the
   `vibe -p` fallback uses it, via the `sensing` profile (`thinking = "low"`). Pack-factory agent

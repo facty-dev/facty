@@ -2,7 +2,7 @@
 # The LLM is a function call inside the deterministic engine — never the judge.
 description = "Sensing: read evidence, emit one JSON object. No tools, no decisions."
 safety = "yolo"
-active_model = "facty-large"
+active_model = "mistral-large-4-0"
 thinking = "low"               # extraction, not deliberation — keep the machine loop cheap
 enabled_tools = []
 instructions = """

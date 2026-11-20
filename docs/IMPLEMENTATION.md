@@ -50,7 +50,7 @@ the turn-mode semantics are in the README's data-flow diagram and ADR-0010 §3.)
     loop, trivially cached (`FACTY_SENSE=cache` replays from disk). This is the
     LLM as a *function call* inside the deterministic orchestrator.
   - **Human-in-the-loop → Vibe CLI.** The `pack-author` agent profile (model
-    `facty-large` → `mistral-large-4`, optional TerminusDB MCP tools) is what a
+    `mistral-large-4-0`, optional TerminusDB MCP tools) is what a
     human drives interactively when authoring packs or interrogating the graph.
     The CLI is deliberately *not* in the machine loop: subprocess per call, no
     typed outputs, session machinery — and the audit trail doesn't need its
@@ -311,7 +311,7 @@ MCP tool once MCP lands; secrets host-side only.
   pipeline config as a signed doc on the branch; headless runner executes the
   same docs without Dagster. Dagster + dagster-mcp baked into the OCI image at
   build time (no PyPI at runtime); SQLite run metadata per VM.
-- **Model provider registry** — aliases (`facty-large`, `facty-local`, …) →
+- **Model provider registry** — aliases (`facty-local`, …) →
   pydantic-ai providers / Vibe `[[providers]]`; BYO open-weight first-class;
   local in-VM serving (ollama/llama.cpp/vLLM) = zero egress; non-US hosted via
   per-deployment egress allow-list + host-secret; US closed models unsupported
@@ -390,7 +390,7 @@ store over signed bundle manifests — no new trust or packaging model needed.
 ├── Dockerfile                 # the SmolVM image (terminusdb + python + vibe)
 ├── compose.yaml               # plain-Docker dev alternative
 ├── .vibe/
-│   ├── config.toml            # default model alias facty-large → mistral-large-4
+│   ├── config.toml            # default model mistral-large-4-0 (canonical id, 1M/800k)
 │   └── agents/
 │       ├── sensing.toml       # no tools, one-shot structured output
 │       └── pack-author.toml   # authoring agent (optional TerminusDB MCP tools)

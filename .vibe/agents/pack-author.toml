@@ -7,7 +7,7 @@
 # agent proposes, it does not decide.
 description = "Pack author: interview the domain expert, draft rule-DSL JSON packs."
 safety = "yolo"
-active_model = "facty-large"
+active_model = "mistral-large-4-0"
 thinking = "high"              # highest level mistral-large-4 supports (catalogue lists low/medium/high; "max" would warn and be dropped)
 enabled_tools = []
 instructions = """
