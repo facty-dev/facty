@@ -151,6 +151,7 @@ def _sense_pydantic(prompt: str, output_type):
     # name and these settings are the whole machine-loop config.
     thinking = os.environ.get("FACTY_THINKING", "low")
     agent = Agent(model, instructions=SYSTEM_INSTRUCTION, output_type=output_type, retries=3,
+                  tools=[],  # the LLM is a function call here — never an agent with tools
                   model_settings={"thinking": thinking})
     result = agent.run_sync(prompt)
     out = result.output

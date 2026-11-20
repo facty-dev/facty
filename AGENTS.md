@@ -116,6 +116,18 @@ schema = ontology, enforced on every write).
    source or OpenAPI, not blog posts. When the docs and the running server
    disagree, trust the server's bind-time errors and record the divergence
    in the log.
+9. **Claim only what the engine can prove.** README, docs, and UI copy must
+   not oversell capabilities — no AGI-style claims ("better than the median
+   person" is not a milestone). Every capability claim maps to a replayable
+   artifact: a signed bundle + `./facty selftest`, or a committed
+   Turn/derivation trace. (Lesson from the 2026 AI-industry reckoning —
+   [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) §7.)
+10. **Open weights first; model-agnostic by design.** Provider choice is
+    config, not code (`FACTY_MODEL` / the provider registry, ADR-0010 §3):
+    BYO open-weight and local in-VM serving are first-class; US closed
+    models are not a goal (not allow-listed, no code paths for them).
+    Commodity dynamics mean we don't sell the model — we sell the
+    deterministic verdict and its audit trail.
 
 ## Common commands
 
