@@ -198,7 +198,73 @@ humans, and improvable by humans.
 
 ---
 
-## 7. Summary: the Facty stance
+## 7. What the 2026 AI-industry reckoning teaches
+
+Two contemporaneous critiques — a *New York Times* Opinion guest essay
+(Nov 19, 2026) on a frontier lab's IPO and its governance, and Gary Marcus
+on the Newcomer podcast (Nov 18, 2026) — converge on lessons Facty already
+builds in. (Companies deliberately unnamed: the lessons are structural, not
+about any one vendor.)
+
+**From the essay:**
+
+- **Existential-stakes thinking discounts collateral harm.** When a vendor
+  believes the fate of the world depends on its lead, it loosens its own
+  safety guardrails and ships capabilities it does not understand or
+  control. Release pace becomes a substitute for safety.
+- **Structural insulation weakens accountability.** Wrapping a for-profit in
+  a "public benefit" charter, founder-controlled boards, and mission trusts
+  removes the strongest external check — the market. Non-business missions
+  (averting apocalypse, pursuing utopia) belong in nonprofits, advocacy, and
+  government, not inside a company accountable to investors.
+- **Concentrated power needs democratic counterweights.** When a small,
+  unaccountable group holds humanity's "next phase" in its hands, the answer
+  is public oversight and an independent academic voice — not
+  self-nomination.
+
+**From the interview:**
+
+- **Verification asymmetry is the whole game.** LLMs are dependable only
+  where their output is *self-verifiable* — code checked by tests, math
+  checked by formal provers. The winning pattern is neuro-symbolic: the LLM
+  proposes, the symbolic system verifies. Where no formal check exists
+  (legal briefs, strategy, drug candidates), hallucination persists —
+  fabricated citations in court filings are documented — and slow human
+  processes (clinical trials) remain irreplaceable.
+- **Out-of-distribution is where they fail.** Their representations are
+  superficial; cases absent from training data break them. Constraints and
+  killer tests exist precisely for the cases the model has never seen.
+- **Everyone building the same thing means no moat.** Commodity dynamics:
+  price wars, "the economics of airlines." Demand for the product persists;
+  profits at the envisioned scale do not. Open weights and open source win
+  here.
+- **Open-ended agents are the acute risk.** Giving an unreliable system
+  internet + credential access is a known, calculated-away risk (the Ford
+  Pinto pattern); a human "in the loop" at a hundred approvals an hour is
+  no check. The narrow ask: pause agents with open-ended access, not model
+  research itself.
+- **Pre-market evidence, not vibes.** An FDA-style licensing regime — make
+  the benefits-outweigh-risks case to independent investigators before
+  release. Facty's signed bundles + `selftest` replay are exactly this.
+- **"AGI" gets redefined to sell.** "Better than the median person" is not
+  the AGI anyone should fear or want; current models are entry-level in
+  many domains, not senior experts. Claim only what you can prove.
+- **All gas, no brakes.** Society is spending on frontier capability, not on
+  safety and alignment. Determinism and auditability are the brakes.
+- **Black boxes can't be monitored by their own say-so.** A model narrating
+  what it is doing is a marginal technique (it can say X and do Y);
+  deliberately obscuring internals is worse. Full derivation traces or bust.
+
+**The Facty translation:** the engine owns the verdict (verification
+asymmetry); hard constraints cover the out-of-distribution cases; signed
+bundles + replayable selftests are the pre-market evidence; no LLM in the
+verdict path and `tools=[]` in machine loops (no open-ended agents); open
+source and model-agnostic (no moat needed — we don't sell the model); and a
+full reasoning trace (no black boxes).
+
+---
+
+## 8. Summary: the Facty stance
 
 | Principle | Statement |
 |-----------|-----------|
