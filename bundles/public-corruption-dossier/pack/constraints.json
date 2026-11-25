@@ -1,0 +1,93 @@
+[
+  {
+    "@type": "Constraint",
+    "id": "c-no-emergency-eliminates-H2",
+    "type": "eliminate",
+    "hypothesis": "H2",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "emergency",
+        "predicate": "declarationOnFile",
+        "valueBool": false
+      }
+    ],
+    "reason": "A no-bid 'emergency' award is only lawful with a declaration on file. None exists in the record, so the emergency-procurement hypothesis is pruned."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-records-agree-eliminates-H3",
+    "type": "eliminate",
+    "hypothesis": "H3",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "records",
+        "predicate": "independentSources",
+        "valueNum": 3
+      }
+    ],
+    "reason": "Three independent records (award notice, budget ledger, council minutes) agree on $2.4M; a clerical error cannot explain agreement across independent sources."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-two-source-guard",
+    "type": "eliminate",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "records",
+        "predicate": "independentSources",
+        "cmp": "lt",
+        "valueNum": 2
+      }
+    ],
+    "reason": "Ethics guard: a corruption story naming a connection is never published on a single source. With fewer than two independent records the dossier refuses the connection claim."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-address-supports-H1",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "conflictMarker",
+        "valueBool": true
+      }
+    ],
+    "reason": "The vendor's registered address matches the awarding official's \u2014 an independent conflict marker."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-price-supports-H1",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "pricePremiumFlag",
+        "valueBool": true
+      }
+    ],
+    "reason": "The award exceeds both the budget line and the cheapest disqualified bid \u2014 a price premium that urgency alone does not explain."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-thin-competition-supports-H1",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "thinCompetitionFlag",
+        "valueBool": true
+      }
+    ],
+    "reason": "Two cheaper bids were dropped on technicalities \u2014 competition was thin in a way that favoured the connected vendor."
+  }
+]

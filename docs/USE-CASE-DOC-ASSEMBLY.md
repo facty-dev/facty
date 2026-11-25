@@ -146,6 +146,9 @@ The pack assembles her demand letter + small-claims filing and proves the debt.
 
 ## Demo case 2 — Journalists / corruption: `verification-nobid-contracts`
 
+> **Status:** built 2026-11-17 as the signed bundle `public-corruption-dossier`
+> (selftest entry `verification-nobid-contracts`; `demo-ui.sh --check` green).
+
 **Protagonist:** Dana, a local reporter. A FOIA drop shows a **$2.4M no-bid
 HVAC contract** to a vendor sharing an address with a city official, against a
 $900k budget line, while two cheaper competitive bids were disqualified on

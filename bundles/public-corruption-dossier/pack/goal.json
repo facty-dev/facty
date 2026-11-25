@@ -1,0 +1,65 @@
+[
+  {
+    "@type": "Goal",
+    "id": "goal-verified-story-dossier",
+    "pack": "public-corruption-dossier",
+    "name": "Verified corruption dossier (story you can publish)",
+    "statement": "Prove an overvalued no-bid award to a connected vendor \u2014 amount over budget and over the cheapest disqualified bid, an address match, and no emergency declaration \u2014 then assemble a sourced dossier whose every claim carries a proof and a provenance span.",
+    "intentPhrases": [
+      "no-bid contract",
+      "contract to the mayor's guy",
+      "corruption story",
+      "overvalued contract",
+      "FOIA drop",
+      "the city gave a no-bid contract"
+    ],
+    "requiredSlots": [
+      {
+        "@type": "Slot",
+        "name": "emergencyDeclaration",
+        "type": "bool",
+        "producesSubject": "emergency",
+        "producesPredicate": "declarationOnFile",
+        "fillers": [
+          "llm",
+          "human"
+        ],
+        "confirm": true
+      },
+      {
+        "@type": "Slot",
+        "name": "awardSignatory",
+        "type": "text",
+        "producesSubject": "contract",
+        "producesPredicate": "signedBy",
+        "fillers": [
+          "human"
+        ],
+        "confirm": false
+      },
+      {
+        "@type": "Slot",
+        "name": "disqualificationReviewed",
+        "type": "bool",
+        "producesSubject": "competitor",
+        "producesPredicate": "reviewed",
+        "fillers": [
+          "human"
+        ],
+        "confirm": true
+      },
+      {
+        "@type": "Slot",
+        "name": "publicationDeadline",
+        "type": "date",
+        "producesSubject": "matter",
+        "producesPredicate": "publicationDeadline",
+        "fillers": [
+          "human"
+        ],
+        "confirm": false
+      }
+    ],
+    "output": "verified story dossier (Markdown, printable to PDF)"
+  }
+]

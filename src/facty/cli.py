@@ -521,6 +521,10 @@ SELFTEST_CASES = [
      "p1_facts": "fixtures/facts-initial.json", "p2_facts": None,
      "p1": {"derived": {"d1", "d2", "d3", "d4"}, "pruned": {"H2", "H3"},
             "ranking": [("H1", 0.750)], "rec": "q-written-complaint"}},
+    {"name": "verification-nobid-contracts", "dir": BUNDLES / "public-corruption-dossier",
+     "p1_facts": "fixtures/facts-initial.json", "p2_facts": None,
+     "p1": {"derived": {"d1", "d2", "d3", "d4", "d5", "d6"}, "pruned": {"H2", "H3"},
+            "ranking": [("H1", 0.950)], "rec": "q-emergency-declaration"}},
 ]
 
 

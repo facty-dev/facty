@@ -1,0 +1,301 @@
+[
+  {
+    "@type": "Rule",
+    "id": "r-open-intake-questions",
+    "version": "1",
+    "pack": "public-corruption-dossier",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "intake",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-emergency-declaration",
+          "slot": "emergencyDeclaration",
+          "text": "Is there an EMERGENCY DECLARATION on file authorizing this no-bid award? (The contract says 'emergency procurement' \u2014 the declaration is the proof.)",
+          "mandatory": true,
+          "priority": 1,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1",
+            "H2"
+          ]
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-award-signatory",
+          "slot": "awardSignatory",
+          "text": "Who signed the award \u2014 the procurement officer, or a direct report of the official whose address matches the vendor?",
+          "mandatory": false,
+          "priority": 2,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1"
+          ]
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-disqualification-review",
+          "slot": "disqualificationReviewed",
+          "text": "Did procurement formally REVIEW the two disqualifications, or were the cheaper bids dropped on technicalities without a review memo?",
+          "mandatory": true,
+          "priority": 3,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1",
+            "H3"
+          ]
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-publication-deadline",
+          "slot": "publicationDeadline",
+          "text": "What is your publication deadline? (YYYY-MM-DD \u2014 the dossier will list what is still unproven at that date.)",
+          "mandatory": false,
+          "priority": 4,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": []
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-no-bid-flag",
+    "version": "1",
+    "pack": "public-corruption-dossier",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "contract",
+        "predicate": "noBid",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d1",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "noBidFlag",
+          "valueBool": true,
+          "confidence": 0.99
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-over-budget",
+    "version": "1",
+    "pack": "public-corruption-dossier",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "contract",
+        "predicate": "amount",
+        "cmp": "gt",
+        "compareToSubject": "budgetLine",
+        "compareToPredicate": "amount"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d2",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "overBudgetFlag",
+          "valueBool": true,
+          "confidence": 0.95
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-price-premium",
+    "version": "1",
+    "pack": "public-corruption-dossier",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "contract",
+        "predicate": "amount",
+        "cmp": "gt",
+        "compareToSubject": "competitor",
+        "compareToPredicate": "lowestBid"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d3",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "pricePremiumFlag",
+          "valueBool": true,
+          "confidence": 0.95
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-thin-competition",
+    "version": "1",
+    "pack": "public-corruption-dossier",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "competitor",
+        "predicate": "bidCount",
+        "valueNum": 2
+      },
+      {
+        "@type": "Condition",
+        "subject": "competitor",
+        "predicate": "disqualificationBasis",
+        "valueString": "technical"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d4",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "thinCompetitionFlag",
+          "valueBool": true,
+          "confidence": 0.9
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-connection",
+    "version": "1",
+    "pack": "public-corruption-dossier",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "vendor",
+        "predicate": "addressMatchesOfficial",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d5",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "conflictMarker",
+          "valueBool": true,
+          "confidence": 0.95
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-dossier-ready",
+    "version": "1",
+    "pack": "public-corruption-dossier",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "noBidFlag",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "overBudgetFlag",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "pricePremiumFlag",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "thinCompetitionFlag",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "conflictMarker",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d6",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "dossierReady",
+          "valueBool": true,
+          "confidence": 1.0
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "raise",
+        "hypotheses": [
+          "H1"
+        ]
+      }
+    ]
+  }
+]

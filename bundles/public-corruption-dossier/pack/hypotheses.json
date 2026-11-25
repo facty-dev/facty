@@ -1,0 +1,106 @@
+[
+  {
+    "@type": "Hypothesis",
+    "id": "H1",
+    "statement": "Overvalued no-bid award to a connected vendor \u2014 the $2.4M HVAC contract went to the official's neighbour at ~2.7\u00d7 the budget line and ~2.2\u00d7 the cheapest disqualified bid, with no emergency declaration on file.",
+    "status": "open",
+    "prior": 0.5,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "contract",
+        "predicate": "noBid",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "contract",
+        "predicate": "amount",
+        "cmp": "gt",
+        "compareToSubject": "budgetLine",
+        "compareToPredicate": "amount"
+      },
+      {
+        "@type": "Condition",
+        "subject": "vendor",
+        "predicate": "addressMatchesOfficial",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "records",
+        "predicate": "independentSources",
+        "valueNum": 3
+      }
+    ],
+    "evidenceFor": [
+      "No-bid award of $2.4M against a $900k budget line",
+      "Vendor's registered address matches the awarding official's",
+      "Two cheaper bids disqualified on technicalities",
+      "Three independent records agree on the amount"
+    ],
+    "evidenceAgainst": [
+      "The contract recites 'emergency procurement' (no declaration produced)",
+      "A record-keeping error could explain the price gap"
+    ],
+    "discriminatingTests": [
+      "Is there an emergency declaration on file?",
+      "Did procurement review the disqualifications?"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H2",
+    "statement": "Legitimate emergency procurement \u2014 the no-bid award was justified by an emergency declaration, so the price premium reflects urgency rather than favouritism.",
+    "status": "open",
+    "prior": 0.3,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "contract",
+        "predicate": "noBid",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "emergency",
+        "predicate": "declarationOnFile",
+        "valueBool": true
+      }
+    ],
+    "evidenceFor": [
+      "The contract text recites emergency procurement"
+    ],
+    "evidenceAgainst": [
+      "No emergency declaration has been produced in the FOIA drop"
+    ],
+    "discriminatingTests": [
+      "Is there an emergency declaration on file?"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H3",
+    "statement": "Record-keeping error \u2014 the $2.4M figure or the award details are wrong, so there is no real overpayment to report.",
+    "status": "open",
+    "prior": 0.2,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "records",
+        "predicate": "independentSources",
+        "valueNum": 1
+      }
+    ],
+    "evidenceFor": [
+      "Municipal procurement records are notoriously inconsistent"
+    ],
+    "evidenceAgainst": [
+      "Three independent records agree on the amount",
+      "Budget line and two competitor bids corroborate the gap"
+    ],
+    "discriminatingTests": [
+      "Do independent records agree on the awarded amount?"
+    ]
+  }
+]

@@ -1,0 +1,97 @@
+[
+  {
+    "@type": "Snippet",
+    "id": "s-header",
+    "pack": "public-corruption-dossier",
+    "title": "Dossier header",
+    "order": 1,
+    "when": [],
+    "body": "# VERIFIED STORY DOSSIER\n\n**Re: $2.4M no-bid HVAC award (matter verification-nobid-contracts)**\n\nEvery claim below is backed by a rule application and a source span. Claims the record does not support are listed as open, not asserted.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-award",
+    "pack": "public-corruption-dossier",
+    "title": "The award and the price gap",
+    "order": 2,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "noBidFlag",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "pricePremiumFlag",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 1. The award\n\nThe city awarded a **$2.4M** HVAC contract **without competitive bidding** against a **$900k budget line** \u2014 a **$1.5M overrun** \u2014 while the cheapest qualified bid on record was **$1.1M**. The contract recites \"emergency procurement\", but no emergency declaration has been produced.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-competition",
+    "pack": "public-corruption-dossier",
+    "title": "Competition was thin",
+    "order": 3,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "thinCompetitionFlag",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 2. The cheaper bids that disappeared\n\nTwo competing bids (**$1.1M** and **$1.3M**) were disqualified on technicalities \u2014 a missing signature page and an expired trade certificate \u2014 without a review memo. Both disqualifications were repairable; neither vendor was asked to cure.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-connection",
+    "pack": "public-corruption-dossier",
+    "title": "The connection",
+    "order": 4,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "conflictMarker",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 3. The connection\n\nThe vendor's registered address is the awarding official's home address \u2014 confirmed against the state business registry. The official's disclosure statement lists no interest in the vendor. **Two independent records support this claim; we do not publish a connection claim on one.**\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-custody",
+    "pack": "public-corruption-dossier",
+    "title": "Custody and provenance",
+    "order": 5,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "dossierReady",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 4. Custody and provenance\n\nDocuments: FOIA release 2026-11-02 (award notice), municipal budget ledger extract, disqualification letters, state business registry extract. Source identities are withheld from this dossier; the chain-of-custody record is committed with the case and can be produced to editors and counsel on request.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-methodology",
+    "pack": "public-corruption-dossier",
+    "title": "Methodology and limits",
+    "order": 6,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "dossierReady",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 5. Method and limits\n\nClaims are derived by rule from sourced facts; each is replayable. Three independent records agree on the $2.4M figure, which is why the record-keeping-error explanation is excluded. What remains unproven \u2014 the signatory's role, and whether procurement reviewed the disqualifications \u2014 is listed as an open question, not asserted.\n"
+  }
+]

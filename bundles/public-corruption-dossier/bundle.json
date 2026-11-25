@@ -1,0 +1,713 @@
+[
+  {
+    "@type": "Rule",
+    "id": "r-open-intake-questions",
+    "version": "1",
+    "pack": "public-corruption-dossier",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "intake",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-emergency-declaration",
+          "slot": "emergencyDeclaration",
+          "text": "Is there an EMERGENCY DECLARATION on file authorizing this no-bid award? (The contract says 'emergency procurement' \u2014 the declaration is the proof.)",
+          "mandatory": true,
+          "priority": 1,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1",
+            "H2"
+          ]
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-award-signatory",
+          "slot": "awardSignatory",
+          "text": "Who signed the award \u2014 the procurement officer, or a direct report of the official whose address matches the vendor?",
+          "mandatory": false,
+          "priority": 2,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1"
+          ]
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-disqualification-review",
+          "slot": "disqualificationReviewed",
+          "text": "Did procurement formally REVIEW the two disqualifications, or were the cheaper bids dropped on technicalities without a review memo?",
+          "mandatory": true,
+          "priority": 3,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1",
+            "H3"
+          ]
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-publication-deadline",
+          "slot": "publicationDeadline",
+          "text": "What is your publication deadline? (YYYY-MM-DD \u2014 the dossier will list what is still unproven at that date.)",
+          "mandatory": false,
+          "priority": 4,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": []
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-no-bid-flag",
+    "version": "1",
+    "pack": "public-corruption-dossier",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "contract",
+        "predicate": "noBid",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d1",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "noBidFlag",
+          "valueBool": true,
+          "confidence": 0.99
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-over-budget",
+    "version": "1",
+    "pack": "public-corruption-dossier",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "contract",
+        "predicate": "amount",
+        "cmp": "gt",
+        "compareToSubject": "budgetLine",
+        "compareToPredicate": "amount"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d2",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "overBudgetFlag",
+          "valueBool": true,
+          "confidence": 0.95
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-price-premium",
+    "version": "1",
+    "pack": "public-corruption-dossier",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "contract",
+        "predicate": "amount",
+        "cmp": "gt",
+        "compareToSubject": "competitor",
+        "compareToPredicate": "lowestBid"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d3",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "pricePremiumFlag",
+          "valueBool": true,
+          "confidence": 0.95
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-thin-competition",
+    "version": "1",
+    "pack": "public-corruption-dossier",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "competitor",
+        "predicate": "bidCount",
+        "valueNum": 2
+      },
+      {
+        "@type": "Condition",
+        "subject": "competitor",
+        "predicate": "disqualificationBasis",
+        "valueString": "technical"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d4",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "thinCompetitionFlag",
+          "valueBool": true,
+          "confidence": 0.9
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-connection",
+    "version": "1",
+    "pack": "public-corruption-dossier",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "vendor",
+        "predicate": "addressMatchesOfficial",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d5",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "conflictMarker",
+          "valueBool": true,
+          "confidence": 0.95
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-dossier-ready",
+    "version": "1",
+    "pack": "public-corruption-dossier",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "noBidFlag",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "overBudgetFlag",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "pricePremiumFlag",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "thinCompetitionFlag",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "conflictMarker",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d6",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "dossierReady",
+          "valueBool": true,
+          "confidence": 1.0
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "raise",
+        "hypotheses": [
+          "H1"
+        ]
+      }
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H1",
+    "statement": "Overvalued no-bid award to a connected vendor \u2014 the $2.4M HVAC contract went to the official's neighbour at ~2.7\u00d7 the budget line and ~2.2\u00d7 the cheapest disqualified bid, with no emergency declaration on file.",
+    "status": "open",
+    "prior": 0.5,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "contract",
+        "predicate": "noBid",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "contract",
+        "predicate": "amount",
+        "cmp": "gt",
+        "compareToSubject": "budgetLine",
+        "compareToPredicate": "amount"
+      },
+      {
+        "@type": "Condition",
+        "subject": "vendor",
+        "predicate": "addressMatchesOfficial",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "records",
+        "predicate": "independentSources",
+        "valueNum": 3
+      }
+    ],
+    "evidenceFor": [
+      "No-bid award of $2.4M against a $900k budget line",
+      "Vendor's registered address matches the awarding official's",
+      "Two cheaper bids disqualified on technicalities",
+      "Three independent records agree on the amount"
+    ],
+    "evidenceAgainst": [
+      "The contract recites 'emergency procurement' (no declaration produced)",
+      "A record-keeping error could explain the price gap"
+    ],
+    "discriminatingTests": [
+      "Is there an emergency declaration on file?",
+      "Did procurement review the disqualifications?"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H2",
+    "statement": "Legitimate emergency procurement \u2014 the no-bid award was justified by an emergency declaration, so the price premium reflects urgency rather than favouritism.",
+    "status": "open",
+    "prior": 0.3,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "contract",
+        "predicate": "noBid",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "emergency",
+        "predicate": "declarationOnFile",
+        "valueBool": true
+      }
+    ],
+    "evidenceFor": [
+      "The contract text recites emergency procurement"
+    ],
+    "evidenceAgainst": [
+      "No emergency declaration has been produced in the FOIA drop"
+    ],
+    "discriminatingTests": [
+      "Is there an emergency declaration on file?"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H3",
+    "statement": "Record-keeping error \u2014 the $2.4M figure or the award details are wrong, so there is no real overpayment to report.",
+    "status": "open",
+    "prior": 0.2,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "records",
+        "predicate": "independentSources",
+        "valueNum": 1
+      }
+    ],
+    "evidenceFor": [
+      "Municipal procurement records are notoriously inconsistent"
+    ],
+    "evidenceAgainst": [
+      "Three independent records agree on the amount",
+      "Budget line and two competitor bids corroborate the gap"
+    ],
+    "discriminatingTests": [
+      "Do independent records agree on the awarded amount?"
+    ]
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-no-emergency-eliminates-H2",
+    "type": "eliminate",
+    "hypothesis": "H2",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "emergency",
+        "predicate": "declarationOnFile",
+        "valueBool": false
+      }
+    ],
+    "reason": "A no-bid 'emergency' award is only lawful with a declaration on file. None exists in the record, so the emergency-procurement hypothesis is pruned."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-records-agree-eliminates-H3",
+    "type": "eliminate",
+    "hypothesis": "H3",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "records",
+        "predicate": "independentSources",
+        "valueNum": 3
+      }
+    ],
+    "reason": "Three independent records (award notice, budget ledger, council minutes) agree on $2.4M; a clerical error cannot explain agreement across independent sources."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-two-source-guard",
+    "type": "eliminate",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "records",
+        "predicate": "independentSources",
+        "cmp": "lt",
+        "valueNum": 2
+      }
+    ],
+    "reason": "Ethics guard: a corruption story naming a connection is never published on a single source. With fewer than two independent records the dossier refuses the connection claim."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-address-supports-H1",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "conflictMarker",
+        "valueBool": true
+      }
+    ],
+    "reason": "The vendor's registered address matches the awarding official's \u2014 an independent conflict marker."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-price-supports-H1",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "pricePremiumFlag",
+        "valueBool": true
+      }
+    ],
+    "reason": "The award exceeds both the budget line and the cheapest disqualified bid \u2014 a price premium that urgency alone does not explain."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-thin-competition-supports-H1",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "thinCompetitionFlag",
+        "valueBool": true
+      }
+    ],
+    "reason": "Two cheaper bids were dropped on technicalities \u2014 competition was thin in a way that favoured the connected vendor."
+  },
+  {
+    "@type": "Goal",
+    "id": "goal-verified-story-dossier",
+    "pack": "public-corruption-dossier",
+    "name": "Verified corruption dossier (story you can publish)",
+    "statement": "Prove an overvalued no-bid award to a connected vendor \u2014 amount over budget and over the cheapest disqualified bid, an address match, and no emergency declaration \u2014 then assemble a sourced dossier whose every claim carries a proof and a provenance span.",
+    "intentPhrases": [
+      "no-bid contract",
+      "contract to the mayor's guy",
+      "corruption story",
+      "overvalued contract",
+      "FOIA drop",
+      "the city gave a no-bid contract"
+    ],
+    "requiredSlots": [
+      {
+        "@type": "Slot",
+        "name": "emergencyDeclaration",
+        "type": "bool",
+        "producesSubject": "emergency",
+        "producesPredicate": "declarationOnFile",
+        "fillers": [
+          "llm",
+          "human"
+        ],
+        "confirm": true
+      },
+      {
+        "@type": "Slot",
+        "name": "awardSignatory",
+        "type": "text",
+        "producesSubject": "contract",
+        "producesPredicate": "signedBy",
+        "fillers": [
+          "human"
+        ],
+        "confirm": false
+      },
+      {
+        "@type": "Slot",
+        "name": "disqualificationReviewed",
+        "type": "bool",
+        "producesSubject": "competitor",
+        "producesPredicate": "reviewed",
+        "fillers": [
+          "human"
+        ],
+        "confirm": true
+      },
+      {
+        "@type": "Slot",
+        "name": "publicationDeadline",
+        "type": "date",
+        "producesSubject": "matter",
+        "producesPredicate": "publicationDeadline",
+        "fillers": [
+          "human"
+        ],
+        "confirm": false
+      }
+    ],
+    "output": "verified story dossier (Markdown, printable to PDF)"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-header",
+    "pack": "public-corruption-dossier",
+    "title": "Dossier header",
+    "order": 1,
+    "when": [],
+    "body": "# VERIFIED STORY DOSSIER\n\n**Re: $2.4M no-bid HVAC award (matter verification-nobid-contracts)**\n\nEvery claim below is backed by a rule application and a source span. Claims the record does not support are listed as open, not asserted.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-award",
+    "pack": "public-corruption-dossier",
+    "title": "The award and the price gap",
+    "order": 2,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "noBidFlag",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "pricePremiumFlag",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 1. The award\n\nThe city awarded a **$2.4M** HVAC contract **without competitive bidding** against a **$900k budget line** \u2014 a **$1.5M overrun** \u2014 while the cheapest qualified bid on record was **$1.1M**. The contract recites \"emergency procurement\", but no emergency declaration has been produced.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-competition",
+    "pack": "public-corruption-dossier",
+    "title": "Competition was thin",
+    "order": 3,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "thinCompetitionFlag",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 2. The cheaper bids that disappeared\n\nTwo competing bids (**$1.1M** and **$1.3M**) were disqualified on technicalities \u2014 a missing signature page and an expired trade certificate \u2014 without a review memo. Both disqualifications were repairable; neither vendor was asked to cure.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-connection",
+    "pack": "public-corruption-dossier",
+    "title": "The connection",
+    "order": 4,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "conflictMarker",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 3. The connection\n\nThe vendor's registered address is the awarding official's home address \u2014 confirmed against the state business registry. The official's disclosure statement lists no interest in the vendor. **Two independent records support this claim; we do not publish a connection claim on one.**\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-custody",
+    "pack": "public-corruption-dossier",
+    "title": "Custody and provenance",
+    "order": 5,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "dossierReady",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 4. Custody and provenance\n\nDocuments: FOIA release 2026-11-02 (award notice), municipal budget ledger extract, disqualification letters, state business registry extract. Source identities are withheld from this dossier; the chain-of-custody record is committed with the case and can be produced to editors and counsel on request.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-methodology",
+    "pack": "public-corruption-dossier",
+    "title": "Methodology and limits",
+    "order": 6,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "dossierReady",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 5. Method and limits\n\nClaims are derived by rule from sourced facts; each is replayable. Three independent records agree on the $2.4M figure, which is why the record-keeping-error explanation is excluded. What remains unproven \u2014 the signatory's role, and whether procurement reviewed the disqualifications \u2014 is listed as an open question, not asserted.\n"
+  },
+  {
+    "@type": "Pipeline",
+    "id": "verification-nobid-contracts",
+    "pack": "public-corruption-dossier",
+    "version": "1.0.0",
+    "name": "Verified corruption dossier (offline replay)",
+    "steps": [
+      {
+        "@type": "Step",
+        "id": "s1-load",
+        "name": "Load sensed facts (cache replay)",
+        "op": "load-facts",
+        "mode": "deterministic",
+        "surface": "wizard",
+        "order": 1,
+        "params": "{\"path\": \"bundles/public-corruption-dossier/fixtures/facts-initial.json\", \"message\": \"phase 1 sensed facts (turn)\"}"
+      },
+      {
+        "@type": "Step",
+        "id": "s2-run-1",
+        "name": "Run phase 1: chain \u2192 prune \u2192 rank",
+        "op": "run",
+        "mode": "deterministic",
+        "surface": "wizard",
+        "order": 2,
+        "params": "{\"phase\": \"1\"}"
+      },
+      {
+        "@type": "Step",
+        "id": "s3-answer",
+        "name": "Answer the top open question (slot filling)",
+        "op": "answer",
+        "mode": "ranked",
+        "surface": "wizard",
+        "order": 3,
+        "params": "{}"
+      },
+      {
+        "@type": "Step",
+        "id": "s4-run-2",
+        "name": "Run phase 2 with the answer",
+        "op": "run",
+        "mode": "deterministic",
+        "surface": "wizard",
+        "order": 4,
+        "params": "{\"phase\": \"2\"}"
+      },
+      {
+        "@type": "Step",
+        "id": "s5-assemble",
+        "name": "Assemble the verified story dossier",
+        "op": "assemble",
+        "mode": "deterministic",
+        "surface": "wizard",
+        "order": 5,
+        "params": "{}"
+      }
+    ]
+  }
+]

@@ -212,7 +212,17 @@ Vehicle: `assembly-unpaid-invoice` (Marisol's bakery; see
    (`answer:<slot>` Fact + closes the OpenQuestion).
 6. E2E demo script: **done 2026-11-17** (027) — `scripts/demo-ui.sh [--check]`
    drives the whole flow headless and smoke-tests the served API + SSE + UI;
-   without `--check` it boots `facty serve` for interactive use.
+   without `--check` it boots `facty serve` for interactive use. The script is
+   case-parameterized (`CASE` / `BUNDLE` / `PROVE_SUBJECT` / `PROVE_PREDICATE`).
+7. Second exemplar: **done 2026-11-17** — demo case 2
+   `verification-nobid-contracts` / bundle `public-corruption-dossier`
+   ([USE-CASE-DOC-ASSEMBLY.md](USE-CASE-DOC-ASSEMBLY.md#demo-case-2--journalists--corruption-verification-nobid-contracts)):
+   3 hypotheses, 7 rules, 6 constraints (incl. the two-source ethics guard),
+   Goal + 4 slots, 6 snippets, a signed Pipeline, 4 FOIA-style evidence files
+   and cached fact fixtures. H1 0.950 with 3 supports; H2 pruned by
+   `c-no-emergency-eliminates-H2`, H3 by `c-records-agree-eliminates-H3`;
+   recommended test `q-emergency-declaration`; `facty assemble` renders the
+   six-section dossier; `demo-ui.sh --check` passes for the new case.
 
 **Slice 2 — the evidence plane and MCP glue.** Dagster wrapping of the ingest
 assets (framework-agnostic functions, TDB resource, commit per

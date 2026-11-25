@@ -1,13 +1,19 @@
 #!/bin/sh
-# demo-ui.sh — Slice 1 headless e2e: drive `assembly-unpaid-invoice` end to end
-# through the SAME ops the Web UI calls on `facty serve`, then boot the server.
+# demo-ui.sh — Slice 1 headless e2e: drive a demo case end to end through the
+# SAME ops the Web UI calls on `facty serve`, then boot the server.
 #
 # Usage:
 #   scripts/demo-ui.sh            # full flow + boot `facty serve` on :8080
 #   scripts/demo-ui.sh --check    # run the flow, assert, exit (CI mode, no server)
 #
-# Env: TERMINUSDB_URL (default http://127.0.0.1:6363), TERMINUSDB_PASS (root),
-#      PORT (8080). Requires the compose terminusdb service up.
+# Env: CASE (default assembly-unpaid-invoice), BUNDLE (default
+#      bundles/small-business-contract-claim), PROVE_SUBJECT/PROVE_PREDICATE
+#      (default matter/demandReady), TERMINUSDB_URL (default
+#      http://127.0.0.1:6363), TERMINUSDB_PASS (root), PORT (8080).
+#      Second demo: CASE=verification-nobid-contracts
+#      BUNDLE=bundles/public-corruption-dossier PROVE_PREDICATE=dossierReady
+#      scripts/demo-ui.sh --check
+#      Requires the compose terminusdb service up.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -15,8 +21,10 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
 
 PORT="${PORT:-8080}"
-CASE="assembly-unpaid-invoice"
-BUNDLE="bundles/small-business-contract-claim"
+CASE="${CASE:-assembly-unpaid-invoice}"
+BUNDLE="${BUNDLE:-bundles/small-business-contract-claim}"
+PROVE_SUBJECT="${PROVE_SUBJECT:-matter}"
+PROVE_PREDICATE="${PROVE_PREDICATE:-demandReady}"
 BR="case-$CASE"
 FACTY="$PROJECT_DIR/facty"
 
@@ -44,7 +52,7 @@ echo "$OUT" | grep -E '"winner"|H1|H2|H3'
 echo "$OUT" | grep -q '"winner": "H1"' || { echo "FAIL: winner not H1"; exit 1; }
 
 step "backward proof"
-"$FACTY" prove matter demandReady --value true --case "$CASE" | grep -q '"provable": true' || { echo "FAIL: not provable"; exit 1; }
+"$FACTY" prove "$PROVE_SUBJECT" "$PROVE_PREDICATE" --value true --case "$CASE" | grep -q '"provable": true' || { echo "FAIL: not provable"; exit 1; }
 
 step "deterministic assembly"
 "$FACTY" assemble "$CASE" --ref "$BR" | head -3

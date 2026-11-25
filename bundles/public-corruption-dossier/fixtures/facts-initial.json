@@ -1,0 +1,22 @@
+[
+  {"@type": "Fact", "id": "f01", "type": "case", "subject": "matter", "predicate": "intake",
+   "valueBool": true, "confidence": 1.0, "source": "operator:intake", "observedAt": "2026-11-03"},
+  {"@type": "Fact", "id": "f02", "type": "evidence", "subject": "contract", "predicate": "noBid",
+   "valueBool": true, "confidence": 0.99, "source": "evidence/foia-award.txt:6", "observedAt": "2026-11-02"},
+  {"@type": "Fact", "id": "f03", "type": "evidence", "subject": "contract", "predicate": "amount",
+   "valueNum": 2400000, "confidence": 0.99, "source": "evidence/foia-award.txt:7", "observedAt": "2026-11-02"},
+  {"@type": "Fact", "id": "f04", "type": "evidence", "subject": "budgetLine", "predicate": "amount",
+   "valueNum": 900000, "confidence": 0.99, "source": "evidence/budget-ledger.txt:5", "observedAt": "2026-11-02"},
+  {"@type": "Fact", "id": "f05", "type": "evidence", "subject": "competitor", "predicate": "lowestBid",
+   "valueNum": 1100000, "confidence": 0.98, "source": "evidence/disqualification-letters.txt:6", "observedAt": "2026-11-02"},
+  {"@type": "Fact", "id": "f06", "type": "evidence", "subject": "competitor", "predicate": "bidCount",
+   "valueNum": 2, "confidence": 0.99, "source": "evidence/disqualification-letters.txt:13", "observedAt": "2026-11-02"},
+  {"@type": "Fact", "id": "f07", "type": "evidence", "subject": "competitor", "predicate": "disqualificationBasis",
+   "valueString": "technical", "confidence": 0.95, "source": "evidence/disqualification-letters.txt:7", "observedAt": "2026-11-02"},
+  {"@type": "Fact", "id": "f08", "type": "evidence", "subject": "vendor", "predicate": "addressMatchesOfficial",
+   "valueBool": true, "confidence": 0.97, "source": "evidence/vendor-registry.txt:5", "observedAt": "2026-11-02"},
+  {"@type": "Fact", "id": "f09", "type": "evidence", "subject": "emergency", "predicate": "declarationOnFile",
+   "valueBool": false, "confidence": 0.9, "source": "evidence/foia-award.txt:12", "observedAt": "2026-11-02"},
+  {"@type": "Fact", "id": "f10", "type": "evidence", "subject": "records", "predicate": "independentSources",
+   "valueNum": 3, "confidence": 1.0, "source": "evidence/vendor-registry.txt:16", "observedAt": "2026-11-02"}
+]

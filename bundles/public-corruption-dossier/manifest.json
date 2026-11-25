@@ -1,0 +1,26 @@
+{
+  "contents": {
+    "bundle.json": "e08b88faa6cc4bdcffc54911b71aa3197f26f05f9f71eff21783ffd00ae0039b",
+    "evidence/budget-ledger.txt": "2e7294c9b04b40a272de95d43230d50d9af4f1f82f958713c7d170bab763f685",
+    "evidence/disqualification-letters.txt": "25e857a2ee372660197102f9365cdbe94695d69b3738bfa8fe2d34aeb0399ef0",
+    "evidence/foia-award.txt": "a190bf75365fd8cc5d3636fbf8bd6a807cc95d8da58863e6ce322ecaabcd87e2",
+    "evidence/vendor-registry.txt": "aa6b847b29274c9641ff2a99c439168c97bb7e6ee9d0a00e5c37b2ae4983d6d6",
+    "fixtures/expected.md": "e62b300971a0b94174ddf5d531a7843600173bbb27a027559a167c2710120a96",
+    "fixtures/facts-initial.json": "1856e233fd61e3c9b040cc82ae184f9e46f808f22769effddd53814c1aa18643",
+    "pack/constraints.json": "b6f5894a2545af401a88b717e22bd3014f3a8a36a713b7d49e83571586da7611",
+    "pack/goal.json": "d0baf0a1794ef4da0b414e7d92d546bacfa3fc609b35156562a734149c817c0a",
+    "pack/hypotheses.json": "602a6d2e0fcbf4a7717f4f8350d6989d6a98b0d9939515c04c611682e037a361",
+    "pack/rules.json": "88f8a9e070815e789620833a654c419e1269bc373733aca6bee6ce997ee7bdbd",
+    "pack/snippets.json": "2bd27d013310badc1e4da952ae40faf4be9a849f54a2383968b6ac8e18375904"
+  },
+  "created": "2026-11-25T00:54:36+00:00",
+  "engine": {
+    "name": "facty",
+    "version": "0.2.0"
+  },
+  "fingerprint": "c50ed3ed27662dd3",
+  "id": "public-corruption-dossier",
+  "kind": "domain",
+  "publicKey": "CmfoOCNWShBIojQMIBc7rZz0KeGI11mwi29c63zPweg=",
+  "version": "1.0.0"
+}
