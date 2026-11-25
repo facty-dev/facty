@@ -6,7 +6,8 @@
 # Drafts are committed by the deterministic engine after validation — this
 # agent proposes, it does not decide.
 description = "Pack author: interview the domain expert, draft rule-DSL JSON packs."
-safety = "yolo"
+# NOTE: no `safety` here — vibe 3.1.3 forbids it on agent profiles (warning);
+# approval behavior is the top-level approval policy's (default_approval_policy).
 active_model = "mistral-large-4-0"
 thinking = "high"              # highest level mistral-large-4 supports (catalogue lists low/medium/high; "max" would warn and be dropped)
 enabled_tools = []
