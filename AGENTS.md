@@ -271,7 +271,7 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
   shared by design, so keep it to runtime-safe settings (models/providers/
   agents; secrets stay in `~/.vibe/.env`). One `[[models]]` entry: `name =
   "mistral-large-4-0"` with `thinking = "high"`,
-  `max_context_length = 1048576`, `auto_compact_threshold = 800000` (the API
+  `max_context_length = 1048576`, `auto_compact_threshold = 880000` (the API
   serves 1,048,576 — live-verified against `/v1/models`; see deps-log). Keying
   the single row on the canonical id means old resumed sessions (pinned to
   Mistral's routed alias `mistral-large-4-0-3`, a catalogue alias of this row)
