@@ -525,6 +525,10 @@ SELFTEST_CASES = [
      "p1_facts": "fixtures/facts-initial.json", "p2_facts": None,
      "p1": {"derived": {"d1", "d2", "d3", "d4", "d5", "d6"}, "pruned": {"H2", "H3"},
             "ranking": [("H1", 0.950)], "rec": "q-emergency-declaration"}},
+    {"name": "adjudication-epli-denial", "dir": BUNDLES / "epli-coverage-demand",
+     "p1_facts": "fixtures/facts-initial.json", "p2_facts": None,
+     "p1": {"derived": {"d1", "d2", "d3", "d4"}, "pruned": {"H2", "H3"},
+            "ranking": [("H1", 0.950)], "rec": "q-insurer-notice-date"}},
 ]
 
 

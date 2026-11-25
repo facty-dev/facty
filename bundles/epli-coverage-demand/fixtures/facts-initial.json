@@ -1,0 +1,22 @@
+[
+  {"@type": "Fact", "id": "f01", "type": "case", "subject": "matter", "predicate": "intake",
+   "valueBool": true, "confidence": 1.0, "source": "operator:intake", "observedAt": "2026-05-08"},
+  {"@type": "Fact", "id": "f02", "type": "evidence", "subject": "termination", "predicate": "date",
+   "valueString": "2026-03-02", "confidence": 0.99, "source": "evidence/termination-letter.txt:3", "observedAt": "2026-03-02"},
+  {"@type": "Fact", "id": "f03", "type": "evidence", "subject": "complaint", "predicate": "internalFiled",
+   "valueBool": true, "confidence": 0.98, "source": "evidence/complaint-emails.txt:5", "observedAt": "2026-02-20"},
+  {"@type": "Fact", "id": "f04", "type": "evidence", "subject": "complaint", "predicate": "filedBeforeTermination",
+   "valueBool": true, "confidence": 0.97, "source": "evidence/complaint-emails.txt:12", "observedAt": "2026-02-20"},
+  {"@type": "Fact", "id": "f05", "type": "evidence", "subject": "notice", "predicate": "daysAfterTermination",
+   "valueNum": 41, "confidence": 0.98, "source": "evidence/insurer-denial.txt:6", "observedAt": "2026-04-12"},
+  {"@type": "Fact", "id": "f06", "type": "evidence", "subject": "policy", "predicate": "noticeWindowDays",
+   "valueNum": 90, "confidence": 1.0, "source": "evidence/policy-extract.txt:12", "observedAt": "2026-01-01"},
+  {"@type": "Fact", "id": "f07", "type": "evidence", "subject": "policy", "predicate": "insuringClause",
+   "valueString": "EPLI", "confidence": 1.0, "source": "evidence/policy-extract.txt:5", "observedAt": "2026-01-01"},
+  {"@type": "Fact", "id": "f08", "type": "evidence", "subject": "policy", "predicate": "exclusionMatchesDenial",
+   "valueBool": false, "confidence": 0.95, "source": "evidence/policy-extract.txt:20", "observedAt": "2026-01-01"},
+  {"@type": "Fact", "id": "f09", "type": "evidence", "subject": "denial", "predicate": "reason",
+   "valueString": "late notice + procedure", "confidence": 0.99, "source": "evidence/insurer-denial.txt:7", "observedAt": "2026-05-06"},
+  {"@type": "Fact", "id": "f10", "type": "evidence", "subject": "records", "predicate": "independentSources",
+   "valueNum": 3, "confidence": 1.0, "source": "evidence/complaint-emails.txt:12", "observedAt": "2026-05-08"}
+]

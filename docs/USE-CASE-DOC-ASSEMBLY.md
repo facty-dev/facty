@@ -180,6 +180,12 @@ technicalities. The dossier must prove it before publication.
 
 ## Demo case 3 — Insurance / plaintiff-side EPLI: `adjudication-epli-denial`
 
+> **Status:** built 2026-11-17 as the signed bundle `epli-coverage-demand`
+> (selftest entry `adjudication-epli-denial`; `demo-ui.sh --check` green).
+> Note: the complaint date in the sketch above was inconsistent with the
+> termination date; the built case uses complaint 2026-02-20 (before the
+> 2026-03-02 termination) so the procedure claim is coherent.
+
 **Protagonist:** James, 58, a sales manager terminated after reporting age
 discrimination; his employer's **EPLI insurer denied coverage** claiming late
 notice and "failure to follow internal complaint procedure". Not personal

@@ -223,6 +223,16 @@ Vehicle: `assembly-unpaid-invoice` (Marisol's bakery; see
    `c-no-emergency-eliminates-H2`, H3 by `c-records-agree-eliminates-H3`;
    recommended test `q-emergency-declaration`; `facty assemble` renders the
    six-section dossier; `demo-ui.sh --check` passes for the new case.
+8. Third exemplar: **done 2026-11-17** — demo case 3
+   `adjudication-epli-denial` / bundle `epli-coverage-demand`
+   ([USE-CASE-DOC-ASSEMBLY.md](USE-CASE-DOC-ASSEMBLY.md#demo-case-3--insurance--plaintiff-side-epli-adjudication-epli-denial)):
+   3 hypotheses, 5 rules (numeric `cmp` on the 41-of-90-day notice window),
+   6 constraints (incl. the litigation-grade two-source guard), Goal + 4 slots,
+   6 snippets, a signed Pipeline, 4 insurance-document evidence files and
+   cached fixtures. H1 0.950; H2 pruned by `c-notice-timely-eliminates-H2`,
+   H3 by `c-exclusion-absent-eliminates-H3`; recommended test
+   `q-insurer-notice-date`; `prove matter denialWrongful` renders the proof
+   tree; `assemble` emits the coverage demand package; demo check green.
 
 **Slice 2 — the evidence plane and MCP glue.** Dagster wrapping of the ingest
 assets (framework-agnostic functions, TDB resource, commit per

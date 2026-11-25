@@ -1,0 +1,655 @@
+[
+  {
+    "@type": "Rule",
+    "id": "r-open-intake-questions",
+    "version": "1",
+    "pack": "epli-coverage-demand",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "intake",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-insurer-notice-date",
+          "slot": "insurerNoticeDate",
+          "text": "On what date did you (or counsel) first notify the insurer of the EEOC charge and the termination? (YYYY-MM-DD)",
+          "mandatory": true,
+          "priority": 1,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1",
+            "H2"
+          ]
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-hr-complaint-date",
+          "slot": "hrComplaintDate",
+          "text": "When did you file the internal age-discrimination complaint \u2014 before or after the termination? (YYYY-MM-DD)",
+          "mandatory": true,
+          "priority": 2,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1",
+            "H2"
+          ]
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-counsel-date",
+          "slot": "counselDate",
+          "text": "When did employment counsel take the case? (YYYY-MM-DD \u2014 the insurer's 'late notice' clock only starts once you knew or should have known of the claim.)",
+          "mandatory": false,
+          "priority": 3,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1"
+          ]
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-cited-exclusions",
+          "slot": "citedExclusions",
+          "text": "Which policy exclusions does the denial letter actually cite? (quote them \u2014 an exclusion that does not appear in the policy cannot apply)",
+          "mandatory": true,
+          "priority": 4,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1",
+            "H3"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-notice-timely",
+    "version": "1",
+    "pack": "epli-coverage-demand",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "notice",
+        "predicate": "daysAfterTermination",
+        "cmp": "lt",
+        "compareToSubject": "policy",
+        "compareToPredicate": "noticeWindowDays"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d1",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "noticeTimely",
+          "valueBool": true,
+          "confidence": 0.98
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-procedure-followed",
+    "version": "1",
+    "pack": "epli-coverage-demand",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "complaint",
+        "predicate": "internalFiled",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "complaint",
+        "predicate": "filedBeforeTermination",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d2",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "procedureFollowed",
+          "valueBool": true,
+          "confidence": 0.95
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-epli-covered",
+    "version": "1",
+    "pack": "epli-coverage-demand",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "insuringClause",
+        "valueString": "EPLI"
+      },
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "exclusionMatchesDenial",
+        "valueBool": false
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d3",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "epliCovered",
+          "valueBool": true,
+          "confidence": 0.97
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-denial-wrongful",
+    "version": "1",
+    "pack": "epli-coverage-demand",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "noticeTimely",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "procedureFollowed",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "epliCovered",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d4",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "denialWrongful",
+          "valueBool": true,
+          "confidence": 1.0
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "raise",
+        "hypotheses": [
+          "H1"
+        ]
+      }
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H1",
+    "statement": "The denial is wrongful \u2014 notice was timely (day 41 of the 90-day window), the internal complaint procedure was followed (the complaint predates the termination), and the EPLI insuring clause applies with no matching exclusion.",
+    "status": "open",
+    "prior": 0.5,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "notice",
+        "predicate": "daysAfterTermination",
+        "valueNum": 41
+      },
+      {
+        "@type": "Condition",
+        "subject": "complaint",
+        "predicate": "filedBeforeTermination",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "insuringClause",
+        "valueString": "EPLI"
+      },
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "exclusionMatchesDenial",
+        "valueBool": false
+      }
+    ],
+    "evidenceFor": [
+      "Termination letter dated 2026-03-02; insurer notice sent 2026-04-12 (day 41 of 90)",
+      "Internal age-discrimination complaint filed 2026-02-20, before the termination",
+      "Policy insuring clause covers employment practices liability",
+      "The denial cites 'late notice + procedure' but no exclusion that matches"
+    ],
+    "evidenceAgainst": [
+      "The insurer denies any internal complaint was filed",
+      "Counsel's first letter to the insurer postdates the termination"
+    ],
+    "discriminatingTests": [
+      "When was the insurer first notified?",
+      "When was the internal complaint filed?",
+      "Which exclusions does the denial actually cite?"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H2",
+    "statement": "The denial is proper \u2014 notice to the insurer came after the 90-day claims-made window, so coverage was forfeited regardless of the merits.",
+    "status": "open",
+    "prior": 0.3,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "notice",
+        "predicate": "late",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "complaint",
+        "predicate": "filedBeforeTermination",
+        "valueBool": false
+      }
+    ],
+    "evidenceFor": [
+      "Counsel's coverage letter is dated after the window closed"
+    ],
+    "evidenceAgainst": [
+      "Notice was sent 41 days after termination, inside the 90-day window"
+    ],
+    "discriminatingTests": [
+      "When was the insurer first notified?"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H3",
+    "statement": "No coverage at all \u2014 an exclusion in the policy applies to the claim, so the denial stands on different grounds.",
+    "status": "open",
+    "prior": 0.2,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "exclusionMatchesDenial",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "insuringClause",
+        "valueString": "Property"
+      }
+    ],
+    "evidenceFor": [
+      "Policies often exclude intentional acts and pending litigation"
+    ],
+    "evidenceAgainst": [
+      "The cited exclusions do not appear in the policy text",
+      "The insuring clause expressly covers employment practices liability"
+    ],
+    "discriminatingTests": [
+      "Which exclusions does the denial actually cite?"
+    ]
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-notice-timely-eliminates-H2",
+    "type": "eliminate",
+    "hypothesis": "H2",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "noticeTimely",
+        "valueBool": true
+      }
+    ],
+    "reason": "Notice was given on day 41 of a 90-day window, so 'late notice' cannot stand; the late-notice denial hypothesis is pruned."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-exclusion-absent-eliminates-H3",
+    "type": "eliminate",
+    "hypothesis": "H3",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "exclusionMatchesDenial",
+        "valueBool": false
+      },
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "insuringClause",
+        "valueString": "EPLI"
+      }
+    ],
+    "reason": "The insuring clause covers employment practices liability and none of the cited exclusions appears in the policy, so the no-coverage hypothesis is pruned."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-two-source-guard",
+    "type": "eliminate",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "records",
+        "predicate": "independentSources",
+        "cmp": "lt",
+        "valueNum": 2
+      }
+    ],
+    "reason": "Litigation-grade guard: a coverage demand is never sent on a single source. With fewer than two independent records the demand package refuses the claim."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-notice-supports-H1",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "noticeTimely",
+        "valueBool": true
+      }
+    ],
+    "reason": "The notice timeline is arithmetic, not argument: 41 days is inside the 90-day window."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-procedure-supports-H1",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "procedureFollowed",
+        "valueBool": true
+      }
+    ],
+    "reason": "The internal complaint predates the termination \u2014 the procedure was followed, not evaded."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-coverage-supports-H1",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "epliCovered",
+        "valueBool": true
+      }
+    ],
+    "reason": "The insuring clause applies and no cited exclusion matches the claim."
+  },
+  {
+    "@type": "Goal",
+    "id": "goal-coverage-demand-package",
+    "pack": "epli-coverage-demand",
+    "name": "Coverage demand package (denial overturned)",
+    "statement": "Prove the EPLI denial is wrongful \u2014 notice inside the 90-day window, the internal procedure followed, the insuring clause applying with no matching exclusion \u2014 and assemble the coverage demand letter plus evidence bundle the insurer cannot ignore.",
+    "intentPhrases": [
+      "EPLI insurer denied my coverage",
+      "insurer denied coverage",
+      "employment practices liability denial",
+      "they said I filed late",
+      "insurance company denied my defense"
+    ],
+    "requiredSlots": [
+      {
+        "@type": "Slot",
+        "name": "insurerNoticeDate",
+        "type": "date",
+        "producesSubject": "notice",
+        "producesPredicate": "sentOn",
+        "fillers": [
+          "human"
+        ],
+        "confirm": true
+      },
+      {
+        "@type": "Slot",
+        "name": "hrComplaintDate",
+        "type": "date",
+        "producesSubject": "complaint",
+        "producesPredicate": "filedOn",
+        "fillers": [
+          "llm",
+          "human"
+        ],
+        "confirm": true
+      },
+      {
+        "@type": "Slot",
+        "name": "counselDate",
+        "type": "date",
+        "producesSubject": "counsel",
+        "producesPredicate": "engagedOn",
+        "fillers": [
+          "human"
+        ],
+        "confirm": false
+      },
+      {
+        "@type": "Slot",
+        "name": "citedExclusions",
+        "type": "text",
+        "producesSubject": "denial",
+        "producesPredicate": "citedExclusions",
+        "fillers": [
+          "llm",
+          "human"
+        ],
+        "confirm": false
+      }
+    ],
+    "output": "coverage demand package (letter + evidence bundle, Markdown, printable to PDF)"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-header",
+    "pack": "epli-coverage-demand",
+    "title": "Demand letter header",
+    "order": 1,
+    "when": [],
+    "body": "# COVERAGE DEMAND \u2014 EMPLOYMENT PRACTICES LIABILITY\n\n**Re: Wrongful denial of defense and indemnity (matter adjudication-epli-denial)**\n\nSent on behalf of the insured. Every assertion below is derived from the policy, the termination letter, the internal complaint record and your own denial letter. Each carries a proof and a source span; the file is litigation-grade.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-denial",
+    "pack": "epli-coverage-demand",
+    "title": "The denial and why it fails",
+    "order": 2,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "denialWrongful",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 1. Your denial\n\nYour letter denies coverage on two grounds: **late notice** and **failure to follow the internal complaint procedure**. Neither survives the record.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-notice",
+    "pack": "epli-coverage-demand",
+    "title": "Notice was timely",
+    "order": 3,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "noticeTimely",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 2. Notice was timely \u2014 day 41 of 90\n\nThe termination is dated **2026-03-02**. Notice reached you on **2026-04-12** \u2014 **41 days**, inside the policy's **90-day** claims-made window. The window is arithmetic; there is nothing to argue.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-procedure",
+    "pack": "epli-coverage-demand",
+    "title": "The procedure was followed",
+    "order": 4,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "procedureFollowed",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 3. The procedure was followed\n\nThe internal age-discrimination complaint was filed **2026-02-20**, before the termination of **2026-03-02**. The complaint record and the HR acknowledgement are attached. Your claim that no internal complaint was filed is contradicted by your own insured's contemporaneous records.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-coverage",
+    "pack": "epli-coverage-demand",
+    "title": "The insuring clause applies",
+    "order": 5,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "epliCovered",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 4. The insuring clause applies and no exclusion matches\n\nThe policy's insuring clause expressly covers **employment practices liability**. None of the exclusions your letter cites appears in the policy text. An exclusion that does not exist cannot be applied.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-demand",
+    "pack": "epli-coverage-demand",
+    "title": "Demand and reservation",
+    "order": 6,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "denialWrongful",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 5. Demand\n\nWithdraw the denial within **14 days** and assume the defense of the underlying charge under a full reservation of rights. If the denial stands, this file \u2014 proof trees, custody chain and policy text included \u2014 accompanies a bad-faith claim and a regulatory complaint.\n\n*Custody: policy extract, termination letter, complaint emails and denial letter are content-addressed and committed to the case record; the chain is replayable.*\n"
+  },
+  {
+    "@type": "Pipeline",
+    "id": "adjudication-epli-denial",
+    "pack": "epli-coverage-demand",
+    "version": "1.0.0",
+    "name": "EPLI coverage demand (offline replay)",
+    "steps": [
+      {
+        "@type": "Step",
+        "id": "s1-load",
+        "name": "Load sensed facts (cache replay)",
+        "op": "load-facts",
+        "mode": "deterministic",
+        "surface": "wizard",
+        "order": 1,
+        "params": "{\"path\": \"bundles/epli-coverage-demand/fixtures/facts-initial.json\", \"message\": \"phase 1 sensed facts (turn)\"}"
+      },
+      {
+        "@type": "Step",
+        "id": "s2-run-1",
+        "name": "Run phase 1: chain \u2192 prune \u2192 rank",
+        "op": "run",
+        "mode": "deterministic",
+        "surface": "wizard",
+        "order": 2,
+        "params": "{\"phase\": \"1\"}"
+      },
+      {
+        "@type": "Step",
+        "id": "s3-answer",
+        "name": "Answer the top open question (slot filling)",
+        "op": "answer",
+        "mode": "ranked",
+        "surface": "wizard",
+        "order": 3,
+        "params": "{}"
+      },
+      {
+        "@type": "Step",
+        "id": "s4-run-2",
+        "name": "Run phase 2 with the answer",
+        "op": "run",
+        "mode": "deterministic",
+        "surface": "wizard",
+        "order": 4,
+        "params": "{\"phase\": \"2\"}"
+      },
+      {
+        "@type": "Step",
+        "id": "s5-assemble",
+        "name": "Assemble the coverage demand package",
+        "op": "assemble",
+        "mode": "deterministic",
+        "surface": "wizard",
+        "order": 5,
+        "params": "{}"
+      }
+    ]
+  }
+]

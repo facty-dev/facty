@@ -1,0 +1,26 @@
+{
+  "contents": {
+    "bundle.json": "e2ac9e7ba1037a599cdcb82ac4bbad4d2bb6eb39d1cb074ec9472f8542a77551",
+    "evidence/complaint-emails.txt": "2789bc0a300aa14344992a9ac9a49be790159c3423df4b33563d9809dd7a9b0a",
+    "evidence/insurer-denial.txt": "7e2b2049ebecef1384b51605985c0efd3f062f2fcca2067da46504f8ed377df3",
+    "evidence/policy-extract.txt": "80ad6906d43943315309af32e2d8f3bc96931ea4619f434883959e8a92591d0c",
+    "evidence/termination-letter.txt": "9e017499b817b82fb234f657702a4f1bb5b4d3f8e1b9b3f154ef1c693f571964",
+    "fixtures/expected.md": "baaca10d51c3e96bc691e9054b410bdc11642e415b3000ae4436e9e1f35ca178",
+    "fixtures/facts-initial.json": "8c6750204524acc4f45099c3d0c62734b08c5e3a953bdf4654c28efbe5fec862",
+    "pack/constraints.json": "400ea9d901002b4f23978f5c651af05ff9dd5e0d7345006252b364fd54222e3f",
+    "pack/goal.json": "4a527ae4c7ec5a37d9d0295068e54d72ae06331289db08b0af2f04061b60003e",
+    "pack/hypotheses.json": "359faa94f44d57225f2b27024209a5082641f2fe76ccb61d2bc1f08c69a3eb45",
+    "pack/rules.json": "d10577a51c2b0f4852c7fcb846019711caacd05264318a95359ac08486c3370f",
+    "pack/snippets.json": "48dc53ff3fb18bd473127570a32b4b8a579607296f7deb9e52757b4cc3f564a9"
+  },
+  "created": "2026-11-25T01:01:53+00:00",
+  "engine": {
+    "name": "facty",
+    "version": "0.2.0"
+  },
+  "fingerprint": "c50ed3ed27662dd3",
+  "id": "epli-coverage-demand",
+  "kind": "domain",
+  "publicKey": "CmfoOCNWShBIojQMIBc7rZz0KeGI11mwi29c63zPweg=",
+  "version": "1.0.0"
+}

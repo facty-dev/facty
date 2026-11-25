@@ -1,0 +1,238 @@
+[
+  {
+    "@type": "Rule",
+    "id": "r-open-intake-questions",
+    "version": "1",
+    "pack": "epli-coverage-demand",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "intake",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-insurer-notice-date",
+          "slot": "insurerNoticeDate",
+          "text": "On what date did you (or counsel) first notify the insurer of the EEOC charge and the termination? (YYYY-MM-DD)",
+          "mandatory": true,
+          "priority": 1,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1",
+            "H2"
+          ]
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-hr-complaint-date",
+          "slot": "hrComplaintDate",
+          "text": "When did you file the internal age-discrimination complaint \u2014 before or after the termination? (YYYY-MM-DD)",
+          "mandatory": true,
+          "priority": 2,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1",
+            "H2"
+          ]
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-counsel-date",
+          "slot": "counselDate",
+          "text": "When did employment counsel take the case? (YYYY-MM-DD \u2014 the insurer's 'late notice' clock only starts once you knew or should have known of the claim.)",
+          "mandatory": false,
+          "priority": 3,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1"
+          ]
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "open",
+        "question": {
+          "@type": "Question",
+          "id": "q-cited-exclusions",
+          "slot": "citedExclusions",
+          "text": "Which policy exclusions does the denial letter actually cite? (quote them \u2014 an exclusion that does not appear in the policy cannot apply)",
+          "mandatory": true,
+          "priority": 4,
+          "status": "open",
+          "raisedBy": "rule:r-open-intake-questions",
+          "discriminates": [
+            "H1",
+            "H3"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-notice-timely",
+    "version": "1",
+    "pack": "epli-coverage-demand",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "notice",
+        "predicate": "daysAfterTermination",
+        "cmp": "lt",
+        "compareToSubject": "policy",
+        "compareToPredicate": "noticeWindowDays"
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d1",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "noticeTimely",
+          "valueBool": true,
+          "confidence": 0.98
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-procedure-followed",
+    "version": "1",
+    "pack": "epli-coverage-demand",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "complaint",
+        "predicate": "internalFiled",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "complaint",
+        "predicate": "filedBeforeTermination",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d2",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "procedureFollowed",
+          "valueBool": true,
+          "confidence": 0.95
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-epli-covered",
+    "version": "1",
+    "pack": "epli-coverage-demand",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "insuringClause",
+        "valueString": "EPLI"
+      },
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "exclusionMatchesDenial",
+        "valueBool": false
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d3",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "epliCovered",
+          "valueBool": true,
+          "confidence": 0.97
+        }
+      }
+    ]
+  },
+  {
+    "@type": "Rule",
+    "id": "r-denial-wrongful",
+    "version": "1",
+    "pack": "epli-coverage-demand",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "noticeTimely",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "procedureFollowed",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "epliCovered",
+        "valueBool": true
+      }
+    ],
+    "then": [
+      {
+        "@type": "Action",
+        "op": "derive",
+        "fact": {
+          "@type": "FactTemplate",
+          "id": "d4",
+          "type": "derived",
+          "subject": "matter",
+          "predicate": "denialWrongful",
+          "valueBool": true,
+          "confidence": 1.0
+        }
+      },
+      {
+        "@type": "Action",
+        "op": "raise",
+        "hypotheses": [
+          "H1"
+        ]
+      }
+    ]
+  }
+]

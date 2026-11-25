@@ -1,0 +1,111 @@
+[
+  {
+    "@type": "Hypothesis",
+    "id": "H1",
+    "statement": "The denial is wrongful \u2014 notice was timely (day 41 of the 90-day window), the internal complaint procedure was followed (the complaint predates the termination), and the EPLI insuring clause applies with no matching exclusion.",
+    "status": "open",
+    "prior": 0.5,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "notice",
+        "predicate": "daysAfterTermination",
+        "valueNum": 41
+      },
+      {
+        "@type": "Condition",
+        "subject": "complaint",
+        "predicate": "filedBeforeTermination",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "insuringClause",
+        "valueString": "EPLI"
+      },
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "exclusionMatchesDenial",
+        "valueBool": false
+      }
+    ],
+    "evidenceFor": [
+      "Termination letter dated 2026-03-02; insurer notice sent 2026-04-12 (day 41 of 90)",
+      "Internal age-discrimination complaint filed 2026-02-20, before the termination",
+      "Policy insuring clause covers employment practices liability",
+      "The denial cites 'late notice + procedure' but no exclusion that matches"
+    ],
+    "evidenceAgainst": [
+      "The insurer denies any internal complaint was filed",
+      "Counsel's first letter to the insurer postdates the termination"
+    ],
+    "discriminatingTests": [
+      "When was the insurer first notified?",
+      "When was the internal complaint filed?",
+      "Which exclusions does the denial actually cite?"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H2",
+    "statement": "The denial is proper \u2014 notice to the insurer came after the 90-day claims-made window, so coverage was forfeited regardless of the merits.",
+    "status": "open",
+    "prior": 0.3,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "notice",
+        "predicate": "late",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "complaint",
+        "predicate": "filedBeforeTermination",
+        "valueBool": false
+      }
+    ],
+    "evidenceFor": [
+      "Counsel's coverage letter is dated after the window closed"
+    ],
+    "evidenceAgainst": [
+      "Notice was sent 41 days after termination, inside the 90-day window"
+    ],
+    "discriminatingTests": [
+      "When was the insurer first notified?"
+    ]
+  },
+  {
+    "@type": "Hypothesis",
+    "id": "H3",
+    "statement": "No coverage at all \u2014 an exclusion in the policy applies to the claim, so the denial stands on different grounds.",
+    "status": "open",
+    "prior": 0.2,
+    "claims": [
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "exclusionMatchesDenial",
+        "valueBool": true
+      },
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "insuringClause",
+        "valueString": "Property"
+      }
+    ],
+    "evidenceFor": [
+      "Policies often exclude intentional acts and pending litigation"
+    ],
+    "evidenceAgainst": [
+      "The cited exclusions do not appear in the policy text",
+      "The insuring clause expressly covers employment practices liability"
+    ],
+    "discriminatingTests": [
+      "Which exclusions does the denial actually cite?"
+    ]
+  }
+]

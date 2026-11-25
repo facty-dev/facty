@@ -1,0 +1,65 @@
+[
+  {
+    "@type": "Goal",
+    "id": "goal-coverage-demand-package",
+    "pack": "epli-coverage-demand",
+    "name": "Coverage demand package (denial overturned)",
+    "statement": "Prove the EPLI denial is wrongful \u2014 notice inside the 90-day window, the internal procedure followed, the insuring clause applying with no matching exclusion \u2014 and assemble the coverage demand letter plus evidence bundle the insurer cannot ignore.",
+    "intentPhrases": [
+      "EPLI insurer denied my coverage",
+      "insurer denied coverage",
+      "employment practices liability denial",
+      "they said I filed late",
+      "insurance company denied my defense"
+    ],
+    "requiredSlots": [
+      {
+        "@type": "Slot",
+        "name": "insurerNoticeDate",
+        "type": "date",
+        "producesSubject": "notice",
+        "producesPredicate": "sentOn",
+        "fillers": [
+          "human"
+        ],
+        "confirm": true
+      },
+      {
+        "@type": "Slot",
+        "name": "hrComplaintDate",
+        "type": "date",
+        "producesSubject": "complaint",
+        "producesPredicate": "filedOn",
+        "fillers": [
+          "llm",
+          "human"
+        ],
+        "confirm": true
+      },
+      {
+        "@type": "Slot",
+        "name": "counselDate",
+        "type": "date",
+        "producesSubject": "counsel",
+        "producesPredicate": "engagedOn",
+        "fillers": [
+          "human"
+        ],
+        "confirm": false
+      },
+      {
+        "@type": "Slot",
+        "name": "citedExclusions",
+        "type": "text",
+        "producesSubject": "denial",
+        "producesPredicate": "citedExclusions",
+        "fillers": [
+          "llm",
+          "human"
+        ],
+        "confirm": false
+      }
+    ],
+    "output": "coverage demand package (letter + evidence bundle, Markdown, printable to PDF)"
+  }
+]

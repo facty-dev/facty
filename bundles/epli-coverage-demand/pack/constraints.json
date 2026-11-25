@@ -1,0 +1,99 @@
+[
+  {
+    "@type": "Constraint",
+    "id": "c-notice-timely-eliminates-H2",
+    "type": "eliminate",
+    "hypothesis": "H2",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "noticeTimely",
+        "valueBool": true
+      }
+    ],
+    "reason": "Notice was given on day 41 of a 90-day window, so 'late notice' cannot stand; the late-notice denial hypothesis is pruned."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-exclusion-absent-eliminates-H3",
+    "type": "eliminate",
+    "hypothesis": "H3",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "exclusionMatchesDenial",
+        "valueBool": false
+      },
+      {
+        "@type": "Condition",
+        "subject": "policy",
+        "predicate": "insuringClause",
+        "valueString": "EPLI"
+      }
+    ],
+    "reason": "The insuring clause covers employment practices liability and none of the cited exclusions appears in the policy, so the no-coverage hypothesis is pruned."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-two-source-guard",
+    "type": "eliminate",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "records",
+        "predicate": "independentSources",
+        "cmp": "lt",
+        "valueNum": 2
+      }
+    ],
+    "reason": "Litigation-grade guard: a coverage demand is never sent on a single source. With fewer than two independent records the demand package refuses the claim."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-notice-supports-H1",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "noticeTimely",
+        "valueBool": true
+      }
+    ],
+    "reason": "The notice timeline is arithmetic, not argument: 41 days is inside the 90-day window."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-procedure-supports-H1",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "procedureFollowed",
+        "valueBool": true
+      }
+    ],
+    "reason": "The internal complaint predates the termination \u2014 the procedure was followed, not evaded."
+  },
+  {
+    "@type": "Constraint",
+    "id": "c-coverage-supports-H1",
+    "type": "support",
+    "hypothesis": "H1",
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "epliCovered",
+        "valueBool": true
+      }
+    ],
+    "reason": "The insuring clause applies and no cited exclusion matches the claim."
+  }
+]

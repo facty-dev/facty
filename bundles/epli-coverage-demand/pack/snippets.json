@@ -1,0 +1,91 @@
+[
+  {
+    "@type": "Snippet",
+    "id": "s-header",
+    "pack": "epli-coverage-demand",
+    "title": "Demand letter header",
+    "order": 1,
+    "when": [],
+    "body": "# COVERAGE DEMAND \u2014 EMPLOYMENT PRACTICES LIABILITY\n\n**Re: Wrongful denial of defense and indemnity (matter adjudication-epli-denial)**\n\nSent on behalf of the insured. Every assertion below is derived from the policy, the termination letter, the internal complaint record and your own denial letter. Each carries a proof and a source span; the file is litigation-grade.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-denial",
+    "pack": "epli-coverage-demand",
+    "title": "The denial and why it fails",
+    "order": 2,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "denialWrongful",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 1. Your denial\n\nYour letter denies coverage on two grounds: **late notice** and **failure to follow the internal complaint procedure**. Neither survives the record.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-notice",
+    "pack": "epli-coverage-demand",
+    "title": "Notice was timely",
+    "order": 3,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "noticeTimely",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 2. Notice was timely \u2014 day 41 of 90\n\nThe termination is dated **2026-03-02**. Notice reached you on **2026-04-12** \u2014 **41 days**, inside the policy's **90-day** claims-made window. The window is arithmetic; there is nothing to argue.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-procedure",
+    "pack": "epli-coverage-demand",
+    "title": "The procedure was followed",
+    "order": 4,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "procedureFollowed",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 3. The procedure was followed\n\nThe internal age-discrimination complaint was filed **2026-02-20**, before the termination of **2026-03-02**. The complaint record and the HR acknowledgement are attached. Your claim that no internal complaint was filed is contradicted by your own insured's contemporaneous records.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-coverage",
+    "pack": "epli-coverage-demand",
+    "title": "The insuring clause applies",
+    "order": 5,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "epliCovered",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 4. The insuring clause applies and no exclusion matches\n\nThe policy's insuring clause expressly covers **employment practices liability**. None of the exclusions your letter cites appears in the policy text. An exclusion that does not exist cannot be applied.\n"
+  },
+  {
+    "@type": "Snippet",
+    "id": "s-demand",
+    "pack": "epli-coverage-demand",
+    "title": "Demand and reservation",
+    "order": 6,
+    "when": [
+      {
+        "@type": "Condition",
+        "subject": "matter",
+        "predicate": "denialWrongful",
+        "valueBool": true
+      }
+    ],
+    "body": "\n## 5. Demand\n\nWithdraw the denial within **14 days** and assume the defense of the underlying charge under a full reservation of rights. If the denial stands, this file \u2014 proof trees, custody chain and policy text included \u2014 accompanies a bad-faith claim and a regulatory complaint.\n\n*Custody: policy extract, termination letter, complaint emails and denial letter are content-addressed and committed to the case record; the chain is replayable.*\n"
+  }
+]
