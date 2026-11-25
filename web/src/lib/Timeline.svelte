@@ -17,10 +17,10 @@
   {#each ui.commits as c}
     <div class="flex items-center gap-2 border-b border-dashed py-1">
       <Badge variant="outline" class="font-mono">{c.identifier?.slice(0, 10)}</Badge>
-      <Badge variant="secondary">deterministic commit</Badge>
+      <Badge variant="secondary">saved step</Badge>
       <span class="truncate">{c.message}</span>
     </div>
   {:else}
-    <div class="text-muted-foreground">no commits yet</div>
+    <div class="text-muted-foreground">nothing recorded yet</div>
   {/each}
 </div>

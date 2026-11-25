@@ -63,6 +63,7 @@ POST_ROUTES = {
 }
 
 GET_ROUTES = {
+    "/api/bundles": lambda c, q: ops_mod.bundles(c),
     "/api/cases":   lambda c, q: ops_mod.case_list(c),
     "/api/state":   lambda c, q: ops_mod.state(c, q["case"][0]),
     "/api/log":     lambda c, q: ops_mod.log(c, q["case"][0]),

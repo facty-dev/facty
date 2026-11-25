@@ -135,7 +135,7 @@ TOOLS: list[dict] = [
     {"name": "feedback_list", "serve": "/api/feedback",
      "description": "List Feedback docs for a case (or app scope).",
      "inputSchema": {"type": "object", "properties": {"case": {"type": "string"}}}},
-    {"name": "bundles", "serve": None,
+    {"name": "bundles", "serve": "/api/bundles",
      "description": "List the signed bundles in bundles/ (the only pack/case/demo form).",
      "inputSchema": {"type": "object", "properties": {}}},
 ]

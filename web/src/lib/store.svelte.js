@@ -2,9 +2,16 @@ import * as api from "./api.js";
 
 // All UI state lives here; the server (facty serve / TerminusDB commits) is the
 // only source of truth — SSE pushes replace `docs`/`commits`.
+//
+// Plain-language layering (UX rule for this UI): non-technical users see
+// conclusions, questions and documents; ids, proofs, derivations and turn
+// logs live behind the "Details" tab. Every technical concept gets a human
+// name here, once.
 class UI {
   case = $state("");
   cases = $state([]);
+  bundles = $state([]);
+  caseInfo = $state({});            // case id → {title, open, done, failed}
   docs = $state([]);
   commits = $state([]);
   surface = $state("wizard");      // "wizard" | "chat" — switchable per turn (ADR-0010)
@@ -15,6 +22,7 @@ class UI {
   notice = $state("");              // transient friendly confirmation
   feedback = $state([]);            // Feedback docs for the current case
   intent = $state(null);            // matched Goal
+  dismissed = $state({});           // optional questions the person skipped (session-scoped)
   es = null;
 
   byType(t) { return this.docs.filter((d) => d["@type"] === t); }
@@ -43,6 +51,66 @@ class UI {
     });
   }
 
+  // ── plain-language state ──────────────────────────────────────────────────
+  /** Human title for the current investigation: the pack's goal, else the case. */
+  get title() { return this.goal?.name || this.case; }
+  /** Ordered questions a person still has to answer (mandatory first). */
+  get questions() {
+    return this.gapQuestions
+      .filter((q) => !this.dismissed[q.id])
+      .sort((a, b) =>
+        (Number(b.mandatory) - Number(a.mandatory)) || (a.priority - b.priority) || a.id.localeCompare(b.id));
+  }
+  dismiss(question) { this.dismissed = { ...this.dismissed, [question.id]: true }; }
+  get nextQuestion() { return this.questions[0] || null; }
+  /** 3-stage progress a non-technical user can act on. */
+  get stage() {
+    if (!this.case) return "start";
+    if (this.questions.length) return "answer";
+    if (!this.verdict) return "run";
+    if (!this.byType("AssembledDocument")[0]) return "document";
+    return "done";
+  }
+  /** The winning explanation, in its own prose — never an id. */
+  get conclusion() {
+    const w = this.verdict?.winner;
+    if (!w) return null;
+    const h = this.byType("Hypothesis").find((x) => x.id === w);
+    if (!h) return null;
+    const support = (this.byType("Constraint") || []).filter(
+      (c) => c.type === "support" && c.hypothesis === w).length;
+    return { id: h.id, statement: h.statement, prior: h.prior, support };
+  }
+  /** Explanations the evidence rules out, each with the reason in plain words. */
+  get ruledOut() {
+    const cons = Object.fromEntries(this.byType("Constraint").map((c) => [c.id, c]));
+    return this.byType("Hypothesis")
+      .filter((h) => h.status === "pruned")
+      .map((h) => ({
+        id: h.id,
+        statement: h.statement,
+        why: cons[h.prunedBy]?.reason || "it does not fit the evidence we have",
+      }));
+  }
+  get stillExplaining() {
+    return this.byType("Hypothesis").filter((h) => h.status !== "pruned");
+  }
+  /** One-sentence answer for the top banner. */
+  get headline() {
+    if (!this.case) return "Pick a situation to investigate.";
+    if (this.turns.length === 0 && this.docs.length < 4) return "Loading the case…";
+    if (this.questions.length) {
+      const n = this.questions.length;
+      return `${n} question${n === 1 ? "" : "s"} left before the investigation can run.`;
+    }
+    if (!this.verdict) return "Everything we need is in. Run the investigation.";
+    if (this.conclusion) {
+      const ruled = this.ruledOut.length;
+      return `Conclusion reached — ${ruled ? `${ruled} alternative${ruled === 1 ? "" : "s"} ruled out.` : "the evidence supports one explanation."}`;
+    }
+    return "The investigation is complete.";
+  }
+
   // bullseye rings (USE-CASE-DOC-ASSEMBLY.md): Proven / Open / Anomalies
   get bullseye() {
     const ders = this.byType("Derivation");
@@ -62,14 +130,59 @@ class UI {
     };
   }
 
+  async refreshBundles() {
+    this.bundles = ((await api.bundles()).bundles || []).filter((b) => b.signed);
+  }
+
   async refreshCases() {
     this.cases = ((await api.cases()).cases || []).filter((c) => c.id);
+    // Titles + progress for the sidebar, in plain words. Small N (demo cases);
+    // each state read is one TerminusDB query, so cap the fan-out.
+    const ids = this.cases.slice(0, 12).map((c) => c.id);
+    const infos = await Promise.allSettled(ids.map((id) => api.state(id)));
+    const next = {};
+    infos.forEach((r, i) => {
+      const id = ids[i];
+      if (r.status !== "fulfilled") return;
+      const docs = r.value.docs || [];
+      const goal = docs.find((d) => d["@type"] === "Goal");
+      const hyps = docs.filter((d) => d["@type"] === "Hypothesis");
+      const facts = docs.filter((d) => d["@type"] === "Fact");
+      const openQ = docs.filter((d) => d["@type"] === "OpenQuestion" && d.status === "open");
+      // count only the questions that are still genuine gaps (same rule the
+      // wizard uses), so the sidebar and the header never disagree
+      const filled = (slot) => facts.some(
+        (f) => f.subject === slot.producesSubject && f.predicate === slot.producesPredicate &&
+               /^(answer|sense|pipeline):/.test(f.source || ""));
+      const gaps = openQ.filter((q) => {
+        const slot = (goal?.requiredSlots || []).find((sl) => sl.name === q.slot);
+        return !slot || !filled(slot);
+      });
+      const hasVerdict = docs.some((d) => d["@type"] === "Verdict");
+      const hasDoc = docs.some((d) => d["@type"] === "AssembledDocument");
+      next[id] = {
+        title: goal?.name || id,
+        open: gaps.length,
+        done: hasDoc && hasVerdict,
+        started: hyps.length > 0 && hasVerdict,
+      };
+    });
+    // disambiguate repeated goal titles ("… (2)") so two cases for the same
+    // kind of matter never look like one row duplicated
+    const seen = {};
+    for (const id of Object.keys(next)) {
+      const t = next[id].title;
+      seen[t] = (seen[t] || 0) + 1;
+      if (seen[t] > 1) next[id].title = `${t} (${seen[t]})`;
+    }
+    this.caseInfo = next;
   }
 
   async selectCase(c) {
-    this.case = c; this.chat = []; this.proofs = {}; this.selected = null; this.intent = null;
+    this.case = c; this.chat = []; this.proofs = {}; this.selected = null; this.intent = null; this.dismissed = {};
+    this.error = ""; this.notice = "";
     if (this.es) { this.es.close(); this.es = null; }
-    if (!c) return;
+    if (!c) { this.docs = []; this.commits = []; return; }
     const [s, l, fb] = await Promise.all([api.state(c), api.log(c), api.feedbackList(c)]);
     this.docs = s.docs; this.commits = l; this.feedback = fb.feedback || [];
     this.es = new EventSource(`/api/watch?case=${encodeURIComponent(c)}`);
@@ -77,10 +190,68 @@ class UI {
     this.es.addEventListener("commit", (e) => { this.commits = [JSON.parse(e.data), ...this.commits]; });
   }
 
+  /** Start a new investigation from a signed bundle (a template a human picks
+   *  by its title, never by its path). Optionally seed the example evidence. */
+  async startCase(bundle, { withExample = true } = {}) {
+    this.error = ""; this.notice = "";
+    const base = bundle.id;
+    const taken = new Set(this.cases.map((c) => c.id));
+    let id = base; let n = 2;
+    while (taken.has(id)) { id = `${base}-${n++}`; }
+    try {
+      await api.caseInit(id, `bundles/${bundle.id}`);
+      if (withExample) {
+        try { await api.loadFacts(id, `bundles/${bundle.id}/fixtures/facts-initial.json`); }
+        catch { /* bundle has no starter facts — fine */ }
+      }
+      // run once so the pack opens its questions (they are engine-opened docs,
+      // not a static form) — deterministic and cheap, and the person then
+      // starts on "answer these" instead of "run something unexplained"
+      try { await api.run(id, "1"); } catch { /* an empty case is still usable */ }
+      await this.refreshCases();
+      await this.selectCase(id);
+      this.notice = "Investigation started. Answer the questions that are left.";
+    } catch (e) { this.error = String(e.message || e); }
+  }
+
   async op(fn, ...args) {
     this.error = ""; this.notice = "";
     try { await fn(...args); await this.selectCase(this.case); }
     catch (e) { this.error = String(e.message || e); }
+  }
+
+  /** Answer one question, then re-run the deterministic engine so the rings and
+   *  the conclusion update immediately (cheap: pure functions over the graph). */
+  async answerQuestion(question, value) {
+    this.error = ""; this.notice = "";
+    try {
+      await api.answer(this.case, question.id, String(value));
+      await api.run(this.case, "1");
+      await this.selectCase(this.case);
+      await this.refreshCases();
+      this.notice = "Saved. The picture below is updated.";
+    } catch (e) { this.error = String(e.message || e); }
+  }
+
+  /** The one primary action a non-technical user needs. */
+  async runInvestigation() {
+    this.error = ""; this.notice = "";
+    try {
+      await api.run(this.case, "1");
+      await this.selectCase(this.case);
+      await this.refreshCases();
+      this.notice = "Investigation run — every conclusion below is replayable.";
+    } catch (e) { this.error = String(e.message || e); }
+  }
+
+  async buildDocument() {
+    this.error = ""; this.notice = "";
+    try {
+      await api.assemble(this.case);
+      await this.selectCase(this.case);
+      await this.refreshCases();
+      this.notice = "Document built from the parts the evidence proves.";
+    } catch (e) { this.error = String(e.message || e); }
   }
 
   // in-UI comment channel: committed as a Feedback doc on the case branch,
@@ -133,11 +304,13 @@ class UI {
       const q = this.openQuestions.find((qq) => qq.slot === slot.name);
       if (q) await api.answer(this.case, q.id, value);
     }
+    if (slots.length) { try { await api.run(this.case, "1"); } catch { /* keep the chat usable */ } }
     const bits = [];
-    if (intent) bits.push(`intent → ${intent.name}`);
-    if (slots.length) bits.push(`slots → ${slots.map((s) => `${s.slot.name}=${s.value}`).join(", ")}`);
+    if (intent) bits.push(`this looks like “${intent.name}”`);
+    if (slots.length) bits.push(`noted: ${slots.map((s) => s.slot.name).join(", ")}`);
     this.chat = [...this.chat, {
-      who: "sys", text: bits.length ? bits.join(" · ") : "no intent/slot recognized (LLM candidates land with the Slice-2 dispatcher)",
+      who: "sys",
+      text: bits.length ? bits.join(" · ") : "I couldn't pick anything out of that — try the questionnaire, or name a date like 2026-04-18.",
       intent: intent?.id, slots: slots.map((s) => s.slot.name),
     }];
     await this.selectCase(this.case);

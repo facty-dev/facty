@@ -11,30 +11,37 @@
       <circle cx="145" cy="145" r={R[ring]} fill="none" stroke={C[ring]} stroke-width="1.5" opacity="0.8"
               class="cursor-pointer" onclick={() => (drill = ["proven", "open", "anomalies"][ring])} />
     {/each}
-    <text x="145" y="118" text-anchor="middle" fill="var(--proven)" font-size="12" font-weight="700">PROVEN</text>
-    <text x="145" y="133" text-anchor="middle" fill="currentColor" font-size="16">{ui.bullseye.proven.count}</text>
-    <text x="145" y="172" text-anchor="middle" fill="var(--open)" font-size="12" font-weight="700">OPEN</text>
-    <text x="145" y="187" text-anchor="middle" fill="currentColor" font-size="16">{ui.bullseye.open.count}</text>
-    <text x="145" y="232" text-anchor="middle" fill="var(--anomaly)" font-size="12" font-weight="700">ANOMALIES</text>
-    <text x="145" y="247" text-anchor="middle" fill="currentColor" font-size="16">{ui.bullseye.anomalies.count}</text>
+    <text x="145" y="127" text-anchor="middle" fill="var(--proven)" font-size="10" font-weight="700">PROVEN</text>
+    <text x="145" y="146" text-anchor="middle" fill="currentColor" font-size="15">{ui.bullseye.proven.count}</text>
+    <text x="145" y="203" text-anchor="middle" fill="var(--open)" font-size="10" font-weight="700">OPEN</text>
+    <text x="145" y="219" text-anchor="middle" fill="currentColor" font-size="15">{ui.bullseye.open.count}</text>
+    <text x="145" y="243" text-anchor="middle" fill="var(--anomaly)" font-size="9" font-weight="700">DOESN'T FIT</text>
+    <text x="145" y="259" text-anchor="middle" fill="currentColor" font-size="15">{ui.bullseye.anomalies.count}</text>
   </svg>
   <div class="flex-1 min-w-44">
     <div class="text-sm text-muted-foreground">
-      inner = proven (derivation-backed facts + selected snippets) · middle = open (questions + undecided hypotheses) · outer = anomalies (quarantine, contradictions) — click a ring to drill in
+      <p><span class="font-medium" style="color: var(--proven)">Inner</span> — what the evidence proves.</p>
+      <p><span class="font-medium" style="color: var(--open)">Middle</span> — questions to answer and explanations still in play.</p>
+      <p><span class="font-medium" style="color: var(--anomaly)">Outer</span> — things that don't fit together and need a look.</p>
+      <p class="mt-1 text-xs">Click a ring to see the items.</p>
     </div>
     {#if drill === "proven"}
-      <ul class="mt-2 list-disc pl-5 text-sm">{#each ui.bullseye.proven.ids as id}<li><code class="text-xs">{id}</code></li>{/each}</ul>
+      <ul class="mt-2 list-disc pl-5 text-sm">
+        {#each ui.bullseye.proven.ids as id}<li><code class="text-xs">{id}</code></li>{:else}<li>nothing proven yet</li>{/each}
+      </ul>
     {:else if drill === "open"}
       <ul class="mt-2 list-disc pl-5 text-sm">
-        {#each ui.openQuestions as q}<li>Q {q.id} — {q.text}</li>{/each}
-        {#each ui.byType("Hypothesis").filter((h) => h.status !== "pruned") as h}<li>{h.id} — {h.statement.slice(0, 80)}</li>{/each}
+        {#each ui.questions as q}<li>{q.text}</li>{/each}
+        {#each ui.stillExplaining as h}<li>{h.statement.slice(0, 90)}…</li>{/each}
+        {#if !ui.questions.length && !ui.stillExplaining.length}<li>nothing open</li>{/if}
       </ul>
     {:else if drill === "anomalies"}
       <ul class="mt-2 list-disc pl-5 text-sm">
-        {#each ui.byType("Quarantine") as q}<li>quarantine {q.path}: {q.reason}</li>{/each}
+        {#each ui.byType("Quarantine") as q}<li>{q.path}: {q.reason}</li>{/each}
         {#each ui.byType("Fact").filter((f) => f.predicate === "semanticContradictionWith") as f}
-          <li>contradiction candidate <code class="text-xs">{f.subject}</code> ~ <code class="text-xs">{f.valueString}</code> ({Number(f.confidence).toFixed(3)})</li>
+          <li>two documents disagree about <b>{f.subject}</b> ({Number(f.confidence).toFixed(2)} confidence)</li>
         {/each}
+        {#if !ui.bullseye.anomalies.count}<li>nothing out of place</li>{/if}
       </ul>
     {/if}
   </div>

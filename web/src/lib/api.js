@@ -11,6 +11,7 @@ export async function api(path, body) {
 }
 
 export const cases = () => api("/api/cases");
+export const bundles = () => api("/api/bundles");
 export const state = (c) => api(`/api/state?case=${encodeURIComponent(c)}`);
 export const log = (c) => api(`/api/log?case=${encodeURIComponent(c)}`);
 export const run = (c, phase = "1") => api("/api/run", { case: c, phase });

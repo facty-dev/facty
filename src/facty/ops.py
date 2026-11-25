@@ -76,15 +76,32 @@ def case_delete(client, case_id: str) -> dict:
 
 
 def bundles(client=None) -> dict:
-    """The signed bundles in bundles/ — the only pack/case/demo form."""
+    """The signed bundles in bundles/ — the only pack/case/demo form.
+
+    Each entry carries the bundle's Goal when it has one: `title`/`statement`/
+    `intentPhrases` are what a non-technical picker shows instead of a path.
+    """
     out = []
     if BUNDLES.is_dir():
         for d in sorted(BUNDLES.iterdir()):
             if (d / bundle_mod.MANIFEST).exists():
                 m = json.loads((d / bundle_mod.MANIFEST).read_text())
-                out.append({"id": d.name, "version": m["version"],
-                            "signed": (d / bundle_mod.SIG).exists(),
-                            "fingerprint": m.get("fingerprint", "")})
+                entry = {"id": d.name, "version": m["version"],
+                         "signed": (d / bundle_mod.SIG).exists(),
+                         "fingerprint": m.get("fingerprint", "")}
+                docs_path = d / bundle_mod.DOCS
+                if docs_path.exists():
+                    try:
+                        docs = json.loads(docs_path.read_text())
+                        goal = next((x for x in docs if x.get("@type") == "Goal"), None)
+                        if goal:
+                            entry["title"] = goal.get("name") or d.name
+                            entry["statement"] = goal.get("statement", "")
+                            entry["intentPhrases"] = goal.get("intentPhrases", [])
+                            entry["output"] = goal.get("output", "")
+                    except (OSError, ValueError):
+                        pass
+                out.append(entry)
     return {"bundles": out}
 
 

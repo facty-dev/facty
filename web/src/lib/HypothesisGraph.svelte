@@ -40,9 +40,9 @@
               stroke={ui.selected === n.id ? "var(--ring)" : "none"} stroke-width="2" />
       <text x={n.x} y={n.y + 4} text-anchor="middle" font-size="11" fill="var(--background)" font-weight="700">{n.id}</text>
       <text x={n.x} y={n.y + 14 + n.score * 22 + 12} text-anchor="middle" font-size="10" class="fill-muted-foreground">
-        {n.status === "pruned" ? `pruned by ${n.prunedBy}` : `score ${n.score.toFixed(3)}`}
+        {n.status === "pruned" ? "ruled out" : `${Math.round(n.score * 100)}% support`}
       </text>
     </g>
   {/each}
 </svg>
-<div class="mt-1 text-xs text-muted-foreground">click a hypothesis for its proof tree · grey = pruned (label = killing constraint) · green = winner</div>
+<div class="mt-1 text-xs text-muted-foreground">Each circle is a possible explanation; size = how strongly the evidence supports it. Click one to see why. Grey = ruled out by the evidence.</div>
