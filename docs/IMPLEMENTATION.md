@@ -390,7 +390,7 @@ store over signed bundle manifests — no new trust or packaging model needed.
 ├── Dockerfile                 # the SmolVM image (terminusdb + python + vibe)
 ├── compose.yaml               # plain-Docker dev alternative
 ├── .vibe/
-│   ├── config.toml            # default model mistral-large-4-0 (canonical id, 1M/800k)
+│   ├── config.toml            # dev model deepseek-v4-1-flash-1017 (+ mistral-large-4-0 row), 1M/880k
 │   └── agents/
 │       ├── sensing.toml       # no tools, one-shot structured output
 │       └── pack-author.toml   # authoring agent (optional TerminusDB MCP tools)

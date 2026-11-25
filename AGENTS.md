@@ -262,7 +262,8 @@ Cross-link liberally; ADRs record any significant tradeoff (template:
 ### Agent runtime facts (post-ADR-0005)
 
 - The LLM surface is the **Vibe CLI** with project profiles in `.vibe/agents/`
-  (default model `mistral-large-4-0` — the canonical catalogue id, no custom
+  (default dev model `deepseek-v4-1-flash-1017` — open-weight, Mistral-hosted,
+  1M window; `mistral-large-4-0` kept as a second row for the profiles)
   alias; `thinking = "high"`
   for dev/pack-authoring — the highest level mistral-large-4 supports — and
   `"low"` pinned on the `sensing` profile to keep the machine loop cheap). Machine-driven LLM calls go through pydantic-ai

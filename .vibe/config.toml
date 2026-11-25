@@ -8,31 +8,46 @@
 # like max_context_length are fine here too: one-shot sensing prompts are tiny,
 # so a larger window only moves the compaction threshold, never the cost.
 #
-# Default model for every agent: Mistral Large 4, keyed by its CANONICAL id
-# (no custom alias — see the resume-pin note below).
-active_model = "mistral-large-4-0"
+# Default dev model: DeepSeek V4.1 Flash (open-weight, Mistral-hosted; 1M
+# window) — PO's current working model, and open-weights-first per AGENTS.md
+# rule 10. Both rows below carry the same window/threshold so switching models
+# via `/model` never changes the compaction headroom. No custom aliases: keys
+# are canonical catalogue ids (see the resume-pin note at the bottom).
+active_model = "deepseek-v4-1-flash-1017"
 
 # No co-authorship attribution in commit messages (PO, 2026-11-03).
 # Top-level key (env alt: VIBE_INCLUDE_COMMIT_SIGNATURE=false) — under [[models]]
 # it is not a Vibe setting and warns at startup.
 include_commit_signature = false
 
-# Mistral Large 4 — ONE row, keyed by the canonical catalogue id
-# mistral-large-4-0 (a valid API id; window 1,048,576 live-verified via
-# GET /v1/models, 2026-11-17). No alias: the canonical id IS the stable name —
-# Mistral's dated routed aliases (mistral-large-4-0-3, mistral-large-4) are
-# catalogue aliases OF this row (catalog_model_aliases), so keying on the
-# canonical id covers both fresh sessions and old resumed ones with a single
-# row. thinking "high" = highest level mistral-large-4 supports (catalogue
-# lists low/medium/high only). The machine loops don't read this file at all:
-# pydantic-ai gets model+thinking from code (FACTY_MODEL / FACTY_THINKING=low
-# in sensing.py); only the vibe -p fallback uses this config, via the sensing
-# profile (thinking=low pinned there).
-# auto_compact_threshold must stay under window - 24k headroom (harness bounds).
+# DeepSeek V4.1 Flash — open-weight model served by Mistral's API (catalogue id
+# deepseek-v4-1-flash-1017, "Mistral Hosted"). Window 1,048,576 per the live
+# model catalogue. thinking "max" is the highest level it lists (none/low/high/
+# max) — PO wants the highest level during development.
+# auto_compact_threshold must stay under window - 24k headroom (harness bounds)
+# → ceiling 1,024,576; 880k leaves 144k of margin.
+[[models]]
+name = "deepseek-v4-1-flash-1017"
+provider = "mistral"
+thinking = "max"
+max_context_length = 1048576
+auto_compact_threshold = 880000
+
+# Mistral Large 4 — kept as the second row: the `sensing` / `pack-author` agent
+# profiles pin it explicitly, and the machine-loop fallback sets
+# VIBE_ACTIVE_MODEL to it (src/facty/sensing.py). keyed by the canonical
+# catalogue id (a valid API id; window 1,048,576 live-verified via GET
+# /v1/models, 2026-11-17) — Mistral's dated routed aliases (mistral-large-4-0-3,
+# mistral-large-4) are catalogue aliases OF this row (catalog_model_aliases),
+# so old resumed sessions resolve here too. thinking "high" = the highest level
+# mistral-large-4 lists (low/medium/high). The pydantic-ai machine loop does NOT
+# read this file: it gets model+thinking from code (FACTY_MODEL /
+# FACTY_THINKING=low in sensing.py); only the vibe -p fallback reads it, via
+# the sensing profile (thinking=low pinned there).
 [[models]]
 name = "mistral-large-4-0"
 provider = "mistral"
-thinking = "high"              # dev default; sensing profile pins "low"
+thinking = "high"
 max_context_length = 1048576
 auto_compact_threshold = 880000
 
@@ -41,12 +56,10 @@ auto_compact_threshold = 880000
 # layer — which outranks project config AND VIBE_* env vars
 # (app_server/_session_model.py + _unified_harness_backend_adapter.py
 # `_apply_restored_pin`; layer order in core/config/default_orchestrator.py).
-# Sessions created while the user-layer default (routed alias
-# mistral-large-4-0-3) was active therefore resume pinned to that alias — which
-# resolves through catalog_model_aliases to THIS canonical row, so overriding
-# the canonical row above (not a row named after the alias!) gives even old
-# resumed sessions the real 1M window / 800k threshold while keeping the valid
-# API id. Do NOT add a [[models]] row with name = "mistral-large-4-0-3": an
-# alias that is itself a model key resolves to nothing (_model_aliases.py) and
-# the literal routed name is rejected by the API ("Invalid model", code 1500).
-# In a resumed session you can also just run `/model mistral-large-4-0`.
+# That is why every model you switch between must keep a proper [[models]] row
+# here (name = canonical id, no alias): a resumed session pinned to a model
+# with no row falls back with a "settings ignored / not available" notice.
+# Do NOT add a row whose `name` is an alias (e.g. mistral-large-4-0-3): an alias
+# that is itself a model key resolves to nothing (_model_aliases.py) and the
+# literal routed name is rejected by the API ("Invalid model", code 1500).
+# In a resumed session you can always re-pin with `/model <canonical-id>`.
